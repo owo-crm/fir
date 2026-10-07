@@ -176,6 +176,20 @@ $$ Q₁ = Q₂  →  10 − P = P  →  P = 5, Q = 5 | Równowaga na rynku kompu
 - Jeśli cena jest **wyższa** (np. 7), chętnych do kupna jest 3, a towaru 7. Powstaje [[nadwyzka|nadwyżka]] i cena spada.
 - Jeśli cena jest **niższa** (np. 3), chętnych jest 7, a towaru 3. Powstaje [[niedobor|niedobór]] i cena rośnie.
 
+## Jak czytać wykres popytu i podaży
+Zanim zaczniesz przesuwać suwaki, zapamiętaj, co pokazuje wykres:
+- **Oś pozioma** to ilość (tys. komputerów rocznie), **oś pionowa** to cena (tys. zł).
+- **Krzywa D (popyt)** odpowiada na pytanie: ile komputerów kupujący chcą kupić przy każdej cenie? Opada, bo im drożej, tym mniej chętnych.
+- **Krzywa S (podaż)** odpowiada na pytanie: ile komputerów producenci chcą sprzedać przy każdej cenie? Rośnie, bo im wyższa cena, tym więcej sztuk opłaca się wyprodukować.
+
+> !uwaga Krzywa S to nie „ile producent jest w stanie wyprodukować”. To **plan producentów**: przy cenie 3 tys. zł opłaca im się zrobić 3 tys. sztuk, przy 7 tys. zł już 7 tys. Możliwości produkcyjne, technologia i koszty to czynniki, które **przesuwają** całą krzywą S.
+
+Co przesuwa krzywe:
+- **D w prawo:** wyższe dochody, moda, droższy substytut, tańsze dobro komplementarne. **D w lewo:** odwrotnie, np. recesja.
+- **S w prawo:** tańsza technologia, tańsze surowce i płace, niższe podatki, nowe firmy na rynku. **S w lewo:** droższe surowce, wyższe podatki, firmy wychodzą z rynku.
+
+Wykres ma dwa tryby. W trybie **Eksploruj** przesuwasz cenę oraz obie krzywe i czytasz, co się dzieje. W trybie **Gra** jesteś producentem: dostajesz popyt i musisz tak dobrać cenę i produkcję, żeby sprzedać wszystko bez strat.
+
 {{chart:ds}}
 
 ## Jak rynek sam się dostosowuje
@@ -231,6 +245,20 @@ $$ Q₁ = Q₂  →  10 − P = P  →  P = 5, Q = 5 | Равновесие на
 - Если цена **выше** (например, 7), желающих купить 3, а товара 7. Возникает [[nadwyzka|избыток]], и цена падает.
 - Если цена **ниже** (например, 3), желающих 7, а товара 3. Возникает [[niedobor|дефицит]], и цена растёт.
 
+## Как читать график спроса и предложения
+Прежде чем двигать ползунки, запомни, что показывает график:
+- **Горизонтальная ось** — количество (тыс. компьютеров в год), **вертикальная** — цена (тыс. злотых).
+- **Кривая D (спрос)** отвечает на вопрос: сколько компьютеров покупатели хотят купить при каждой цене? Она нисходящая: чем дороже, тем меньше желающих.
+- **Кривая S (предложение)** отвечает на вопрос: сколько компьютеров производители хотят продать при каждой цене? Она восходящая: чем выше цена, тем больше штук выгодно произвести.
+
+> !uwaga Кривая S — это не «сколько производитель способен произвести». Это **план производителей**: при цене 3 тыс. им выгодно сделать 3 тыс. штук, при 7 тыс. — уже 7 тыс. Производственные возможности, технологии и издержки — факторы, которые **сдвигают** всю кривую S.
+
+Что сдвигает кривые:
+- **D вправо:** выше доходы, мода, дороже заменитель, дешевле дополняющий товар. **D влево:** наоборот, например рецессия.
+- **S вправо:** более дешёвая технология, дешевле сырьё и труд, ниже налоги, новые фирмы на рынке. **S влево:** дороже сырьё, выше налоги, фирмы уходят с рынка.
+
+У графика два режима. В режиме **Исследуй** ты двигаешь цену и обе кривые и читаешь, что происходит. В режиме **Игра** ты производитель: тебе дан спрос, и нужно так подобрать цену и производство, чтобы продать всё без потерь.
+
 {{chart:ds}}
 
 ## Как рынок подстраивается сам
@@ -257,6 +285,12 @@ $$ Q₁ = Q₂  →  10 − P = P  →  P = 5, Q = 5 | Равновесие на
             { q: { pl: "Cena jest wyższa od ceny równowagi. Na rynku pojawia się:", ru: "Цена выше равновесной. На рынке возникает:" },
               a: [{ pl: "niedobór i cena rośnie", ru: "дефицит, и цена растёт" }, { pl: "nadwyżka i cena spada", ru: "избыток, и цена падает" }, { pl: "równowaga", ru: "равновесие" }],
               correct: 1, why: { pl: "Przy wysokiej cenie sprzedający oferują więcej, niż kupujący chcą kupić.", ru: "При высокой цене продавцы предлагают больше, чем покупатели хотят купить." } },
+            { q: { pl: "Co pokazuje krzywa podaży S?", ru: "Что показывает кривая предложения S?" },
+              a: [{ pl: "Maksymalną ilość, jaką firma jest w stanie wyprodukować", ru: "Максимальное количество, которое фирма способна произвести" }, { pl: "Ile producenci chcą sprzedać przy każdej cenie", ru: "Сколько производители хотят продать при каждой цене" }, { pl: "Ile kupujący kupili w zeszłym roku", ru: "Сколько покупатели купили в прошлом году" }],
+              correct: 1, why: { pl: "S to plan producentów. Możliwości produkcyjne tylko przesuwają tę krzywą.", ru: "S — план производителей. Производственные возможности лишь сдвигают эту кривую." } },
+            { q: { pl: "Co przesuwa krzywą podaży w lewo?", ru: "Что сдвигает кривую предложения влево?" },
+              a: [{ pl: "Tańsza technologia", ru: "Более дешёвая технология" }, { pl: "Wzrost cen surowców", ru: "Рост цен на сырьё" }, { pl: "Wzrost dochodów kupujących", ru: "Рост доходов покупателей" }],
+              correct: 1, why: { pl: "Wyższe koszty sprawiają, że przy każdej cenie opłaca się produkować mniej. Dochody kupujących przesuwają popyt, nie podaż.", ru: "Более высокие издержки делают выгодным меньший выпуск при каждой цене. Доходы покупателей сдвигают спрос, а не предложение." } },
           ],
         },
         // ------------------------------------------------------------------ 1.3
@@ -541,8 +575,14 @@ Krzywe podaży przesuwają: postęp techniczny (w prawo), wzrost płac i cen sur
 - **Równowaga krótkookresowa: AD = SAS.** Może leżeć w lewo od Y* (recesja, bezrobocie) albo w prawo (przegrzanie, inflacja).
 - **Równowaga długookresowa: AD = SAS = LAS.** Gospodarka jest w Y*, bez bezrobocia przymusowego.
 
-## Wypróbuj model
-Przesuń suwaki i obserwuj, gdzie przecinają się AD i SAS. Pod wykresem zobaczysz, co oznacza ta sytuacja.
+## Jak czytać wykres AD–AS
+- **Niebieska krzywa AD** opada: przy niższym poziomie cen ludzie, firmy i państwo kupują realnie więcej.
+- **Pomarańczowa krzywa SAS** rośnie: w krótkim okresie wyższe ceny zachęcają firmy do większej produkcji.
+- **Przerywana pionowa linia LAS** to produkcja potencjalna Y*: tyle gospodarka wytwarza przy pełnym zatrudnieniu.
+- **Punkt E** to miejsce, gdzie AD przecina SAS, czyli faktyczny PKB i poziom cen. Kolorowy pas między E a Y* to luka.
+- **Suwak AD** w prawo to np. większe wydatki rządowe albo niższe stopy procentowe, w lewo to np. recesja i oszczędzanie. **Suwak SAS** w lewo to np. drożejące surowce i płace, w prawo to postęp techniczny.
+
+Przesuń suwaki i sprawdź, kiedy powstaje luka recesyjna, a kiedy inflacyjna.
 
 {{chart:adas}}
 
@@ -593,8 +633,14 @@ $$ AD = C + I + G + (X − M) | Та же формула, что у ВВП из 
 - **Краткосрочное равновесие: AD = SAS.** Может лежать левее Y* (рецессия, безработица) или правее (перегрев, инфляция).
 - **Долгосрочное равновесие: AD = SAS = LAS.** Экономика в Y*, без вынужденной безработицы.
 
-## Попробуй модель
-Двигай ползунки и следи, где пересекаются AD и SAS. Под графиком написано, что означает эта ситуация.
+## Как читать график AD–AS
+- **Синяя кривая AD** нисходящая: при более низком уровне цен люди, фирмы и государство реально покупают больше.
+- **Оранжевая кривая SAS** восходящая: в краткосрочном периоде более высокие цены побуждают фирмы производить больше.
+- **Пунктирная вертикаль LAS** — потенциальный выпуск Y*: столько экономика производит при полной занятости.
+- **Точка E** — пересечение AD и SAS, то есть фактический ВВП и уровень цен. Цветная полоса между E и Y* — разрыв.
+- **Ползунок AD** вправо — например, больше госрасходов или ниже ставки, влево — рецессия и экономия. **Ползунок SAS** влево — например, дорожают сырьё и зарплаты, вправо — технический прогресс.
+
+Двигай ползунки и проверь, когда возникает рецессионный разрыв, а когда инфляционный.
 
 {{chart:adas}}
 

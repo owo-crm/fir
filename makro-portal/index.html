@@ -204,6 +204,15 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .verdict.ok{background:var(--ok-soft)} .verdict.ok b{color:var(--ok)}
 .verdict.hi{background:var(--bad-soft)} .verdict.hi b{color:var(--bad)}
 .verdict.lo{background:var(--accent-soft)} .verdict.lo b{color:var(--accent)}
+ .steps{margin:14px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:15px;line-height:1.55}
+.steps li::marker{color:var(--accent);font-weight:700}
+.scen{padding:14px 16px;border-radius:12px;background:var(--accent-soft);margin:12px 0}
+.scen b{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)}
+.scen p{margin:4px 0 0}
+.verdict.mid{background:var(--term-soft)} .verdict.mid b{color:var(--term)}
+.solution{margin-top:14px;padding:14px 16px;border-radius:12px;border:1px solid var(--line);font-size:15px;line-height:1.55}
+.solution ol{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.chart .seg button{font-size:12.5px;padding:6px 10px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .endblock{margin-top:44px;display:flex;flex-direction:column;gap:14px}
@@ -754,40 +763,174 @@ const head = (k) => `<h4>${t(UI[k + "_t"])}</h4><p class="cap">${t(UI[k + "_c"])
 
 const CHARTS = {
   ds(el){
-    el.innerHTML = head("ds") + `<div class="pl"></div>
-      <div class="ctrl">
-        <label for="dsp">${t(UI.price)}: <span><b id="dspv"></b></span><input type="range" id="dsp" min="1" max="9" step="1" value="7"></label>
-        <label for="dss">${t(UI.dshift)}<input type="range" id="dss" min="0" max="3" step="1" value="0"></label>
-      </div><div class="verdict" id="dsv"></div>`;
-    const W = 420, H = 300, L = 44, B = 260, R = 400, T = 16;
-    const X = q => L + q / 13 * (R - L), Y = p => B - p / 10 * (B - T);
-    const upd = () => {
-      const P = +el.querySelector("#dsp").value, sh = +el.querySelector("#dss").value;
-      const d = Math.max(0, 10 + sh - P), s = P, pe = (10 + sh) / 2;
+    const Lg = (pl, ru) => lang === "pl" ? pl : ru;
+    const k = v => num(Math.round(v * 100) / 100);           // liczba z przecinkiem
+    const W = 440, H = 310, L = 46, B = 270, R = 430, T = 14, QM = 14, PM = 11;
+    const X = q => L + q / QM * (R - L), Y = p => B - p / PM * (B - T), box = [L, T, R, B];
+    const grid = () => {
       let g = "";
-      for (let v = 0; v <= 10; v += 2){ g += line(L, Y(v), R, Y(v), "var(--line)", 1) + txt(L - 8, Y(v) + 4, v, "", "end"); }
-      for (let v = 0; v <= 12; v += 2) g += txt(X(v), B + 18, v, "", "middle");
-      g += line(L, T, L, B, "var(--muted)", 1.2) + line(L, B, R, B, "var(--muted)", 1.2);
-      const box = [L, T, R, B];
-      if (sh) g += seg(X(10), Y(0), X(0), Y(10), box, "var(--chart-c)", 2, "5 5");
-      g += seg(X(10 + sh), Y(0), X(sh), Y(10), box, "var(--chart-a)", 3);
-      g += txt(X(sh + 1.6), Y(8.4) - 6, sh ? "D'" : "D", "lab");
-      g += line(X(0), Y(0), X(10), Y(10), "var(--chart-b)", 3);
-      g += txt(X(9.6), Y(9.6) - 8, "S", "lab", "end");
-      g += line(L, Y(P), R, Y(P), "var(--ink)", 1.2, "3 4");
-      g += `<circle cx="${X(d)}" cy="${Y(P)}" r="5" fill="var(--chart-a)"/><circle cx="${X(s)}" cy="${Y(P)}" r="5" fill="var(--chart-b)"/>`;
-      if (d !== s) g += `<rect x="${X(Math.min(d, s))}" y="${Y(P) - 5}" width="${Math.abs(X(d) - X(s))}" height="10" rx="3" fill="${d > s ? "var(--chart-hi)" : "var(--chart-a)"}" opacity=".22"/>`;
-      g += `<circle cx="${X(pe)}" cy="${Y(pe)}" r="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>`;
-      g += txt(R, B - 8, t(UI.qty), "", "end") + txt(L + 6, T + 10, t(UI.price));
-      el.querySelector(".pl").innerHTML = NS(W, H + 10, g);
-      el.querySelector("#dspv").textContent = P + " tys. zł".replace("tys. zł", lang === "pl" ? "tys. zł" : "тыс. zł");
-      const v = el.querySelector("#dsv");
-      const peTxt = num(pe);
-      if (d === s){ v.className = "verdict ok"; v.innerHTML = `<b>${t(UI.ds_eq)}: P = ${peTxt}, Q = ${num(pe)}</b>${t(UI.ds_eqt)}`; }
-      else if (s > d){ v.className = "verdict lo"; v.innerHTML = `<b>${t(UI.ds_sur)}: ${s - d}</b>${fmt(t(UI.ds_surt), { s, d, p: peTxt })}`; }
-      else { v.className = "verdict hi"; v.innerHTML = `<b>${t(UI.ds_sho)}: ${d - s}</b>${fmt(t(UI.ds_shot), { s, d, p: peTxt })}`; }
+      for (let v = 0; v <= 10; v += 2) g += line(L, Y(v), R, Y(v), "var(--line)", 1) + txt(L - 8, Y(v) + 4, v, "", "end");
+      for (let v = 0; v <= 14; v += 2) g += txt(X(v), B + 18, v, "", "middle");
+      return g + line(L, T, L, B, "var(--muted)", 1.2) + line(L, B, R, B, "var(--muted)", 1.2)
+        + txt(R, B - 8, Lg("ilość (tys. szt.)", "количество (тыс. шт.)"), "", "end") + txt(L + 6, T + 10, Lg("cena (tys. zł)", "цена (тыс. zł)"));
     };
-    el.querySelectorAll("input").forEach(x => x.oninput = upd); upd();
+    const Dline = (a, c, w, da) => seg(X(10 + a), Y(0), X(10 + a - PM), Y(PM), box, c, w, da);   // Q = 10 + a − P
+    const Sline = (b, c, w, da) => seg(X(b), Y(0), X(b + PM), Y(PM), box, c, w, da);             // Q = P + b
+    const dot = (q, p, c, r = 5) => `<circle cx="${X(q)}" cy="${Y(p)}" r="${r}" fill="${c}"/>`;
+    const ring = (q, p) => `<circle cx="${X(q)}" cy="${Y(p)}" r="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.2"/>`;
+
+    el.innerHTML = `<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px">
+        <h4 style="margin:0">${t(UI.ds_t)}</h4>
+        <div class="seg" role="tablist"><button data-mode="ex" class="on">${Lg("Eksploruj", "Исследуй")}</button><button data-mode="game">${Lg("Gra: jesteś producentem", "Игра: ты производитель")}</button></div>
+      </div><div class="dsbody"></div>`;
+    const body = el.querySelector(".dsbody");
+    el.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {
+      el.querySelectorAll("[data-mode]").forEach(x => x.classList.toggle("on", x === b));
+      b.dataset.mode === "ex" ? explore() : game();
+    });
+
+    // ---------------- tryb: eksploruj ----------------
+    function explore(){
+      body.innerHTML = `<p class="cap">${Lg("Ustaw cenę i przesuń krzywe. Pod wykresem krok po kroku: co robią kupujący, co robią producenci i co z tego wynika dla rynku.", "Установи цену и сдвигай кривые. Под графиком пошагово: что делают покупатели, что делают производители и что из этого следует для рынка.")}</p>
+        <div class="pl"></div>
+        <div class="ctrl">
+          <label for="dsp">${Lg("Cena (P)", "Цена (P)")}<span><b id="dspv"></b></span><input type="range" id="dsp" min="0.5" max="10" step="0.5" value="7"></label>
+          <label for="dsa">${Lg("Popyt D: spada ← → rośnie", "Спрос D: падает ← → растёт")}<span>${Lg("dochody, moda, ceny substytutów i dóbr komplementarnych", "доходы, мода, цены заменителей и дополняющих товаров")}</span><input type="range" id="dsa" min="-3" max="3" step="1" value="0"></label>
+          <label for="dsb">${Lg("Podaż S: spada ← → rośnie", "Предложение S: падает ← → растёт")}<span>${Lg("technologia, koszty surowców i płac, podatki, liczba firm", "технологии, цены сырья и зарплат, налоги, число фирм")}</span><input type="range" id="dsb" min="-3" max="3" step="1" value="0"></label>
+        </div>
+        <ol class="steps" id="dsx"></ol>`;
+      const upd = () => {
+        const P = +body.querySelector("#dsp").value, a = +body.querySelector("#dsa").value, b = +body.querySelector("#dsb").value;
+        const d = Math.max(0, 10 + a - P), s = Math.max(0, P + b), Pe = (10 + a - b) / 2, Qe = (10 + a + b) / 2;
+        let g = grid();
+        if (a) g += Dline(0, "var(--chart-c)", 2, "5 5");
+        if (b) g += Sline(0, "var(--chart-c)", 2, "5 5");
+        g += Dline(a, "var(--chart-a)", 3) + Sline(b, "var(--chart-b)", 3);
+        g += txt(X(Math.max(0.6, 10 + a - 9.6)) + 8, Y(9.6), a ? "D'" : "D", "lab");
+        g += txt(X(Math.min(13.4, 9.6 + b)) - 8, Y(9.6), b ? "S'" : "S", "lab", "end");
+        g += line(L, Y(P), R, Y(P), "var(--ink)", 1.2, "3 4");
+        if (Math.abs(d - s) > .01) g += `<rect x="${X(Math.min(d, s))}" y="${Y(P) - 6}" width="${Math.abs(X(d) - X(s))}" height="12" rx="3" fill="${d > s ? "var(--chart-hi)" : "var(--chart-a)"}" opacity=".22"/>`;
+        g += dot(d, P, "var(--chart-a)") + dot(s, P, "var(--chart-b)") + ring(Qe, Pe) + txt(X(Qe) + 9, Y(Pe) + 16, "E", "lab");
+        body.querySelector(".pl").innerHTML = NS(W, H + 6, g);
+        body.querySelector("#dspv").textContent = k(P) + Lg(" tys. zł", " тыс. zł");
+        const why_a = a > 0 ? Lg(` Popyt wzrósł (krzywa w prawo): przy każdej cenie kupujący chcą o ${a} tys. więcej, np. bo wzrosły dochody albo podrożał substytut.`, ` Спрос вырос (кривая вправо): при каждой цене покупатели хотят на ${a} тыс. больше, например выросли доходы или подорожал заменитель.`)
+          : a < 0 ? Lg(` Popyt spadł (krzywa w lewo): przy każdej cenie kupujący chcą o ${-a} tys. mniej, np. bo spadły dochody albo minęła moda.`, ` Спрос упал (кривая влево): при каждой цене покупатели хотят на ${-a} тыс. меньше, например упали доходы или прошла мода.`) : "";
+        const why_b = b > 0 ? Lg(` Podaż wzrosła (krzywa w prawo): przy każdej cenie producenci oferują o ${b} tys. więcej, np. dzięki tańszej technologii.`, ` Предложение выросло (кривая вправо): при каждой цене производители предлагают на ${b} тыс. больше, например благодаря более дешёвой технологии.`)
+          : b < 0 ? Lg(` Podaż spadła (krzywa w lewo): przy każdej cenie producenci oferują o ${-b} tys. mniej, np. bo podrożały surowce lub wzrosły podatki.`, ` Предложение упало (кривая влево): при каждой цене производители предлагают на ${-b} тыс. меньше, например подорожало сырьё или выросли налоги.`) : "";
+        let market;
+        if (Math.abs(d - s) < .01) market = Lg(`<b>Rynek: równowaga.</b> Kupujący chcą ${k(d)} tys., producenci oferują ${k(s)} tys. Wszystko się sprzedaje, nikt nie czeka w kolejce i nic nie zalega. Cena nie ma powodu się zmieniać.`, `<b>Рынок: равновесие.</b> Покупатели хотят ${k(d)} тыс., производители предлагают ${k(s)} тыс. Всё продаётся, никто не стоит в очереди и ничего не залёживается. Цене незачем меняться.`);
+        else if (s > d) market = Lg(`<b>Rynek: nadwyżka ${k(s - d)} tys.</b> Producenci chcą sprzedać ${k(s)} tys., a kupujący biorą tylko ${k(d)} tys. Magazyny się zapełniają, więc sprzedawcy zaczynają obniżać cenę. Gdy cena spada, kupujący chcą kupić więcej (ruch w dół po D), a producentom opłaca się produkować mniej (ruch w dół po S). Rynek dojdzie do równowagi E: cena ${k(Pe)} tys. zł, ilość ${k(Qe)} tys.`, `<b>Рынок: избыток ${k(s - d)} тыс.</b> Производители хотят продать ${k(s)} тыс., а покупатели берут только ${k(d)} тыс. Склады переполняются, и продавцы начинают снижать цену. Когда цена падает, покупатели хотят купить больше (движение вниз по D), а производителям выгодно производить меньше (движение вниз по S). Рынок придёт к равновесию E: цена ${k(Pe)} тыс., количество ${k(Qe)} тыс.`);
+        else market = Lg(`<b>Rynek: niedobór ${k(d - s)} tys.</b> Kupujący chcą ${k(d)} tys., a w sprzedaży jest tylko ${k(s)} tys. Ludzie są gotowi zapłacić więcej, więc cena rośnie. Wtedy część kupujących rezygnuje (ruch w górę po D), a producentom opłaca się produkować więcej (ruch w górę po S). Rynek dojdzie do równowagi E: cena ${k(Pe)} tys. zł, ilość ${k(Qe)} tys.`, `<b>Рынок: дефицит ${k(d - s)} тыс.</b> Покупатели хотят ${k(d)} тыс., а в продаже только ${k(s)} тыс. Люди готовы платить больше, и цена растёт. Тогда часть покупателей отказывается (движение вверх по D), а производителям выгодно производить больше (движение вверх по S). Рынок придёт к равновесию E: цена ${k(Pe)} тыс., количество ${k(Qe)} тыс.`);
+        body.querySelector("#dsx").innerHTML =
+          `<li><b>${Lg("Kupujący (D)", "Покупатели (D)")}.</b> ${Lg(`Przy cenie ${k(P)} tys. zł chcą kupić ${k(d)} tys. komputerów. Im wyższa cena, tym mniej osób uważa, że komputer jest wart swojej ceny.`, `При цене ${k(P)} тыс. они хотят купить ${k(d)} тыс. компьютеров. Чем выше цена, тем меньше людей считают, что компьютер её стоит.`)}${why_a}</li>
+           <li><b>${Lg("Producenci (S)", "Производители (S)")}.</b> ${Lg(`Przy cenie ${k(P)} tys. zł chcą sprzedać ${k(s)} tys. Opłaca im się produkować każdą sztukę, której koszt jest niższy od ceny. Wyższa cena = więcej opłacalnych sztuk.`, `При цене ${k(P)} тыс. они хотят продать ${k(s)} тыс. Им выгодно производить каждую штуку, которая обходится дешевле цены. Выше цена — больше выгодных штук.`)}${why_b}</li>
+           <li>${market}</li>`;
+      };
+      body.querySelectorAll("input").forEach(x => x.oninput = upd); upd();
+    }
+
+    // ---------------- tryb: gra ----------------
+    const SCEN = [
+      { a: 3, pl: "Nowy rok szkolny i studenci kupują sprzęt. Przy każdej cenie kupujący chcą o 3 tys. komputerów więcej niż zwykle.", ru: "Новый учебный год, студенты покупают технику. При каждой цене покупатели хотят на 3 тыс. компьютеров больше обычного." },
+      { a: 2, pl: "Płace w Polsce wzrosły, ludzi stać na więcej. Popyt jest o 2 tys. wyższy przy każdej cenie.", ru: "Зарплаты в Польше выросли, людям доступно больше. Спрос выше на 2 тыс. при каждой цене." },
+      { a: 1, pl: "Laptopy (substytut) lekko podrożały. Popyt na Twoje komputery jest o 1 tys. wyższy.", ru: "Ноутбуки (заменитель) немного подорожали. Спрос на твои компьютеры выше на 1 тыс." },
+      { a: 0, pl: "Zwykły rok, popyt jak na wykładzie.", ru: "Обычный год, спрос как на лекции." },
+      { a: -1, pl: "Moda na tablety: część klientów rezygnuje z komputerów. Popyt jest o 1 tys. niższy.", ru: "Мода на планшеты: часть клиентов отказывается от компьютеров. Спрос ниже на 1 тыс." },
+      { a: -2, pl: "Recesja: ludzie oszczędzają. Przy każdej cenie kupujący chcą o 2 tys. komputerów mniej.", ru: "Рецессия: люди экономят. При каждой цене покупатели хотят на 2 тыс. компьютеров меньше." },
+    ];
+    let sc, hist, solved, showSol;
+    function newScenario(){
+      let n; do { n = SCEN[Math.floor(Math.random() * SCEN.length)]; } while (sc && n === sc && SCEN.length > 1);
+      sc = n; hist = []; solved = false; showSol = false;
+    }
+    function judge(P, Q){
+      const a = sc.a, Dp = Math.max(0, 10 + a - P), sold = Math.min(Q, Dp), unsold = Q - sold, unmet = Dp - sold;
+      const rev = P * sold, cost = Q * Q / 2, profit = rev - cost, Pe = (10 + a) / 2, Qe = Pe, last = Q;   // koszt ostatniej sztuki = Q
+      const nums = Lg(`Kupujący przy cenie ${k(P)} tys. zł chcieli ${k(Dp)} tys. Wyprodukowałeś ${k(Q)} tys., sprzedałeś ${k(sold)} tys. Przychód ${k(rev)} mln zł, koszt produkcji ${k(cost)} mln zł, zysk ${k(profit)} mln zł.`,
+        `Покупатели при цене ${k(P)} тыс. хотели ${k(Dp)} тыс. Ты произвёл ${k(Q)} тыс., продал ${k(sold)} тыс. Выручка ${k(rev)} млн zł, затраты ${k(cost)} млн zł, прибыль ${k(profit)} млн zł.`);
+      let kind, head, text;
+      if (unsold > .25){
+        kind = "lo"; head = Lg(`Nadwyżka: ${k(unsold)} tys. komputerów zalega w magazynie`, `Избыток: ${k(unsold)} тыс. компьютеров лежат на складе`);
+        text = Lg(`Za tę cenę tylu chętnych nie ma. Na niesprzedane sztuki wydałeś pieniądze i nic z nich nie masz.${last > P ? ` Do tego ostatnie sztuki kosztowały Cię ${k(last)} tys. zł, czyli więcej niż cena.` : ""} Co zrobić: obniż produkcję do ${k(Dp)} tys. przy tej cenie albo obniż cenę, żeby przyciągnąć więcej kupujących.`,
+          `По такой цене столько желающих нет. На непроданные штуки ты потратил деньги и ничего не получил.${last > P ? ` К тому же последние штуки обошлись тебе в ${k(last)} тыс., то есть дороже цены.` : ""} Что делать: сократи производство до ${k(Dp)} тыс. при этой цене или снизь цену, чтобы привлечь больше покупателей.`);
+      } else if (unmet > .25){
+        kind = "hi"; head = Lg(`Niedobór: ${k(unmet)} tys. klientów odeszło z pustymi rękami`, `Дефицит: ${k(unmet)} тыс. клиентов ушли ни с чем`);
+        text = Lg(`Chętnych było więcej niż komputerów. To sygnał, że możesz ${Q < P ? "produkować więcej (kolejne sztuki kosztują Cię mniej niż cena, więc dają zysk) albo " : ""}podnieść cenę: część kupujących i tak zapłaci więcej.`,
+          `Желающих было больше, чем компьютеров. Это сигнал, что можно ${Q < P ? "производить больше (следующие штуки обходятся дешевле цены и дают прибыль) или " : ""}поднять цену: часть покупателей всё равно заплатит больше.`);
+      } else if (Math.abs(P - Pe) <= .25){
+        kind = "ok"; head = Lg("Optymalnie: równowaga rynkowa!", "Оптимально: рыночное равновесие!");
+        text = Lg(`Wszystko sprzedane, nikt nie czeka w kolejce, a cena ${k(P)} tys. zł jest równa kosztowi ostatniej sztuki (${k(last)} tys. zł). Każda sztuka, którą zrobiłeś, była opłacalna, a dodatkowa już by nie była. To punkt, w którym D = S.`,
+          `Всё продано, никто не стоит в очереди, а цена ${k(P)} тыс. равна стоимости последней штуки (${k(last)} тыс.). Каждая сделанная штука была выгодной, а следующая уже не была бы. Это точка, где D = S.`);
+        solved = true;
+      } else if (P > Pe){
+        kind = "mid"; head = Lg("Rozsądnie: wszystko sprzedane, ale cena za wysoka na dłuższą metę", "Разумно: всё продано, но цена слишком высокая в долгосрочной перспективе");
+        text = Lg(`Dopasowałeś produkcję do popytu, więc nic nie zalega. Ale ostatni komputer kosztował Cię ${k(last)} tys. zł, a sprzedajesz go za ${k(P)} tys. zł. Taki zysk przyciąga konkurentów: wejdą na rynek, podaż wzrośnie i cena spadnie do ${k(Pe)} tys. zł. Na rynku konkurencyjnym nie utrzymasz tej ceny. Spróbuj niższej ceny i większej produkcji.`,
+          `Ты подогнал производство под спрос, ничего не залёживается. Но последний компьютер обошёлся тебе в ${k(last)} тыс., а продаёшь ты его за ${k(P)} тыс. Такая прибыль привлекает конкурентов: они придут на рынок, предложение вырастет, и цена упадёт до ${k(Pe)} тыс. На конкурентном рынке эту цену не удержать. Попробуй цену ниже и производство больше.`);
+      } else {
+        kind = "mid"; head = Lg("Rozsądnie: wszystko sprzedane, ale ostatnie sztuki przynoszą stratę", "Разумно: всё продано, но последние штуки убыточны");
+        text = Lg(`Nic nie zalega, ale żeby zaspokoić popyt przy tak niskiej cenie, produkujesz ${k(Q)} tys. Ostatnia sztuka kosztuje Cię ${k(last)} tys. zł, a sprzedajesz ją tylko za ${k(P)} tys. zł. Podnieś cenę: popyt trochę spadnie, a Ty przestaniesz produkować nieopłacalne sztuki.`,
+          `Ничего не залёживается, но чтобы удовлетворить спрос при такой низкой цене, ты производишь ${k(Q)} тыс. Последняя штука стоит тебе ${k(last)} тыс., а продаёшь ты её всего за ${k(P)} тыс. Подними цену: спрос немного упадёт, а ты перестанешь производить невыгодные штуки.`);
+      }
+      return { P, Q, sold, profit, kind, head, text: nums + " " + text };
+    }
+    function game(){
+      if (!sc) newScenario();
+      const a = sc.a, Pe = (10 + a) / 2;
+      const last = hist[hist.length - 1];
+      body.innerHTML = `<div class="scen"><b>${Lg("Scenariusz", "Сценарий")}</b><p>${esc(t(sc))}</p>
+          <p class="muted" style="font-size:14px;margin:6px 0 0">${Lg(`Popyt: Q = ${10 + a} − P. Twój koszt: k-ty tysiąc komputerów kosztuje Cię k tys. zł za sztukę (pomarańczowa linia). Ustaw cenę i produkcję tak, żeby sprzedać wszystko i żeby żadna sztuka nie była produkowana ze stratą.`, `Спрос: Q = ${10 + a} − P. Твои затраты: k-я тысяча компьютеров обходится в k тыс. за штуку (оранжевая линия). Установи цену и производство так, чтобы продать всё и не производить ни одной штуки себе в убыток.`)}</p></div>
+        <div class="pl"></div>
+        <div class="ctrl">
+          <label for="gp">${Lg("Twoja cena (P)", "Твоя цена (P)")}<span><b id="gpv"></b></span><input type="range" id="gp" min="0.5" max="10" step="0.5" value="${last ? last.P : 8}"></label>
+          <label for="gq">${Lg("Twoja produkcja (Q)", "Твоё производство (Q)")}<span><b id="gqv"></b></span><input type="range" id="gq" min="0.5" max="13" step="0.5" value="${last ? last.Q : 7}"></label>
+        </div>
+        <div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="gsell">${Lg("Sprzedaj", "Продать")}</button><button class="btn ghost" id="ghint">${Lg("Podpowiedź", "Подсказка")}</button><button class="btn ghost" id="gsol">${Lg("Pokaż rozwiązanie", "Показать решение")}</button><button class="btn ghost" id="gnew">${Lg("Nowy scenariusz", "Новый сценарий")}</button></div>
+        <div id="gres"></div><div id="gsolbox"></div><div id="ghist"></div>`;
+      const draw = () => {
+        const P = +body.querySelector("#gp").value, Q = +body.querySelector("#gq").value, Dp = Math.max(0, 10 + a - P);
+        let g = grid() + Dline(a, "var(--chart-a)", 3) + Sline(0, "var(--chart-b)", 2.4, showSol ? "" : "6 4");
+        g += txt(X(Math.max(0.6, 10 + a - 9.6)) + 8, Y(9.6), "D", "lab") + txt(X(9.6) - 8, Y(9.6), Lg("koszt = S", "затраты = S"), "lab", "end");
+        hist.forEach(h => g += `<circle cx="${X(h.Q)}" cy="${Y(h.P)}" r="4" fill="none" stroke="var(--faint)" stroke-width="1.5"/>`);
+        g += line(L, Y(P), R, Y(P), "var(--ink)", 1.1, "3 4") + line(X(Q), T, X(Q), B, "var(--chart-b)", 1.1, "3 4");
+        g += `<rect x="${X(Math.min(Q, Dp))}" y="${Y(P) - 6}" width="${Math.abs(X(Q) - X(Dp))}" height="12" rx="3" fill="${Q > Dp ? "var(--chart-a)" : "var(--chart-hi)"}" opacity=".2"/>`;
+        g += dot(Dp, P, "var(--chart-a)", 4.5) + `<circle cx="${X(Q)}" cy="${Y(P)}" r="6" fill="var(--chart-b)" stroke="var(--surface)" stroke-width="2"/>`;
+        if (showSol || solved) g += ring(Pe, Pe) + txt(X(Pe) + 9, Y(Pe) + 16, "E", "lab");
+        body.querySelector(".pl").innerHTML = NS(W, H + 6, g);
+        body.querySelector("#gpv").textContent = k(P) + Lg(" tys. zł", " тыс. zł") + " · " + Lg(`kupujący chcą ${k(Dp)} tys.`, `покупатели хотят ${k(Dp)} тыс.`);
+        body.querySelector("#gqv").textContent = k(Q) + Lg(" tys. szt.", " тыс. шт.") + " · " + Lg(`koszt ostatniej sztuki ${k(Q)} tys. zł`, `стоимость последней штуки ${k(Q)} тыс.`);
+      };
+      const renderHist = () => {
+        if (!hist.length){ body.querySelector("#ghist").innerHTML = ""; return; }
+        const lab = { ok: Lg("optymalnie", "оптимально"), mid: Lg("rozsądnie", "разумно"), lo: Lg("nadwyżka", "избыток"), hi: Lg("niedobór", "дефицит") };
+        body.querySelector("#ghist").innerHTML = `<div class="tbl" style="margin:14px 0 0"><table><thead><tr><th>#</th><th>P</th><th>Q</th><th>${Lg("Sprzedane", "Продано")}</th><th>${Lg("Zysk", "Прибыль")}</th><th>${Lg("Ocena", "Оценка")}</th></tr></thead><tbody>${hist.map((h, i) => `<tr><td>${i + 1}</td><td>${k(h.P)}</td><td>${k(h.Q)}</td><td>${k(h.sold)}</td><td>${k(h.profit)}</td><td>${lab[h.kind]}</td></tr>`).join("")}</tbody></table></div>`;
+      };
+      body.querySelectorAll("input").forEach(x => x.oninput = draw);
+      body.querySelector("#gsell").onclick = () => {
+        const r = judge(+body.querySelector("#gp").value, +body.querySelector("#gq").value); hist.push(r);
+        const cls = r.kind;
+        body.querySelector("#gres").innerHTML = `<div class="verdict ${cls}"><b>${Lg("Runda", "Раунд")} ${hist.length}: ${r.head}</b>${r.text}</div>`;
+        draw(); renderHist();
+      };
+      body.querySelector("#ghint").onclick = () => {
+        const P = +body.querySelector("#gp").value, Q = +body.querySelector("#gq").value, Dp = Math.max(0, 10 + a - P);
+        const tip = Math.abs(Q - Dp) > .25 ? Lg(`Najpierw dopasuj produkcję do popytu: przy cenie ${k(P)} tys. zł kupujący chcą ${k(Dp)} tys., więc ustaw Q = ${k(Dp)}.`, `Сначала подгони производство под спрос: при цене ${k(P)} тыс. покупатели хотят ${k(Dp)} тыс., поставь Q = ${k(Dp)}.`)
+          : P > Pe ? Lg("Produkcja pasuje do popytu. Teraz porównaj cenę z kosztem ostatniej sztuki: cena jest wyższa, więc obniż ją i produkuj więcej.", "Производство совпадает со спросом. Теперь сравни цену со стоимостью последней штуки: цена выше, значит снизь её и производи больше.")
+          : Lg("Produkcja pasuje do popytu, ale ostatnie sztuki kosztują więcej niż cena. Podnieś cenę i produkuj mniej.", "Производство совпадает со спросом, но последние штуки стоят дороже цены. Подними цену и производи меньше.");
+        body.querySelector("#gres").innerHTML = `<div class="verdict"><b>${Lg("Podpowiedź", "Подсказка")}</b>${tip}</div>`;
+      };
+      body.querySelector("#gsol").onclick = () => {
+        showSol = true; draw();
+        body.querySelector("#gsolbox").innerHTML = `<div class="solution"><b>${Lg("Rozwiązanie krok po kroku", "Решение по шагам")}</b><ol>
+          <li>${Lg(`Popyt: przy cenie P kupujący chcą Q = ${10 + a} − P.`, `Спрос: при цене P покупатели хотят Q = ${10 + a} − P.`)}</li>
+          <li>${Lg("Podaż (Twój koszt): opłaca się produkować dopóty, dopóki koszt kolejnej sztuki jest niższy od ceny. Koszt k-tej sztuki to k, więc przy cenie P chcesz produkować Q = P.", "Предложение (твои затраты): производить выгодно, пока следующая штука обходится дешевле цены. k-я штука стоит k, значит при цене P ты хочешь производить Q = P.")}</li>
+          <li>${Lg(`Równowaga: popyt = podaż → ${10 + a} − P = P → 2P = ${10 + a} → <b>P = ${k(Pe)} tys. zł, Q = ${k(Pe)} tys. szt.</b>`, `Равновесие: спрос = предложение → ${10 + a} − P = P → 2P = ${10 + a} → <b>P = ${k(Pe)} тыс., Q = ${k(Pe)} тыс. шт.</b>`)}</li>
+          <li>${Lg("Rozwiązanie rozsądne to każda para, przy której Q = popyt przy danej cenie (nic nie zalega, nikt nie odchodzi). Optymalne jest tylko jedno: dodatkowo cena = koszt ostatniej sztuki. Wyższa cena da Ci chwilowo większy zysk, ale przyciągnie konkurentów i rynek i tak zepchnie ją do równowagi. Niższa oznacza produkcję ze stratą.", "Разумное решение — любая пара, при которой Q = спрос при этой цене (ничего не залёживается, никто не уходит). Оптимальное только одно: ещё и цена = стоимость последней штуки. Более высокая цена временно даст больше прибыли, но привлечёт конкурентов, и рынок всё равно вернёт её к равновесию. Более низкая означает производство в убыток.")}</li>
+        </ol></div>`;
+      };
+      body.querySelector("#gnew").onclick = () => { newScenario(); game(); };
+      draw(); renderHist();
+    }
+    explore();
   },
   adas(el){
     el.innerHTML = head("ad") + `<div class="pl"></div>
