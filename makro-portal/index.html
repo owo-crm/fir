@@ -1,384 +1,1036 @@
-<!doctype html>
-<html lang="pl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>Makroekonomia WSB</title>
+<title>Makro WSB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
+/* Layout: biblioteka — boczna nawigacja + kolumna do czytania + przyklejony spis treści; na telefonie dolny pasek zakładek. */
 :root{
-  --bg:#f2f2f7;--card:#fff;--text:#000;--muted:#8e8e93;--sep:rgba(60,60,67,.18);--fill:rgba(118,118,128,.12);
-  --blue:#007aff;--green:#34c759;--red:#ff3b30;--orange:#ff9500;--indigo:#5856d6;--teal:#30b0c7;--pink:#ff2d55;
-  --bar:rgba(249,249,249,.85);
+  --bg:#f3f5f8; --surface:#ffffff; --sunken:#eaeef3; --ink:#141c27; --muted:#5a6676; --faint:#8a95a3; --line:#dfe4ea;
+  --accent:#2347c5; --accent-ink:#ffffff; --accent-soft:#e7ecfb;
+  --term:#a35f00; --term-soft:#fbf1df;
+  --ok:#13804a; --ok-soft:#e1f3e8; --bad:#c23a1a; --bad-soft:#fbe7e1;
+  --c-key:#2347c5; --c-ex:#13804a; --c-warn:#b45309;
+  --chart-a:#2347c5; --chart-b:#d9730d; --chart-c:#8a95a3; --chart-hi:#c23a1a; --chart-lo:#0e8a9a;
+  --shadow:0 1px 2px rgba(20,28,39,.06),0 8px 24px rgba(20,28,39,.06);
+  --font-display:"Unbounded","Segoe UI",system-ui,sans-serif;
+  --font-body:"Onest",-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --r:14px; --side:264px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#000;--card:#1c1c1e;--text:#fff;--muted:#8e8e93;--sep:rgba(84,84,88,.6);--fill:rgba(118,118,128,.24);
-  --blue:#0a84ff;--green:#30d158;--red:#ff453a;--orange:#ff9f0a;--indigo:#5e5ce6;--teal:#40c8e0;--pink:#ff375f;--bar:rgba(22,22,24,.85)}}
+  --bg:#0e1319; --surface:#161d26; --sunken:#1d2530; --ink:#e8edf3; --muted:#9aa6b4; --faint:#6f7b89; --line:#28313d;
+  --accent:#86a0ff; --accent-ink:#0e1319; --accent-soft:#1d2846;
+  --term:#f0b35a; --term-soft:#2d2414;
+  --ok:#4cc78a; --ok-soft:#14301f; --bad:#ff8a6b; --bad-soft:#3a1d16;
+  --c-key:#86a0ff; --c-ex:#4cc78a; --c-warn:#f0b35a;
+  --chart-a:#86a0ff; --chart-b:#f39a4a; --chart-c:#6f7b89; --chart-hi:#ff8a6b; --chart-lo:#4fc6d4;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#000;--card:#1c1c1e;--text:#fff;--muted:#8e8e93;--sep:rgba(84,84,88,.6);--fill:rgba(118,118,128,.24);
-  --blue:#0a84ff;--green:#30d158;--red:#ff453a;--orange:#ff9f0a;--indigo:#5e5ce6;--teal:#40c8e0;--pink:#ff375f;--bar:rgba(22,22,24,.85)}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+  --bg:#0e1319; --surface:#161d26; --sunken:#1d2530; --ink:#e8edf3; --muted:#9aa6b4; --faint:#6f7b89; --line:#28313d;
+  --accent:#86a0ff; --accent-ink:#0e1319; --accent-soft:#1d2846;
+  --term:#f0b35a; --term-soft:#2d2414;
+  --ok:#4cc78a; --ok-soft:#14301f; --bad:#ff8a6b; --bad-soft:#3a1d16;
+  --c-key:#86a0ff; --c-ex:#4cc78a; --c-warn:#f0b35a;
+  --chart-a:#86a0ff; --chart-b:#f39a4a; --chart-c:#6f7b89; --chart-hi:#ff8a6b; --chart-lo:#4fc6d4;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--font-body);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
-svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+h1,h2,h3{text-wrap:balance;margin:0}
+svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-/* nav bar */
-.navbar{position:sticky;top:0;z-index:10;height:44px;display:flex;align-items:center;justify-content:center;padding:0 16px;
-  background:var(--bar);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid transparent;transition:border-color .2s}
-.navbar.scrolled{border-bottom-color:var(--sep)}
-.navbar .t{font-weight:600;font-size:17px;opacity:0;transition:opacity .2s}
-.navbar.scrolled .t{opacity:1}
-.navbar .back{position:absolute;left:8px;display:flex;align-items:center;color:var(--blue);font-size:17px}
-.navbar .back svg{width:24px;height:24px;stroke-width:2.4}
+/* ---------- szkielet ---------- */
+.app{display:grid;grid-template-columns:var(--side) minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:env(safe-area-inset-top,0px);height:100vh;overflow-y:auto;border-right:1px solid var(--line);background:var(--surface);padding:20px 14px;display:flex;flex-direction:column;gap:18px}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px}
+.brand b{font:600 19px/1 var(--font-display);letter-spacing:-.01em}
+.brand small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--accent);display:grid;place-items:center;flex:none}
+.logo svg{width:20px;height:20px}
+.searchbtn{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:10px;background:var(--sunken);color:var(--muted);font-size:14px;text-align:left}
+.searchbtn kbd{margin-left:auto;font:500 11px var(--font-mono);border:1px solid var(--line);border-radius:5px;padding:1px 5px;background:var(--surface)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:9px;color:var(--muted);font-weight:500;font-size:15px}
+.nav a:hover{background:var(--sunken);color:var(--ink)}
+.nav a.on{background:var(--accent-soft);color:var(--accent)}
+.navsub{display:flex;flex-direction:column;margin:2px 0 6px 21px;padding-left:12px;border-left:1px solid var(--line)}
+.navsub a{font-size:13.5px;padding:6px 10px;gap:8px}
+.navsub a .num{font:500 11px var(--font-mono);color:var(--faint);min-width:22px}
+.navsub a.on .num{color:var(--accent)}
+.navsub .dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+.seg{display:inline-flex;background:var(--sunken);border-radius:10px;padding:3px;gap:2px}
+.seg button{padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 
-.wrap{max-width:680px;margin:0 auto;padding:0 16px calc(100px + env(safe-area-inset-bottom))}
-.large{font-size:34px;font-weight:700;letter-spacing:.37px;margin:4px 0 8px}
-.sub{color:var(--muted);font-size:15px;margin:-4px 0 16px}
+.topbar{display:none}
+.main{min-width:0;padding:32px 40px 96px}
+.tabbar{display:none}
 
-/* grouped inset list */
-.hdr{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:-.08px;margin:24px 16px 7px}
-.foot{color:var(--muted);font-size:13px;margin:7px 16px 0}
-.group{background:var(--card);border-radius:12px;overflow:hidden}
-.cell{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 16px;position:relative;width:100%;text-align:left}
-.cell + .cell::before{content:"";position:absolute;top:0;right:0;left:60px;border-top:.5px solid var(--sep)}
-.group.plain .cell + .cell::before{left:16px}
-.cell:active{background:var(--fill)}
-.cell .body{flex:1;min-width:0}
-.cell .body small{display:block;color:var(--muted);font-size:13px;margin-top:1px}
-.cell .val{color:var(--muted);font-size:15px}
-.chev{color:#c4c4c7;width:14px;height:14px;stroke-width:2.6}
-.ico{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
-.ico svg{width:18px;height:18px;stroke-width:2}
-.check{color:var(--green)}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{display:none}
+  .topbar{display:flex;align-items:center;gap:10px;position:sticky;top:env(safe-area-inset-top,0px);z-index:20;padding:10px 16px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .topbar .brand{padding:0;flex:1}
+  .topbar .logo{width:30px;height:30px;border-radius:9px}
+  .iconbtn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line)}
+  .main{padding:20px 16px calc(96px + env(safe-area-inset-bottom,0px))}
+  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+  .tabbar a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--faint);padding:4px 0}
+  .tabbar a.on{color:var(--accent)}
+  .tabbar svg.i{width:23px;height:23px}
+}
 
-/* widgets */
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.tile{background:var(--card);border-radius:12px;padding:14px 16px}
-.tile .n{font-size:28px;font-weight:700;margin-top:6px}
-.tile .l{color:var(--muted);font-size:13px}
-.ring{display:block}
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:50px;border-radius:12px;background:var(--blue);color:#fff;font-weight:600}
-.btn.gray{background:var(--fill);color:var(--blue)}
-.btn:disabled{opacity:.4}
+/* ---------- typografia stron ---------- */
+.page{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13.5px;color:var(--muted)}
+.crumbs a:hover{color:var(--accent)}
+.crumbs svg{width:14px;height:14px}
+.eyebrow{font:600 12px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.h1{font:600 clamp(26px,4vw,38px)/1.15 var(--font-display);letter-spacing:-.02em}
+.h2{font:600 20px/1.25 var(--font-display);letter-spacing:-.01em}
+.lead{font-size:18px;color:var(--muted);max-width:62ch;margin:0}
+.muted{color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.stack{display:flex;flex-direction:column;gap:12px}
 
-/* segmented control */
-.seg{display:flex;background:var(--fill);border-radius:9px;padding:2px;margin:8px 0 16px;overflow-x:auto;scrollbar-width:none}
-.seg a{flex:1;min-width:max-content;text-align:center;font-size:13px;font-weight:500;padding:6px 10px;border-radius:7px;white-space:nowrap}
-.seg a.on{background:var(--card);box-shadow:0 3px 8px rgba(0,0,0,.12),0 3px 1px rgba(0,0,0,.04);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border-radius:11px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn:hover{filter:brightness(1.06)}
+.btn.ghost{background:var(--sunken);color:var(--ink)}
+.btn.wide{width:100%}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:14px;font-weight:500}
+.chip:hover{border-color:var(--term);color:var(--term)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--sunken);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill svg{width:13px;height:13px;stroke-width:2.4}
 
-.note{padding:14px 16px;line-height:1.5}
-.note li{margin:6px 0}
-.formula{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:16px}
-.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--fill);color:var(--muted)}
-.badge.ok{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
+/* ---------- start ---------- */
+.hero{display:flex;flex-direction:column;gap:16px;padding:32px;border-radius:20px;background:var(--surface);border:1px solid var(--line);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-40px;top:-40px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,var(--accent-soft),transparent 70%);pointer-events:none}
+.bigsearch{display:flex;align-items:center;gap:12px;max-width:560px;padding:14px 16px;border-radius:14px;background:var(--bg);border:1px solid var(--line);color:var(--muted);font-size:16px;text-align:left;position:relative;z-index:1}
+.bigsearch:hover{border-color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat{padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.stat b{font:600 26px/1.1 var(--font-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--muted)}
+.continue{display:flex;align-items:center;gap:16px;padding:18px 20px}
+.continue:hover{border-color:var(--accent)}
+.continue .body{flex:1;min-width:0}
+.continue .body b{display:block;font-size:17px}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.lcard{display:flex;flex-direction:column;gap:12px;padding:20px}
+.lcard:hover{border-color:var(--accent);box-shadow:var(--shadow)}
+.lnum{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font:600 16px var(--font-display);background:var(--accent);color:var(--accent-ink)}
+.lcard.soon{opacity:.6}
+.lcard.soon .lnum{background:var(--sunken);color:var(--muted)}
+.bar{height:6px;border-radius:3px;background:var(--sunken);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok);border-radius:3px}
+.soonlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.soonlist div{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px dashed var(--line);color:var(--muted);font-size:14px}
+.soonlist .n{font:500 12px var(--font-mono);color:var(--faint)}
 
-/* flashcards */
-.flash{background:var(--card);border-radius:16px;min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.flash .w{font-size:26px;font-weight:600}
-.flash .def{font-size:19px;font-weight:500;line-height:1.4}
-.flash .s{color:var(--muted);font-size:13px}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+/* ---------- wykład ---------- */
+.subgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sub{display:flex;gap:14px;padding:16px 18px;align-items:flex-start}
+.sub:hover{border-color:var(--accent);box-shadow:var(--shadow)}
+.sub .num{font:600 13px var(--font-mono);color:var(--accent);background:var(--accent-soft);border-radius:8px;padding:5px 7px;flex:none}
+.sub .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.sub .body b{font-size:16px;line-height:1.3}
+.acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.act{display:flex;gap:14px;align-items:center;padding:18px}
+.act:hover{border-color:var(--accent)}
+.act .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:none}
+.act .ic.ok{background:var(--ok-soft);color:var(--ok)}
+.act .body{flex:1;min-width:0}
+.act .body b{display:block}
 
-/* quiz */
-.qprog{height:4px;background:var(--fill);border-radius:2px;overflow:hidden;margin:4px 0 16px}
-.qprog i{display:block;height:100%;background:var(--blue);transition:width .3s}
-.q{font-size:20px;font-weight:600;margin:0 0 14px}
-.opt{justify-content:space-between}
-.opt.ok{color:var(--green);font-weight:600}
-.opt.bad{color:var(--red)}
-.why{color:var(--muted);font-size:15px;padding:12px 16px}
-.result{text-align:center;padding:24px 16px}
-.result .big{font-size:48px;font-weight:700}
+/* ---------- artykuł ---------- */
+.artwrap{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:48px;max-width:1080px;margin:0 auto}
+.art{min-width:0;max-width:70ch}
+.toc{position:sticky;top:32px;align-self:start;display:flex;flex-direction:column;gap:2px;font-size:13.5px;border-left:1px solid var(--line);padding-left:14px}
+.toc b{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.toc a{color:var(--muted);padding:4px 0}
+.toc a:hover,.toc a.on{color:var(--accent)}
+@media (max-width:1200px){.artwrap{grid-template-columns:minmax(0,1fr)}.toc{display:none}}
+.arthead{display:flex;flex-direction:column;gap:12px;margin-bottom:8px}
+.meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:14px}
+.meta span{display:inline-flex;align-items:center;gap:6px}
+.meta svg{width:16px;height:16px}
+.prose{font-size:17px;line-height:1.72}
+.prose>p{margin:0 0 16px}
+.prose h2{font:600 22px/1.3 var(--font-display);letter-spacing:-.01em;margin:40px 0 14px;scroll-margin-top:80px}
+.prose h3{font:600 17px/1.35 var(--font-body);margin:26px 0 8px}
+.prose ul,.prose ol{margin:0 0 18px;padding-left:22px}
+.prose li{margin:6px 0;padding-left:4px}
+.prose li::marker{color:var(--accent);font-weight:600}
+.prose strong{font-weight:650}
+.term{display:inline;font:inherit;color:inherit;background:none;padding:0 1px;border-bottom:2px dotted var(--term);cursor:help;border-radius:2px;text-align:inherit}
+.term:hover,.term[aria-expanded="true"]{background:var(--term-soft);color:var(--term)}
+.call{margin:22px 0;padding:14px 18px 14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);display:flex;gap:12px}
+.call .ci{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center}
+.call .ci svg{width:17px;height:17px;stroke-width:2}
+.call.key .ci{background:var(--accent-soft);color:var(--c-key)}
+.call.ex .ci{background:var(--ok-soft);color:var(--c-ex)}
+.call.warn .ci{background:var(--term-soft);color:var(--c-warn)}
+.call b.lab{display:block;font-size:12px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:2px}
+.call.key b.lab{color:var(--c-key)} .call.ex b.lab{color:var(--c-ex)} .call.warn b.lab{color:var(--c-warn)}
+.call p{margin:0;font-size:16px;line-height:1.6}
+.formula{margin:22px 0;padding:18px 20px;border-radius:12px;background:var(--sunken);text-align:center}
+.formula .f{font:500 clamp(15px,2.4vw,19px)/1.5 var(--font-mono);overflow-x:auto;white-space:nowrap}
+.formula figcaption{margin-top:6px;font-size:14px;color:var(--muted)}
+.tbl{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.tbl table{border-collapse:collapse;width:100%;font-size:15px;line-height:1.45}
+.tbl th,.tbl td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl th{font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken)}
+.chart{margin:24px 0;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.chart h4{margin:0 0 4px;font-size:15px}
+.chart .cap{margin:2px 0 12px;font-size:14px;color:var(--muted);line-height:1.5}
+.chart svg.plot{width:100%;height:auto;display:block}
+.chart svg.plot text{fill:var(--muted);font:12px var(--font-body)}
+.chart svg.plot text.lab{fill:var(--ink);font-weight:600}
+.ctrl{display:grid;gap:12px;margin-top:14px}
+.ctrl label{display:grid;gap:4px;font-size:14px;font-weight:500}
+.ctrl label span{display:flex;justify-content:space-between;color:var(--muted);font-weight:400}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.verdict{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:15px;line-height:1.5;background:var(--sunken)}
+.verdict b{display:block;margin-bottom:2px}
+.verdict.ok{background:var(--ok-soft)} .verdict.ok b{color:var(--ok)}
+.verdict.hi{background:var(--bad-soft)} .verdict.hi b{color:var(--bad)}
+.verdict.lo{background:var(--accent-soft)} .verdict.lo b{color:var(--accent)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.endblock{margin-top:44px;display:flex;flex-direction:column;gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.pn{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.pn a{padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.pn a:hover{border-color:var(--accent)}
+.pn a small{color:var(--muted);font-size:12.5px}
+.pn a.next{text-align:right}
 
-/* tab bar */
-.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:10;display:flex;justify-content:center;background:var(--bar);
-  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--sep);padding-bottom:env(safe-area-inset-bottom)}
-.tabbar a{flex:1;max-width:170px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 4px;font-size:10px;font-weight:500;color:var(--muted)}
-.tabbar a.on{color:var(--blue)}
-.tabbar svg{width:26px;height:26px}
+/* ---------- quiz ---------- */
+.quiz{padding:22px}
+.qtop{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin-bottom:8px}
+.qbar{height:4px;border-radius:2px;background:var(--sunken);overflow:hidden;margin-bottom:18px}
+.qbar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.qq{font-size:19px;font-weight:600;line-height:1.4;margin:0 0 16px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:16px;line-height:1.4}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt .k{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--sunken);font:600 13px var(--font-mono);flex:none}
+.opt.ok{border-color:var(--ok);background:var(--ok-soft)} .opt.ok .k{background:var(--ok);color:var(--surface)}
+.opt.bad{border-color:var(--bad);background:var(--bad-soft)} .opt.bad .k{background:var(--bad);color:var(--surface)}
+.opt:disabled{cursor:default}
+.why{margin:14px 0 0;padding:12px 14px;border-radius:10px;background:var(--sunken);font-size:15px}
+.qres{text-align:center;padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.qres .big{font:600 48px/1 var(--font-display)}
 
-input[type=range]{width:100%;accent-color:var(--blue)}
-.chart text{fill:var(--muted);font-size:12px}
-.toast{position:fixed;left:50%;top:60px;transform:translateX(-50%);background:var(--card);box-shadow:0 8px 30px rgba(0,0,0,.18);border-radius:14px;padding:12px 18px;display:flex;gap:10px;align-items:center;z-index:20;font-weight:600;white-space:nowrap;animation:pop .3s}
-@keyframes pop{from{opacity:0;transform:translate(-50%,-10px)}}
+/* ---------- fiszki ---------- */
+.flash{min-height:260px;padding:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;cursor:pointer;user-select:none;border-radius:20px}
+.flash .side-l{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.flash .w{font:600 clamp(22px,4vw,30px)/1.25 var(--font-display)}
+.flash .d{font-size:18px;line-height:1.55;max-width:46ch}
+.flash .hint{font-size:13px;color:var(--faint)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ---------- słownik ---------- */
+.filter{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.filter input{flex:1;border:0;background:none;outline:none;font-size:16px;min-width:0}
+.letter{font:600 15px var(--font-display);color:var(--accent);margin:10px 0 4px}
+.glist{display:flex;flex-direction:column}
+.gitem{display:flex;flex-direction:column;gap:2px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.gitem:last-child{border-bottom:0}
+.gitem:hover{background:var(--sunken)}
+.gitem b{font-size:16px}
+.gitem span{font-size:14px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.termpage{max-width:70ch;display:flex;flex-direction:column;gap:18px}
+.termpage .def{font-size:20px;line-height:1.55;margin:0}
+.termpage .long{font-size:17px;line-height:1.72;margin:0}
+.examline{font-size:14px;color:var(--muted)}
+.examline b{color:var(--term)}
+
+/* ---------- popup ---------- */
+.pop{position:fixed;z-index:50;width:min(320px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:14px 16px;animation:pop .14s ease-out}
+.pop::before{content:"";position:absolute;left:var(--ax,24px);width:12px;height:12px;background:var(--surface);border:1px solid var(--line);transform:rotate(45deg)}
+.pop.below::before{top:-7px;border-right:0;border-bottom:0}
+.pop.above::before{bottom:-7px;border-left:0;border-top:0}
+.pop b{display:block;font-size:15.5px;margin-bottom:4px}
+.pop p{margin:0;font-size:14.5px;line-height:1.5;color:var(--ink)}
+.pop .examline{margin-top:6px}
+.pop a{display:inline-flex;align-items:center;gap:4px;margin-top:10px;font-size:14px;font-weight:600;color:var(--accent)}
+.pop a svg{width:15px;height:15px}
+@keyframes pop{from{opacity:0;transform:translateY(4px)}}
+
+/* ---------- wyszukiwarka ---------- */
+.overlay{position:fixed;inset:0;z-index:60;background:rgba(10,14,20,.45);display:flex;justify-content:center;align-items:flex-start;padding:calc(10vh + env(safe-area-inset-top,0px)) 16px 16px}
+.spanel{width:min(640px,100%);max-height:75vh;display:flex;flex-direction:column;background:var(--surface);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden}
+.sinput{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.sinput input{flex:1;border:0;outline:none;background:none;font-size:18px;min-width:0}
+.sinput button{font-size:13px;color:var(--muted)}
+.sres{overflow-y:auto;padding:8px}
+.sgroup{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:10px 12px 4px}
+.sitem{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:10px}
+.sitem:hover,.sitem.sel{background:var(--accent-soft)}
+.sitem .ic{color:var(--muted);margin-top:2px}
+.sitem b{display:block;font-size:15px}
+.sitem span{font-size:13.5px;color:var(--muted)}
+.sempty{padding:24px;text-align:center;color:var(--muted)}
+
+/* ---------- ustawienia, toast ---------- */
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.setrow:last-child{border-bottom:0}
+.setrow input[type=date]{padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg)}
+.danger{color:var(--bad);font-weight:600}
+.toast{position:fixed;left:50%;top:calc(20px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:70;background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:600;display:flex;gap:10px;align-items:center;white-space:nowrap;animation:pop .2s}
+@media (max-width:900px){
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .stat{padding:12px}
+  .stat b{font-size:21px}
+  .hero{padding:22px}
+  .acts{grid-template-columns:1fr}
+  .pn{grid-template-columns:1fr}
+  .pn a.next{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
-</head>
-<body>
-<div class="navbar" id="navbar"><span id="back"></span><span class="t" id="navTitle"></span></div>
-<div class="wrap" id="main"></div>
-<nav class="tabbar" id="tabbar"></nav>
-<script src="data.js"></script>
-<script>
-const C = window.COURSE;
 
-// Ikony w stylu SF Symbols (stroke, 24×24)
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main" id="main"></main>
+</div>
+<nav class="tabbar" id="tabbar"></nav>
+
+<script src="glossary.js"></script>
+<script src="content.js"></script>
+<script>
+"use strict";
+const C = window.COURSE, GL = window.GLOSSARY;
+const TERM = Object.fromEntries(GL.map(g => [g.id, g]));
+
+// ---------- ikony ----------
 const I = {
   home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
   book:'<path d="M12 6.5C10 5 7 4.5 3.5 5v14c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5Z"/><path d="M12 6.5v14"/>',
-  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
+  dict:'<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5v-15Z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3"/><path d="m9 13 2.5-6 2.5 6M9.8 11h3.4"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
-  chev:'<path d="m9 5 7 7-7 7"/>',
-  back:'<path d="m15 5-7 7 7 7"/>',
-  check:'<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>',
-  checkFill:'<circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" stroke-width="2.2"/>',
-  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
-  calendar:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
-  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"/>',
-  moon:'<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/>',
-  trash:'<path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
-  play:'<path d="M7 4.5v15l12-7.5-12-7.5Z"/>',
-  x:'<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  chev:'<path d="m9 6 6 6-6 6"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  back:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  checkc:'<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>',
+  star:'<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  tag:'<path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9-9-9Z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  cards:'<rect x="3" y="6" width="13" height="15" rx="2"/><path d="M8 3h11a2 2 0 0 1 2 2v13"/>',
   trophy:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 6h3v2a3 3 0 0 1-3 3M7 6H4v2a3 3 0 0 0 3 3"/>',
-  chart:'<path d="M4 4v16h16"/><path d="m7 15 4-4 3 3 5-6"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  bulb:'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.9V16h5v-.2c0-.8.4-1.5 1-1.9A6 6 0 0 0 12 3Z"/>',
+  pen:'<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
+  alert:'<path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4.5M12 17.5v.01"/>',
+  play:'<path d="M7 4.5v15l12-7.5-12-7.5Z"/>',
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"/>',
 };
-const icon = (n, cls="i") => `<svg class="${cls}" viewBox="0 0 24 24">${I[n]}</svg>`;
-const LECTURE_COLORS = ["--blue","--indigo","--orange","--teal","--pink","--green","--red"];
+const icon = (n, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+const LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V13M9.3 19V9M14.7 19v-7M20 19V5" stroke="var(--accent-ink)" stroke-width="2.6" stroke-linecap="round" fill="none"/></svg>`;
 
+// ---------- teksty interfejsu ----------
 const UI = {
-  home:{pl:"Start",ru:"Главная"}, lectures:{pl:"Wykłady",ru:"Лекции"}, exam:{pl:"Egzamin",ru:"Экзамен"}, settings:{pl:"Ustawienia",ru:"Настройки"},
-  lecture:{pl:"Wykład",ru:"Лекция"}, toExam:{pl:"dni do egzaminu",ru:"дней до экзамена"}, mastered:{pl:"wykładów zaliczonych",ru:"лекций зачтено"},
-  continue:{pl:"Kontynuuj",ru:"Продолжить"}, allDone:{pl:"Wszystkie wykłady zaliczone!",ru:"Все лекции зачтены!"},
-  summary:{pl:"Notatki",ru:"Конспект"}, formulas:{pl:"Wzory",ru:"Формулы"}, terms:{pl:"Pojęcia",ru:"Термины"},
-  cards:{pl:"Fiszki",ru:"Карточки"}, quiz:{pl:"Test",ru:"Тест"}, chart:{pl:"Wykres",ru:"График"},
-  term:{pl:"Pojęcie",ru:"Термин"}, meaning:{pl:"Znaczenie",ru:"Значение"},
-  flip:{pl:"Dotknij, aby odwrócić",ru:"Нажми, чтобы перевернуть"}, know:{pl:"Umiem",ru:"Знаю"}, again:{pl:"Jeszcze raz",ru:"Ещё раз"},
-  next:{pl:"Dalej",ru:"Дальше"}, finish:{pl:"Zakończ",ru:"Завершить"}, retry:{pl:"Spróbuj ponownie",ru:"Пройти снова"},
-  passed:{pl:"Zaliczone",ru:"Зачтено"}, notPassed:{pl:"Niezaliczone",ru:"Не зачтено"}, best:{pl:"Najlepszy wynik",ru:"Лучший результат"},
-  rule:{pl:"Wykład zostanie zaliczony po rozwiązaniu testu na 100%.",ru:"Лекция зачитывается, когда тест пройден на 100%."},
-  perfect:{pl:"Wykład zaliczony!",ru:"Лекция зачтена!"}, need:{pl:"Do zaliczenia potrzebne jest 100%.",ru:"Для зачёта нужно 100%."},
-  examDesc:{pl:"Losowe pytania ze wszystkich wykładów. Nie wpływa na zaliczenia.",ru:"Случайные вопросы по всем лекциям. Не влияет на зачёты."},
-  startExam:{pl:"Rozpocznij egzamin próbny",ru:"Начать пробный экзамен"}, questions:{pl:"pytań",ru:"вопросов"},
-  language:{pl:"Język",ru:"Язык"}, theme:{pl:"Motyw",ru:"Тема"}, auto:{pl:"Automatyczny",ru:"Авто"}, light:{pl:"Jasny",ru:"Светлая"}, dark:{pl:"Ciemny",ru:"Тёмная"},
-  reset:{pl:"Resetuj postęp",ru:"Сбросить прогресс"}, resetQ:{pl:"Na pewno usunąć cały postęp?",ru:"Точно удалить весь прогресс?"},
-  examDate:{pl:"Data egzaminu",ru:"Дата экзамена"},
-  shiftD:{pl:"Przesunięcie AD (np. wzrost G)",ru:"Сдвиг AD (например, рост G)"}, shiftS:{pl:"Przesunięcie SAS (np. szok podażowy)",ru:"Сдвиг SAS (например, шок предложения)"},
-  ch_adas:{pl:"Model AD–AS",ru:"Модель AD–AS"}, ch_inflation:{pl:"Inflacja w Polsce 2003–2024 (%)",ru:"Инфляция в Польше 2003–2024 (%)"},
-  target:{pl:"cel NBP 2,5% ± 1",ru:"цель NBP 2,5% ± 1"}, program:{pl:"Program kursu",ru:"Программа курса"}, soon:{pl:"wkrótce",ru:"скоро"},
+  start:{pl:"Start",ru:"Главная"}, lectures:{pl:"Wykłady",ru:"Лекции"}, glossary:{pl:"Słownik",ru:"Словарь"},
+  exam:{pl:"Egzamin",ru:"Экзамен"}, settings:{pl:"Ustawienia",ru:"Настройки"}, lecture:{pl:"Wykład",ru:"Лекция"},
+  search:{pl:"Szukaj pojęcia lub tematu…",ru:"Искать понятие или тему…"}, searchShort:{pl:"Szukaj",ru:"Поиск"},
+  hello:{pl:"Co dziś powtarzamy?",ru:"Что повторяем сегодня?"},
+  heroLead:{pl:"Wszystkie tematy z makroekonomii w jednym miejscu: krótkie artykuły, interaktywne wykresy, słownik pojęć i testy.",ru:"Все темы по макроэкономике в одном месте: понятные статьи, интерактивные графики, словарь понятий и тесты."},
+  read:{pl:"przeczytane podtematy",ru:"прочитано подтем"}, passed:{pl:"zaliczone wykłady",ru:"зачтено лекций"}, days:{pl:"dni do egzaminu",ru:"дней до экзамена"},
+  continue:{pl:"Kontynuuj",ru:"Продолжить"}, startHere:{pl:"Zacznij tutaj",ru:"Начни отсюда"},
+  allLectures:{pl:"Wykłady",ru:"Лекции"}, soon:{pl:"Wkrótce",ru:"Скоро"}, soonLead:{pl:"Kolejne tematy z programu kursu pojawią się po wykładach.",ru:"Следующие темы из программы курса появятся после лекций."},
+  popular:{pl:"Pojęcia z wykładu 1",ru:"Понятия из лекции 1"},
+  subs:{pl:"podtematów",ru:"подтем"}, min:{pl:"min czytania",ru:"мин чтения"}, terms:{pl:"pojęć",ru:"понятий"},
+  readDone:{pl:"Przeczytane",ru:"Прочитано"}, miniDone:{pl:"Mini-test 100%",ru:"Мини-тест 100%"},
+  topics:{pl:"Podtematy",ru:"Подтемы"}, practice:{pl:"Utrwalanie i zaliczenie",ru:"Закрепление и зачёт"},
+  cards:{pl:"Fiszki",ru:"Карточки"}, cardsLead:{pl:"pojęć z tego wykładu",ru:"понятий из этой лекции"},
+  final:{pl:"Test końcowy",ru:"Итоговый тест"}, finalLead:{pl:"pytań · zalicza wykład przy 100%",ru:"вопросов · зачёт при 100%"},
+  lecPassed:{pl:"Wykład zaliczony",ru:"Лекция зачтена"}, best:{pl:"najlepszy wynik",ru:"лучший результат"},
+  toc:{pl:"Na tej stronie",ru:"На этой странице"}, keyTerms:{pl:"Kluczowe pojęcia",ru:"Ключевые понятия"},
+  check:{pl:"Sprawdź się",ru:"Проверь себя"}, checkLead:{pl:"Krótki test do tego podtematu. Nie wpływa na zaliczenie wykładu.",ru:"Короткий тест по этой подтеме. Не влияет на зачёт лекции."},
+  prev:{pl:"Poprzedni",ru:"Назад"}, next:{pl:"Następny",ru:"Дальше"}, toLecture:{pl:"Wróć do wykładu",ru:"К лекции"},
+  key:{pl:"Zapamiętaj",ru:"Запомни"}, ex:{pl:"Przykład",ru:"Пример"}, warn:{pl:"Uwaga — częsty błąd",ru:"Внимание — частая ошибка"},
+  more:{pl:"Więcej w słowniku",ru:"Подробнее в словаре"}, onExam:{pl:"Na egzaminie",ru:"На экзамене"},
+  related:{pl:"Powiązane pojęcia",ru:"Связанные понятия"}, appears:{pl:"Występuje w",ru:"Встречается в"},
+  filter:{pl:"Filtruj pojęcia…",ru:"Фильтр понятий…"}, termsCount:{pl:"pojęć w słowniku",ru:"понятий в словаре"},
+  noRes:{pl:"Nic nie znaleziono. Spróbuj innego słowa.",ru:"Ничего не найдено. Попробуй другое слово."},
+  gTerms:{pl:"Pojęcia",ru:"Понятия"}, gTopics:{pl:"Podtematy",ru:"Подтемы"}, close:{pl:"Esc",ru:"Esc"},
+  q:{pl:"Pytanie",ru:"Вопрос"}, nextQ:{pl:"Dalej",ru:"Дальше"}, finish:{pl:"Zobacz wynik",ru:"Результат"}, retry:{pl:"Spróbuj ponownie",ru:"Пройти снова"},
+  good:{pl:"Dobrze!",ru:"Верно!"}, bad:{pl:"Niestety nie.",ru:"Неверно."},
+  perfect:{pl:"Wszystko dobrze!",ru:"Всё верно!"}, need:{pl:"Do zaliczenia potrzebne jest 100%. Przejrzyj błędne odpowiedzi i spróbuj jeszcze raz.",ru:"Для зачёта нужно 100%. Посмотри ошибки и попробуй ещё раз."},
+  passedToast:{pl:"Wykład zaliczony!",ru:"Лекция зачтена!"},
+  flip:{pl:"Dotknij, aby zobaczyć znaczenie",ru:"Нажми, чтобы увидеть значение"}, term:{pl:"Pojęcie",ru:"Понятие"}, meaning:{pl:"Znaczenie",ru:"Значение"},
+  know:{pl:"Umiem",ru:"Знаю"}, again:{pl:"Jeszcze raz",ru:"Ещё раз"}, left:{pl:"zostało",ru:"осталось"}, deckDone:{pl:"Wszystkie fiszki opanowane",ru:"Все карточки выучены"},
+  examTitle:{pl:"Egzamin próbny",ru:"Пробный экзамен"}, examLead:{pl:"15 losowych pytań ze wszystkich wykładów. Wynik nie wpływa na zaliczenia.",ru:"15 случайных вопросов по всем лекциям. Результат не влияет на зачёты."},
+  examGo:{pl:"Rozpocznij egzamin",ru:"Начать экзамен"},
+  language:{pl:"Język",ru:"Язык"}, theme:{pl:"Motyw",ru:"Тема"}, auto:{pl:"Auto",ru:"Авто"}, light:{pl:"Jasny",ru:"Светлая"}, dark:{pl:"Ciemny",ru:"Тёмная"},
+  examDate:{pl:"Data egzaminu",ru:"Дата экзамена"}, reset:{pl:"Resetuj postęp",ru:"Сбросить прогресс"}, resetSure:{pl:"Kliknij ponownie, aby usunąć cały postęp",ru:"Нажми ещё раз, чтобы удалить весь прогресс"},
+  resetDone:{pl:"Postęp usunięty",ru:"Прогресс удалён"}, progress:{pl:"Postęp",ru:"Прогресс"},
+  // wykresy
+  ds_t:{pl:"Rynek komputerów: popyt i podaż",ru:"Рынок компьютеров: спрос и предложение"},
+  ds_c:{pl:"Oś pozioma: ilość (tys. sztuk rocznie). Oś pionowa: cena (tys. zł). Zmień cenę i zobacz, czy powstaje nadwyżka, czy niedobór. Drugi suwak przesuwa cały popyt.",ru:"Горизонтальная ось: количество (тыс. штук в год). Вертикальная: цена (тыс. злотых). Измени цену и посмотри, возникает избыток или дефицит. Второй ползунок сдвигает весь спрос."},
+  price:{pl:"Cena",ru:"Цена"}, dshift:{pl:"Wzrost popytu (np. wyższe dochody)",ru:"Рост спроса (например, выше доходы)"},
+  ds_eq:{pl:"Równowaga",ru:"Равновесие"}, ds_eqt:{pl:"Kupujący chcą kupić tyle, ile sprzedający chcą sprzedać.",ru:"Покупатели хотят купить столько, сколько продавцы хотят продать."},
+  ds_sur:{pl:"Nadwyżka",ru:"Избыток"}, ds_surt:{pl:"Sprzedający oferują {s} tys., kupujący chcą {d} tys. Towar zalega, więc cena spadnie do {p}.",ru:"Продавцы предлагают {s} тыс., покупатели хотят {d} тыс. Товар залёживается, цена снизится до {p}."},
+  ds_sho:{pl:"Niedobór",ru:"Дефицит"}, ds_shot:{pl:"Kupujący chcą {d} tys., a w sprzedaży jest {s} tys. Brakuje towaru, więc cena wzrośnie do {p}.",ru:"Покупатели хотят {d} тыс., а в продаже {s} тыс. Товара не хватает, цена вырастет до {p}."},
+  qty:{pl:"Ilość",ru:"Количество"},
+  ad_t:{pl:"Model AD–AS",ru:"Модель AD–AS"},
+  ad_c:{pl:"Oś pozioma: realny PKB (Y). Oś pionowa: poziom cen (P). Przerywana linia LAS pokazuje produkcję potencjalną Y*. Przesuń AD (popyt) lub SAS (podaż).",ru:"Горизонтальная ось: реальный ВВП (Y). Вертикальная: уровень цен (P). Пунктир LAS — потенциальный выпуск Y*. Сдвигай AD (спрос) или SAS (предложение)."},
+  ad_d:{pl:"Popyt AD: w lewo ← → w prawo",ru:"Спрос AD: влево ← → вправо"}, ad_s:{pl:"Podaż SAS: w lewo ← → w prawo",ru:"Предложение SAS: влево ← → вправо"},
+  ad_d_hint:{pl:"np. wydatki rządowe, stopy procentowe",ru:"например, госрасходы, ставки"}, ad_s_hint:{pl:"np. płace, ceny surowców, technologia",ru:"например, зарплаты, сырьё, технологии"},
+  ad_eq:{pl:"Równowaga długookresowa",ru:"Долгосрочное равновесие"}, ad_eqt:{pl:"PKB = Y*. Pełne zatrudnienie, tylko bezrobocie naturalne.",ru:"ВВП = Y*. Полная занятость, только естественная безработица."},
+  ad_rec:{pl:"Luka recesyjna",ru:"Рецессионный разрыв"}, ad_rect:{pl:"PKB jest o {g}% niższy od potencjalnego. Maszyny stoją, rośnie bezrobocie. Keynes: zwiększyć AD.",ru:"ВВП на {g}% ниже потенциального. Оборудование простаивает, растёт безработица. Кейнс: увеличить AD."},
+  ad_inf:{pl:"Luka inflacyjna",ru:"Инфляционный разрыв"}, ad_inft:{pl:"PKB jest o {g}% wyższy od potencjalnego. Gospodarka jest przegrzana, rosną płace i ceny. Rada: schłodzić AD.",ru:"ВВП на {g}% выше потенциального. Экономика перегрета, растут зарплаты и цены. Совет: охладить AD."},
+  ad_pr:{pl:"Poziom cen",ru:"Уровень цен"},
+  inf_t:{pl:"Inflacja w Polsce 2003–2024",ru:"Инфляция в Польше 2003–2024"},
+  inf_c:{pl:"Średnioroczna zmiana cen (CPI), w %. Zielony pas to cel NBP: 2,5% ± 1. Czerwone słupki: powyżej celu, turkusowe: deflacja. Dotknij słupka, aby zobaczyć wartość.",ru:"Среднегодовое изменение цен (CPI), в %. Зелёная полоса — цель NBP: 2,5% ± 1. Красные столбики — выше цели, бирюзовые — дефляция. Нажми на столбик, чтобы увидеть значение."},
+  un_t:{pl:"Stopa bezrobocia w Polsce 2004–2025",ru:"Безработица в Польше 2004–2025"},
+  un_c:{pl:"Stopa bezrobocia rejestrowanego w grudniu (2025: sierpień), w %. Wzrost w 2009 r. to skutek światowego kryzysu finansowego.",ru:"Уровень зарегистрированной безработицы в декабре (2025: август), в %. Рост в 2009 году — следствие мирового финансового кризиса."},
+  src:{pl:"Źródło: GUS, NBP",ru:"Источник: GUS, NBP"}, target:{pl:"cel NBP",ru:"цель NBP"},
+  gaps_t:{pl:"Luka recesyjna i luka inflacyjna",ru:"Рецессионный и инфляционный разрыв"},
+  gaps_c:{pl:"Punkt E to równowaga krótkookresowa (AD = SAS). Jej odległość od Y* to luka.",ru:"Точка E — краткосрочное равновесие (AD = SAS). Её расстояние до Y* — разрыв."},
+  gap_rec:{pl:"Luka recesyjna: Y < Y*",ru:"Рецессионный разрыв: Y < Y*"}, gap_inf:{pl:"Luka inflacyjna: Y > Y*",ru:"Инфляционный разрыв: Y > Y*"},
 };
 
+// ---------- stan ----------
 const store = {
-  get(k,d){try{return JSON.parse(localStorage.getItem("makro."+k))??d}catch{return d}},
-  set(k,v){try{localStorage.setItem("makro."+k,JSON.stringify(v))}catch{}},
+  get(k, d){ try{ const v = localStorage.getItem("makro2." + k); return v == null ? d : JSON.parse(v); }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem("makro2." + k, JSON.stringify(v)); }catch{} },
 };
-let lang = store.get("lang","pl");
-let best = store.get("best",{});          // { [id]: najlepszy wynik 0..1 }
-const passed = id => best[id] === 1;       // zaliczenie = 100% w teście wykładu
-const t = o => o==null ? "" : typeof o==="string" ? o : (o[lang] ?? o.pl);
-const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const lectures = [...C.topics].sort((a,b)=>a.lecture-b.lecture);
-const colorOf = x => `var(${LECTURE_COLORS[(x.lecture-1)%LECTURE_COLORS.length]})`;
+let lang = store.get("lang", "pl");
+const S = { read: store.get("read", {}), mini: store.get("mini", {}), best: store.get("best", {}), last: store.get("last", null) };
+const save = () => { store.set("read", S.read); store.set("mini", S.mini); store.set("best", S.best); store.set("last", S.last); };
+const t = o => o == null ? "" : typeof o === "string" ? o : (o[lang] ?? o.pl);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = (s, o) => s.replace(/\{(\w+)\}/g, (_, k) => o[k]);
+const num = v => String(v).replace(".", lang === "pl" ? "," : ",");
+const tn = id => TERM[id]?.[lang] || TERM[id]?.pl;
+
+const allSubs = C.lectures.flatMap(L => L.subs.map(s => ({ ...s, L })));
+const findSub = id => allSubs.find(s => s.id === id);
+const lecPassed = L => S.best["w" + L.n] === 1;
+const words = s => (s.body.pl.match(/\S+/g) || []).length;
+const readMin = s => Math.max(2, Math.round(words(s) / 170));
+const termsIn = txt => [...new Set([...txt.matchAll(/\[\[([a-z0-9-]+)/g)].map(m => m[1]).filter(id => TERM[id]))];
+const lecTerms = L => [...new Set(L.subs.flatMap(s => termsIn(s.body.pl)))];
 
 function applyTheme(){
-  const th = store.get("theme","auto");
-  if (th==="auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = th;
+  const th = store.get("theme", "auto");
+  if (th === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = th;
 }
 function toast(html){
-  const d=document.createElement("div"); d.className="toast"; d.innerHTML=html; document.body.appendChild(d);
-  setTimeout(()=>d.remove(),2200);
+  const d = document.createElement("div"); d.className = "toast"; d.innerHTML = html; document.body.appendChild(d);
+  setTimeout(() => d.remove(), 2400);
+}
+
+// ---------- mini-markdown ----------
+function inline(s){
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[\[([a-z0-9-]+)(?:\|([^\]]+))?\]\]/g, (m, id, txt) => TERM[id]
+      ? `<button type="button" class="term" data-t="${id}" aria-expanded="false">${txt || esc(tn(id).n)}</button>`
+      : (txt || id));
+}
+function md(src){
+  const lines = src.split("\n"); const out = []; const toc = []; let i = 0;
+  const CALL = { zapamietaj:["key","bulb"], przyklad:["ex","pen"], uwaga:["warn","alert"] };
+  while (i < lines.length){
+    const ln = lines[i].trim();
+    if (!ln){ i++; continue; }
+    let m;
+    if ((m = ln.match(/^## (.+)/))){ const id = "s" + (toc.length + 1); toc.push({ id, h: m[1] }); out.push(`<h2 id="${id}">${inline(m[1])}</h2>`); i++; continue; }
+    if ((m = ln.match(/^### (.+)/))){ out.push(`<h3>${inline(m[1])}</h3>`); i++; continue; }
+    if ((m = ln.match(/^\{\{chart:(\w+)\}\}$/))){ out.push(`<div class="chart" data-chart="${m[1]}"></div>`); i++; continue; }
+    if ((m = ln.match(/^\$\$ (.+?)(?: \| (.+))?$/))){ out.push(`<figure class="formula"><div class="f">${esc(m[1])}</div>${m[2] ? `<figcaption>${inline(m[2])}</figcaption>` : ""}</figure>`); i++; continue; }
+    if ((m = ln.match(/^> !(\w+) (.+)/))){
+      const [cls, ic] = CALL[m[1]] || CALL.zapamietaj;
+      out.push(`<aside class="call ${cls}"><span class="ci">${icon(ic)}</span><div><b class="lab">${t(UI[cls])}</b><p>${inline(m[2])}</p></div></aside>`); i++; continue;
+    }
+    if (ln.startsWith("|")){
+      const rows = []; while (i < lines.length && lines[i].trim().startsWith("|")){ rows.push(lines[i].trim()); i++; }
+      const cells = r => r.slice(1, -1).split("|").map(c => c.trim());
+      const body = rows.filter(r => !/^\|[\s|:-]+\|$/.test(r));
+      out.push(`<div class="tbl"><table><thead><tr>${cells(body[0]).map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.slice(1).map(r => `<tr>${cells(r).map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      continue;
+    }
+    if (/^(- |\d+\. )/.test(ln)){
+      const ord = /^\d/.test(ln); const items = [];
+      while (i < lines.length && /^(- |\d+\. )/.test(lines[i].trim())){ items.push(lines[i].trim().replace(/^(- |\d+\. )/, "")); i++; }
+      out.push(`<${ord ? "ol" : "ul"}>${items.map(x => `<li>${inline(x)}</li>`).join("")}</${ord ? "ol" : "ul"}>`); continue;
+    }
+    out.push(`<p>${inline(ln)}</p>`); i++;
+  }
+  return { html: out.join(""), toc };
+}
+
+// ---------- nawigacja ----------
+function route(){
+  const h = location.hash.replace(/^#/, "");
+  let m;
+  if (!h || h === "start") return { v: "home" };
+  if ((m = h.match(/^w(\d+)$/))) return { v: "lecture", n: +m[1] };
+  if ((m = h.match(/^w(\d+)-fiszki$/))) return { v: "cards", n: +m[1] };
+  if ((m = h.match(/^w(\d+)-test$/))) return { v: "final", n: +m[1] };
+  if ((m = h.match(/^w(\d+\.\d+)$/))) return { v: "sub", id: m[1] };
+  if (h === "slownik") return { v: "glossary" };
+  if ((m = h.match(/^p-([a-z0-9-]+)$/))) return { v: "term", id: m[1] };
+  if (h === "egzamin") return { v: "exam" };
+  if (h === "ustawienia") return { v: "settings" };
+  return { v: "home" };
+}
+function tabOf(r){ return { home:"start", lecture:"lectures", cards:"lectures", final:"lectures", sub:"lectures", glossary:"glossary", term:"glossary", exam:"exam", settings:"settings" }[r.v]; }
+
+function renderChrome(r){
+  const tab = tabOf(r);
+  const L1 = r.v === "sub" ? findSub(r.id)?.L : (r.n ? C.lectures.find(L => L.n === r.n) : null);
+  const brand = `<a class="brand" href="#start"><span class="logo">${LOGO}</span><span><b>${esc(C.name)}</b><small>${esc(C.university)} · ${t(UI.lectures).toLowerCase()}</small></span></a>`;
+  const navItem = (k, ic, h) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k === "start" ? "start" : k])}</a>`;
+  const lecNav = C.lectures.map(L => `<a href="#w${L.n}" class="${L1 === L && r.v !== "sub" ? "on" : ""}">${icon("book")}${t(UI.lecture)} ${L.n}</a>
+    ${L1 === L ? `<div class="navsub">${L.subs.map(s => `<a href="#w${s.id}" class="${r.id === s.id ? "on" : ""}"><span class="num">${s.id}</span>${esc(t(s.title))}${S.mini[s.id] === 1 ? '<span class="dot" title="100%"></span>' : ""}</a>`).join("")}</div>` : ""}`).join("");
+  document.getElementById("side").innerHTML = `${brand}
+    <button class="searchbtn" data-open-search>${icon("search")}${t(UI.searchShort)}<kbd>⌘K</kbd></button>
+    <nav class="nav" aria-label="${t(UI.start)}">
+      ${navItem("start", "home", "#start")}
+      ${lecNav}
+      ${navItem("glossary", "dict", "#slownik")}
+      ${navItem("exam", "target", "#egzamin")}
+      ${navItem("settings", "gear", "#ustawienia")}
+    </nav>
+    <div class="side-foot"><div class="seg" role="group" aria-label="${t(UI.language)}">${["pl","ru"].map(l => `<button data-lang="${l}" class="${lang === l ? "on" : ""}">${l === "pl" ? "Polski" : "Русский"}</button>`).join("")}</div></div>`;
+  document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button>`;
+  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#w1"],["glossary","dict","#slownik"],["exam","target","#egzamin"],["settings","gear","#ustawienia"]]
+    .map(([k, ic, h]) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k])}</a>`).join("");
 }
 
 // ---------- widoki ----------
-function ring(p){
-  const r=26,c=2*Math.PI*r;
-  return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--fill)" stroke-width="7"/>
-    <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--green)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c*(1-p)}" transform="rotate(-90 32 32)"/></svg>`;
-}
-function lectureCell(x){
-  const ok=passed(x.id);
-  return `<a class="cell" href="#/l/${x.id}">
-    <span class="ico" style="background:${colorOf(x)}">${icon("book")}</span>
-    <span class="body">${esc(t(x.title))}<small>${t(UI.lecture)} ${x.lecture}${best[x.id]!=null&&!ok?` · ${Math.round(best[x.id]*100)}%`:""}</small></span>
-    ${ok?`<span class="check">${icon("checkFill")}</span>`:""}${icon("chev","i chev")}</a>`;
-}
 function vHome(){
-  const n=lectures.length, d=lectures.filter(x=>passed(x.id)).length;
-  const days=Math.max(0,Math.ceil((new Date(C.examDate)-new Date())/864e5));
-  const nx=lectures.find(x=>!passed(x.id));
-  return {title:t(C.title), html:`
-    <h1 class="large">${esc(t(C.title))}</h1><p class="sub">${esc(C.university)}</p>
-    <div class="tiles">
-      <div class="tile" style="display:flex;align-items:center;gap:12px">${ring(n?d/n:0)}<div><div class="n" style="margin:0">${d}/${n}</div><div class="l">${t(UI.mastered)}</div></div></div>
-      <div class="tile"><span style="color:var(--orange)">${icon("calendar")}</span><div class="n">${days}</div><div class="l">${t(UI.toExam)}</div></div>
+  const total = allSubs.length, read = allSubs.filter(s => S.read[s.id]).length;
+  const passed = C.lectures.filter(lecPassed).length;
+  const days = Math.max(0, Math.ceil((new Date(store.get("exam", C.examDate)) - new Date()) / 864e5));
+  const last = findSub(S.last) || allSubs.find(s => !S.read[s.id]) || allSubs[0];
+  const pop = lecTerms(C.lectures[0]).slice(0, 12);
+  return `<div class="page">
+    <section class="hero">
+      <span class="eyebrow">${esc(C.university)} · ${esc(C.lecturer)}</span>
+      <h1 class="h1">${t(UI.hello)}</h1>
+      <p class="lead">${t(UI.heroLead)}</p>
+      <button class="bigsearch" data-open-search>${icon("search")}${t(UI.search)}</button>
+    </section>
+    <div class="stats">
+      <div class="card stat"><b>${read}/${total}</b><span>${t(UI.read)}</span></div>
+      <div class="card stat"><b>${passed}/${C.lectures.length}</b><span>${t(UI.passed)}</span></div>
+      <div class="card stat"><b>${days}</b><span>${t(UI.days)}</span></div>
     </div>
-    <div class="hdr">${t(UI.continue)}</div>
-    <div class="group">${nx?lectureCell(nx):`<div class="cell"><span class="ico" style="background:var(--green)">${icon("trophy")}</span><span class="body">${t(UI.allDone)}</span></div>`}</div>
-    <p class="foot">${t(UI.rule)}</p>
-`};
+    <section class="stack">
+      <h2 class="h2">${S.last ? t(UI.continue) : t(UI.startHere)}</h2>
+      <a class="card continue" href="#w${last.id}">
+        <span class="lnum">${last.L.n}</span>
+        <span class="body"><span class="muted" style="font-size:13px">${t(UI.lecture)} ${last.L.n} · ${last.id}</span><b>${esc(t(last.title))}</b></span>
+        ${icon("arrow")}
+      </a>
+    </section>
+    <section class="stack">
+      <h2 class="h2">${t(UI.allLectures)}</h2>
+      <div class="lgrid">${C.lectures.map(lecCard).join("")}</div>
+      <p class="muted" style="margin:6px 0 0;font-size:14px">${t(UI.soonLead)}</p>
+      <div class="soonlist">${C.program.map(p => `<div>${icon("lock")}<span class="n">${p.n}</span>${esc(t(p))}</div>`).join("")}</div>
+    </section>
+    <section class="stack">
+      <h2 class="h2">${t(UI.popular)}</h2>
+      <div class="chips">${pop.map(id => `<button type="button" class="chip term-chip" data-t="${id}">${icon("tag")}${esc(tn(id).n)}</button>`).join("")}</div>
+    </section>
+  </div>`;
 }
-function vLectures(){
-  const have=new Set(lectures.map(x=>x.lecture));
-  const rest=(C.program||[]).filter(p=>!have.has(p.n));
-  return {title:t(UI.lectures), html:`<h1 class="large">${t(UI.lectures)}</h1>
-    <div class="group">${lectures.map(lectureCell).join("")}</div><p class="foot">${t(UI.rule)}</p>
-    ${rest.length?`<div class="hdr">${t(UI.program)}</div><div class="group">${rest.map(p=>`<div class="cell" style="opacity:.55">
-      <span class="ico" style="background:var(--muted)">${icon("lock")}</span><span class="body">${esc(t(p))}<small>${t(UI.lecture)} ${p.n} · ${t(UI.soon)}</small></span></div>`).join("")}</div>`:""}`};
+function lecCard(L){
+  const done = L.subs.filter(s => S.read[s.id]).length;
+  return `<a class="card lcard" href="#w${L.n}">
+    <div class="row" style="justify-content:space-between"><span class="lnum">${L.n}</span>${lecPassed(L) ? `<span class="pill ok">${icon("check")}${t(UI.lecPassed)}</span>` : `<span class="pill">${L.subs.length} ${t(UI.subs)}</span>`}</div>
+    <b style="font-size:18px;line-height:1.3">${esc(t(L.title))}</b>
+    <span class="muted" style="font-size:14px">${esc(t(L.lead))}</span>
+    <div class="bar" aria-label="${t(UI.progress)}"><i style="width:${done / L.subs.length * 100}%"></i></div>
+  </a>`;
 }
-function vLecture(x, tab){
-  const tabs=["summary","formulas","terms","cards","quiz"]; if(x.charts?.length) tabs.splice(1,0,"chart");
-  if(!tabs.includes(tab)) tab="summary";
-  const ok=passed(x.id);
-  let body="";
-  if(tab==="summary") body=x.summary.map(s=>`<div class="hdr">${esc(t(s.h))}</div><div class="group"><ul class="note">${(s.pts[lang]||s.pts.pl).map(p=>`<li>${esc(p)}</li>`).join("")}</ul></div>`).join("");
-  if(tab==="formulas") body=`<div class="group plain">${x.formulas.map(f=>`<div class="cell"><span class="body"><span class="formula">${esc(f.f)}</span><small>${esc(t(f.d))}</small></span></div>`).join("")}</div>`;
-  if(tab==="terms") body=`<div class="group plain">${x.terms.map(r=>`<div class="cell"><span class="body"><b>${esc(lang==="pl"?r.pl:r.ru)}</b><small>${r.def?esc(t(r.def)):""}</small><small>${esc(lang==="pl"?r.ru:r.pl)}${r.en?` · ${esc(r.en)}`:""}</small></span></div>`).join("")}</div>`;
-  if(tab==="chart") body=x.charts.map(c=>`<div class="hdr">${t(UI["ch_"+c])}</div><div class="group" style="padding:16px" data-chart="${c}"></div>`).join("");
-  if(tab==="cards") body=`<div id="cards"></div>`;
-  if(tab==="quiz") body=`<div id="quiz"></div>`;
-  return {title:t(x.title), back:["#/lectures",t(UI.lectures)], html:`
-    <p class="sub" style="margin:8px 0 0">${t(UI.lecture)} ${x.lecture}</p>
-    <h1 class="large" style="font-size:28px">${esc(t(x.title))}</h1>
-    <span class="badge ${ok?"ok":""}">${ok?t(UI.passed):t(UI.notPassed)}${best[x.id]!=null?` · ${t(UI.best)}: ${Math.round(best[x.id]*100)}%`:""}</span>
-    <div class="seg">${tabs.map(k=>`<a class="${k===tab?"on":""}" href="#/l/${x.id}/${k}">${t(UI[k])}</a>`).join("")}</div>
-    ${body}`};
+function vLecture(L){
+  const nterms = lecTerms(L).length, bestv = S.best["w" + L.n];
+  return `<div class="page">
+    <nav class="crumbs"><a href="#start">${t(UI.start)}</a>${icon("chev")}<span>${t(UI.lecture)} ${L.n}</span></nav>
+    <header class="stack">
+      <span class="eyebrow">${t(UI.lecture)} ${L.n}</span>
+      <h1 class="h1">${esc(t(L.title))}</h1>
+      <p class="lead">${esc(t(L.lead))}</p>
+    </header>
+    <section class="stack">
+      <h2 class="h2">${t(UI.topics)}</h2>
+      <div class="subgrid">${L.subs.map(s => `<a class="card sub" href="#w${s.id}">
+        <span class="num">${s.id}</span>
+        <span class="body"><b>${esc(t(s.title))}</b>
+          <span class="row" style="gap:8px"><span class="pill">${icon("clock")}${readMin(s)} ${t(UI.min)}</span>
+          ${S.read[s.id] ? `<span class="pill ok">${icon("check")}${t(UI.readDone)}</span>` : ""}
+          ${S.mini[s.id] === 1 ? `<span class="pill ok">${icon("star")}100%</span>` : ""}</span></span>
+      </a>`).join("")}</div>
+    </section>
+    <section class="stack">
+      <h2 class="h2">${t(UI.practice)}</h2>
+      <div class="acts">
+        <a class="card act" href="#w${L.n}-fiszki"><span class="ic">${icon("cards")}</span><span class="body"><b>${t(UI.cards)}</b><span class="muted">${nterms} ${t(UI.cardsLead)}</span></span>${icon("chev")}</a>
+        <a class="card act" href="#w${L.n}-test"><span class="ic ${lecPassed(L) ? "ok" : ""}">${icon(lecPassed(L) ? "trophy" : "target")}</span><span class="body"><b>${t(UI.final)}</b><span class="muted">${lecPassed(L) ? t(UI.lecPassed) : `${L.final.length} ${t(UI.finalLead)}${bestv != null ? ` · ${t(UI.best)} ${Math.round(bestv * 100)}%` : ""}`}</span></span>${icon("chev")}</a>
+      </div>
+    </section>
+  </div>`;
+}
+function vSub(s){
+  const L = s.L, idx = L.subs.indexOf(s), prev = L.subs[idx - 1], next = L.subs[idx + 1];
+  const { html, toc } = md(t(s.body));
+  const terms = termsIn(t(s.body));
+  return `<div class="artwrap">
+    <article class="art">
+      <div class="arthead">
+        <nav class="crumbs"><a href="#w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${s.id}</span></nav>
+        <h1 class="h1">${esc(t(s.title))}</h1>
+        <div class="meta"><span>${icon("clock")}${readMin(s)} ${t(UI.min)}</span><span>${icon("tag")}${terms.length} ${t(UI.terms)}</span>${S.mini[s.id] === 1 ? `<span style="color:var(--ok)">${icon("star")}${t(UI.miniDone)}</span>` : ""}</div>
+      </div>
+      <div class="prose">${html}</div>
+      <section class="endblock" id="endmark">
+        <h2 class="h2">${t(UI.keyTerms)}</h2>
+        <div class="chips">${terms.map(id => `<button type="button" class="chip term-chip" data-t="${id}">${esc(tn(id).n)}</button>`).join("")}</div>
+      </section>
+      <section class="endblock">
+        <div><h2 class="h2">${t(UI.check)}</h2><p class="muted" style="margin:6px 0 0">${t(UI.checkLead)}</p></div>
+        <div class="card quiz" id="quiz"></div>
+      </section>
+      <div class="pn">
+        ${prev ? `<a class="card" href="#w${prev.id}"><small>← ${t(UI.prev)} · ${prev.id}</small><b>${esc(t(prev.title))}</b></a>` : `<a class="card" href="#w${L.n}"><small>← ${t(UI.toLecture)}</small><b>${esc(t(L.title))}</b></a>`}
+        ${next ? `<a class="card next" href="#w${next.id}"><small>${t(UI.next)} · ${next.id} →</small><b>${esc(t(next.title))}</b></a>` : `<a class="card next" href="#w${L.n}-test"><small>${t(UI.next)} →</small><b>${t(UI.final)}</b></a>`}
+      </div>
+    </article>
+    <aside class="toc"><b>${t(UI.toc)}</b>${toc.map(x => `<a href="#w${s.id}" data-goto="${x.id}">${inline(x.h).replace(/<[^>]+>/g, "")}</a>`).join("")}</aside>
+  </div>`;
+}
+function vCards(L){
+  return `<div class="page" style="max-width:640px">
+    <nav class="crumbs"><a href="#w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.cards)}</span></nav>
+    <h1 class="h1">${t(UI.cards)}</h1>
+    <div id="cards"></div></div>`;
+}
+function vFinal(L){
+  return `<div class="page" style="max-width:720px">
+    <nav class="crumbs"><a href="#w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.final)}</span></nav>
+    <header class="stack"><h1 class="h1">${t(UI.final)}</h1><p class="lead">${esc(t(L.title))} · ${L.final.length} ${t(UI.finalLead)}</p></header>
+    <div class="card quiz" id="quiz"></div></div>`;
+}
+function sortedTerms(){
+  return [...GL].sort((a, b) => a[lang].n.localeCompare(b[lang].n, lang));
+}
+function vGlossary(){
+  return `<div class="page" style="max-width:820px">
+    <header class="stack"><h1 class="h1">${t(UI.glossary)}</h1><p class="lead">${GL.length} ${t(UI.termsCount)}</p></header>
+    <label class="filter">${icon("search")}<span class="sr">${t(UI.filter)}</span><input id="gfilter" placeholder="${t(UI.filter)}" autocomplete="off"></label>
+    <div id="glist"></div></div>`;
+}
+function glossaryList(q){
+  const nq = norm(q || "");
+  const items = sortedTerms().filter(g => !nq || norm(g[lang].n + " " + g[lang].s).includes(nq));
+  if (!items.length) return `<p class="muted">${t(UI.noRes)}</p>`;
+  const groups = {};
+  items.forEach(g => { const L0 = g[lang].n[0].toUpperCase(); (groups[L0] = groups[L0] || []).push(g); });
+  return Object.entries(groups).map(([L0, arr]) => `<div class="letter">${L0}</div><div class="card glist">${arr.map(g => `<a class="gitem" href="#p-${g.id}"><b>${esc(g[lang].n)}</b><span>${esc(g[lang].s)}</span></a>`).join("")}</div>`).join("");
+}
+function vTerm(g){
+  const d = g[lang];
+  const where = allSubs.filter(s => termsIn(s.body.pl).includes(g.id));
+  return `<div class="page" style="max-width:820px"><div class="termpage">
+    <nav class="crumbs"><a href="#slownik">${t(UI.glossary)}</a>${icon("chev")}<span>${esc(d.n)}</span></nav>
+    <h1 class="h1">${esc(d.n)}</h1>
+    ${lang === "ru" ? `<span class="examline">${t(UI.onExam)}: <b>${esc(g.pl.n)}</b></span>` : ""}
+    <p class="def">${esc(d.s)}</p>
+    <p class="long">${esc(d.l)}</p>
+    ${g.rel.length ? `<div class="stack"><h2 class="h2">${t(UI.related)}</h2><div class="chips">${g.rel.filter(id => TERM[id]).map(id => `<a class="chip" href="#p-${id}">${icon("tag")}${esc(tn(id).n)}</a>`).join("")}</div></div>` : ""}
+    ${where.length ? `<div class="stack"><h2 class="h2">${t(UI.appears)}</h2><div class="stack" style="gap:8px">${where.map(s => `<a class="card continue" href="#w${s.id}" style="padding:12px 16px"><span class="pill">${s.id}</span><span class="body"><b style="font-size:15px">${esc(t(s.title))}</b></span>${icon("chev")}</a>`).join("")}</div></div>` : ""}
+  </div></div>`;
 }
 function vExam(){
-  const total=C.topics.reduce((s,x)=>s+x.quiz.length,0);
-  return {title:t(UI.exam), html:`<h1 class="large">${t(UI.exam)}</h1>
-    <div id="quiz"><div class="group"><div class="cell"><span class="ico" style="background:var(--red)">${icon("target")}</span>
-      <span class="body">${t(UI.examDesc)}<small>${Math.min(15,total)} ${t(UI.questions)}</small></span></div></div>
-      <div style="margin-top:16px"><button class="btn" id="go">${icon("play")} ${t(UI.startExam)}</button></div></div>`};
+  return `<div class="page" style="max-width:720px">
+    <header class="stack"><h1 class="h1">${t(UI.examTitle)}</h1><p class="lead">${t(UI.examLead)}</p></header>
+    <div class="card quiz" id="quiz"><button class="btn wide" id="go">${icon("play")}${t(UI.examGo)}</button></div></div>`;
 }
 function vSettings(){
-  const th=store.get("theme","auto");
-  const opt=(cur,val,label,key)=>`<button class="cell" data-${key}="${val}"><span class="body">${label}</span>${cur===val?`<span style="color:var(--blue)">${icon("checkFill")}</span>`:""}</button>`;
-  return {title:t(UI.settings), html:`<h1 class="large">${t(UI.settings)}</h1>
-    <div class="hdr">${t(UI.language)}</div>
-    <div class="group plain">${opt(lang,"pl","Polski","lang")}${opt(lang,"ru","Русский","lang")}</div>
-    <div class="hdr">${t(UI.theme)}</div>
-    <div class="group plain">${opt(th,"auto",t(UI.auto),"theme")}${opt(th,"light",t(UI.light),"theme")}${opt(th,"dark",t(UI.dark),"theme")}</div>
-    <div class="hdr">&nbsp;</div>
-    <div class="group plain"><div class="cell"><span class="body">${t(UI.examDate)}</span><span class="val">${new Date(C.examDate).toLocaleDateString(lang)}</span></div></div>
-    <div class="hdr">&nbsp;</div>
-    <div class="group plain"><button class="cell" id="reset" style="color:var(--red);justify-content:center">${t(UI.reset)}</button></div>`};
+  const th = store.get("theme", "auto");
+  const seg = (key, cur, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-${key}="${v}" class="${cur === v ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  return `<div class="page" style="max-width:720px">
+    <h1 class="h1">${t(UI.settings)}</h1>
+    <div class="card">
+      <div class="setrow"><b>${t(UI.language)}</b>${seg("lang", lang, [["pl","Polski"],["ru","Русский"]])}</div>
+      <div class="setrow"><b>${t(UI.theme)}</b>${seg("theme", th, [["auto",t(UI.auto)],["light",t(UI.light)],["dark",t(UI.dark)]])}</div>
+      <div class="setrow"><label for="examdate"><b>${t(UI.examDate)}</b></label><input type="date" id="examdate" value="${esc(store.get("exam", C.examDate))}"></div>
+      <div class="setrow"><button class="danger" id="reset">${t(UI.reset)}</button></div>
+    </div></div>`;
 }
 
-// ---------- interakcje ----------
-function cards(el, x){
-  let deck=x.terms.map((_,i)=>i), i=0, flipped=false;
-  const draw=()=>{
-    if(!deck.length){el.innerHTML=`<div class="group result"><span class="check">${icon("checkFill")}</span><p>${x.terms.length}/${x.terms.length}</p></div>
-      <div style="margin-top:12px"><button class="btn gray" id="re">${t(UI.retry)}</button></div>`;el.querySelector("#re").onclick=()=>cards(el,x);return;}
-    const r=x.terms[deck[i%deck.length]];
-    const front=lang==="pl"?r.pl:r.ru, back=r.def?t(r.def):(lang==="pl"?r.ru:r.pl);
-    el.innerHTML=`<div class="flash" id="fc"><span class="s">${t(flipped?UI.meaning:UI.term)} · ${deck.length}</span>
-      <div class="w${flipped?" def":""}" style="margin:16px 0">${esc(flipped?back:front)}</div>${flipped?`<span class="s" style="margin-bottom:8px">${esc(lang==="pl"?r.ru:r.pl)}</span>`:""}<span class="s">${t(UI.flip)}</span></div>
-      <div class="row2"><button class="btn gray" id="ag">${t(UI.again)}</button><button class="btn" id="kn">${t(UI.know)}</button></div>`;
-    el.querySelector("#fc").onclick=()=>{flipped=!flipped;draw();};
-    el.querySelector("#ag").onclick=()=>{i++;flipped=false;draw();};
-    el.querySelector("#kn").onclick=()=>{deck.splice(i%deck.length,1);flipped=false;draw();};
-  };
-  draw();
-}
-
-// onFinish(score, total) — wywoływane po ostatnim pytaniu
+// ---------- quiz ----------
 function quiz(el, qs, onFinish){
-  let i=0, score=0;
-  const draw=()=>{
-    if(i>=qs.length){
-      const msg=onFinish?.(score,qs.length)||"";
-      const pct=Math.round(score/qs.length*100);
-      el.innerHTML=`<div class="group result"><span style="color:${pct===100?"var(--green)":"var(--orange)"}">${icon(pct===100?"trophy":"target")}</span>
-        <div class="big">${pct}%</div><div class="sub" style="margin:0">${score}/${qs.length}</div>${msg?`<p>${msg}</p>`:""}</div>
-        <div style="margin-top:16px"><button class="btn ${pct===100?"gray":""}" id="re">${t(UI.retry)}</button></div>`;
-      el.querySelector("#re").onclick=()=>quiz(el,qs,onFinish);return;
+  let i = 0, score = 0;
+  const K = "ABCDE";
+  const draw = () => {
+    if (i >= qs.length){
+      const pct = Math.round(score / qs.length * 100);
+      onFinish?.(score / qs.length);
+      el.innerHTML = `<div class="qres"><span style="color:${pct === 100 ? "var(--ok)" : "var(--term)"}">${icon(pct === 100 ? "trophy" : "target")}</span>
+        <div class="big">${pct}%</div><div class="muted">${score} / ${qs.length}</div>
+        <p style="max-width:44ch">${pct === 100 ? t(UI.perfect) : t(UI.need)}</p>
+        <button class="btn ghost" id="re">${t(UI.retry)}</button></div>`;
+      el.querySelector("#re").onclick = () => quiz(el, qs, onFinish);
+      return;
     }
-    const q=qs[i];
-    el.innerHTML=`<div class="qprog"><i style="width:${i/qs.length*100}%"></i></div>
-      <p class="sub" style="margin:0 0 6px">${i+1} / ${qs.length}</p><p class="q">${esc(t(q.q))}</p>
-      <div class="group plain">${q.a.map((a,k)=>`<button class="cell opt" data-k="${k}"><span class="body">${esc(t(a))}</span><span class="mark"></span></button>`).join("")}</div>
+    const q = qs[i];
+    el.innerHTML = `<div class="qtop"><span>${t(UI.q)} ${i + 1} / ${qs.length}</span><span>${score} ${icon("check")}</span></div>
+      <div class="qbar"><i style="width:${i / qs.length * 100}%"></i></div>
+      <p class="qq">${esc(t(q.q))}</p>
+      <div class="opts">${q.a.map((a, k) => `<button class="opt" data-k="${k}"><span class="k">${K[k]}</span><span>${esc(t(a))}</span></button>`).join("")}</div>
       <div id="fb"></div>`;
-    el.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
-      const k=+b.dataset.k; if(k===q.correct) score++;
-      el.querySelectorAll(".opt").forEach(o=>{o.disabled=true;
-        if(+o.dataset.k===q.correct){o.classList.add("ok");o.querySelector(".mark").innerHTML=icon("checkFill");}
-        else if(o===b){o.classList.add("bad");o.querySelector(".mark").innerHTML=icon("x");}});
-      el.querySelector("#fb").innerHTML=`<p class="why">${esc(t(q.why))}</p><button class="btn" id="nx">${t(i+1<qs.length?UI.next:UI.finish)}</button>`;
-      el.querySelector("#nx").onclick=()=>{i++;draw();};
+    el.querySelectorAll(".opt").forEach(b => b.onclick = () => {
+      const k = +b.dataset.k, ok = k === q.correct; if (ok) score++;
+      el.querySelectorAll(".opt").forEach(o => { o.disabled = true; if (+o.dataset.k === q.correct) o.classList.add("ok"); else if (o === b) o.classList.add("bad"); });
+      el.querySelector("#fb").innerHTML = `<p class="why"><b>${ok ? t(UI.good) : t(UI.bad)}</b> ${esc(t(q.why))}</p>
+        <div style="margin-top:14px"><button class="btn" id="nx">${i + 1 < qs.length ? t(UI.nextQ) : t(UI.finish)}${icon("arrow")}</button></div>`;
+      el.querySelector("#nx").onclick = () => { i++; draw(); el.scrollIntoView({ block: "nearest" }); };
     });
   };
   draw();
 }
 
-function adas(el){
-  el.innerHTML=`<svg class="chart" viewBox="0 0 400 300" style="width:100%;display:block"></svg>
-    <p style="font-size:15px;margin:16px 0 4px">${t(UI.shiftD)}</p><input type="range" id="d" min="-60" max="60" value="0">
-    <p style="font-size:15px;margin:12px 0 4px">${t(UI.shiftS)}</p><input type="range" id="s" min="-60" max="60" value="0"><p id="eq" class="sub" style="margin:12px 0 0"></p>`;
-  const sv=el.querySelector("svg");
-  const upd=()=>{
-    const d=+el.querySelector("#d").value, s=+el.querySelector("#s").value;
-    // AD: P = 250 - 0.8(Y - d); SRAS: P = 50 + 0.8(Y - s)
-    const Y=(200+0.8*(d+s))/1.6, P=250-0.8*(Y-d), X=v=>40+v*1.4;
-    const line=(x1,y1,x2,y2,c,w=2,da="")=>`<line x1="${x1}" y1="${300-y1}" x2="${x2}" y2="${300-y2}" stroke="${c}" stroke-width="${w}" stroke-dasharray="${da}" stroke-linecap="round"/>`;
-    sv.innerHTML=`<defs><clipPath id="cp"><rect x="40" y="10" width="350" height="270"/></clipPath></defs><g clip-path="url(#cp)">`+
-      line(X(125),20,X(125),290,"var(--muted)",1.5,"5 4")+
-      line(X(d-40),250+32,X(d+250),250-200,"var(--blue)",3)+
-      line(X(s-40),50-32,X(s+230),50+184,"var(--orange)",3)+`</g>`+
-      line(40,20,40,290,"var(--muted)",1)+line(40,20,390,20,"var(--muted)",1)+
-      `<text x="${X(125)+4}" y="20">LAS</text><text x="${X(d+230)}" y="${300-(250-0.8*230)-8}">AD</text><text x="${X(s+215)}" y="${300-(50+0.8*215)-8}">SAS</text>`+
-      `<circle cx="${X(Y)}" cy="${300-P}" r="6" fill="var(--card)" stroke="var(--text)" stroke-width="2.5"/>`+
-      `<text x="380" y="295" text-anchor="end">Y</text><text x="28" y="34">P</text>`;
-    el.querySelector("#eq").textContent=`Y* ≈ ${Y.toFixed(0)} · P* ≈ ${(P/1.25).toFixed(0)}`;
+// ---------- fiszki ----------
+function cards(el, ids){
+  let deck = [...ids], i = 0, flipped = false;
+  const draw = () => {
+    if (!deck.length){
+      el.innerHTML = `<div class="card flash"><span style="color:var(--ok)">${icon("trophy")}</span><div class="w">${t(UI.deckDone)}</div><button class="btn ghost" id="re">${t(UI.retry)}</button></div>`;
+      el.querySelector("#re").onclick = e => { e.stopPropagation(); cards(el, ids); }; return;
+    }
+    const g = TERM[deck[i % deck.length]], d = g[lang];
+    el.innerHTML = `<div class="card flash" id="fc" role="button" tabindex="0">
+        <span class="side-l">${flipped ? t(UI.meaning) : t(UI.term)} · ${deck.length} ${t(UI.left)}</span>
+        ${flipped ? `<div class="d">${esc(d.s)}</div>` : `<div class="w">${esc(d.n)}</div>`}
+        ${flipped && lang === "ru" ? `<span class="examline">${t(UI.onExam)}: <b>${esc(g.pl.n)}</b></span>` : ""}
+        ${flipped ? "" : `<span class="hint">${t(UI.flip)}</span>`}
+      </div>
+      <div class="two" style="margin-top:12px"><button class="btn ghost" id="ag">${t(UI.again)}</button><button class="btn" id="kn">${icon("check")}${t(UI.know)}</button></div>`;
+    const fc = el.querySelector("#fc");
+    fc.onclick = () => { flipped = !flipped; draw(); };
+    fc.onkeydown = e => { if (e.key === " " || e.key === "Enter"){ e.preventDefault(); flipped = !flipped; draw(); } };
+    el.querySelector("#ag").onclick = () => { i++; flipped = false; draw(); };
+    el.querySelector("#kn").onclick = () => { deck.splice(i % deck.length, 1); flipped = false; draw(); };
   };
-  el.querySelectorAll("input").forEach(i=>i.oninput=upd); upd();
+  draw();
 }
 
-function inflation(el){
-  const d=C.data.inflation, W=400, H=230, L=30, B=200, top=14, max=15, min=-2;
-  const y=v=>B-(v-min)/(max-min)*(B-top), bw=(W-L-6)/d.length;
-  let s=`<rect x="${L}" y="${y(3.5)}" width="${W-L}" height="${y(1.5)-y(3.5)}" fill="var(--green)" opacity=".15"/>`;
-  [0,5,10,15].forEach(v=>s+=`<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--sep)"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`);
-  d.forEach(([yr,v],i)=>{const x=L+4+i*bw, c=v<0?"var(--teal)":v>3.5?"var(--red)":"var(--blue)";
-    s+=`<rect x="${x}" y="${Math.min(y(v),y(0))}" width="${bw-3}" height="${Math.max(1,Math.abs(y(v)-y(0)))}" rx="2" fill="${c}"><title>${yr}: ${String(v).replace(".",",")}%</title></rect>`;
-    if(yr%3===0||yr===2022) s+=`<text x="${x+bw/2-1}" y="${H-12}" text-anchor="middle">${String(yr).slice(2)}</text>`;
-    if(yr===2022) s+=`<text x="${x+bw/2-1}" y="${y(v)-4}" text-anchor="middle" style="fill:var(--text);font-weight:600">14,4</text>`;});
-  el.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}" style="width:100%;display:block">${s}</svg>
-    <p class="sub" style="margin:8px 0 0"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--green);opacity:.4"></span> ${t(UI.target)} · GUS</p>`;
+// ---------- wykresy ----------
+const NS = (w, h, inner) => `<svg class="plot" viewBox="0 0 ${w} ${h}" role="img">${inner}</svg>`;
+const line = (x1, y1, x2, y2, c, w = 2.5, da = "") => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}" stroke-linecap="round" ${da ? `stroke-dasharray="${da}"` : ""}/>`;
+// odcinek przycięty do prostokąta (Liang–Barsky); clipPath bywa ignorowany w podglądzie
+function seg(x1, y1, x2, y2, [bx0, by0, bx1, by1], c, w = 2.5, da = ""){
+  let t0 = 0, t1 = 1; const dx = x2 - x1, dy = y2 - y1;
+  for (const [p, q] of [[-dx, x1 - bx0], [dx, bx1 - x1], [-dy, y1 - by0], [dy, by1 - y1]]){
+    if (p === 0){ if (q < 0) return ""; continue; }
+    const r = q / p; if (p < 0){ if (r > t1) return ""; if (r > t0) t0 = r; } else { if (r < t0) return ""; if (r < t1) t1 = r; }
+  }
+  return line(x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy, c, w, da);
 }
+const txt = (x, y, s, cls = "", anchor = "start") => `<text x="${x}" y="${y}" class="${cls}" text-anchor="${anchor}">${s}</text>`;
+const head = (k) => `<h4>${t(UI[k + "_t"])}</h4><p class="cap">${t(UI[k + "_c"])}</p>`;
 
-// ---------- router ----------
-function render(){
-  document.documentElement.lang=lang;
-  const [route,id,tab]=location.hash.slice(2).split("/");
-  const x = route==="l" && C.topics.find(z=>z.id===id);
-  const view = x ? vLecture(x,tab) : route==="lectures" ? vLectures() : route==="exam" ? vExam() : route==="settings" ? vSettings() : vHome();
-  const main=document.getElementById("main");
-  main.innerHTML=view.html;
-  document.getElementById("navTitle").textContent=view.title;
-  document.getElementById("back").innerHTML=view.back?`<a class="back" href="${view.back[0]}">${icon("back")}${esc(view.back[1])}</a>`:"";
-  const active = x ? "lectures" : (route||"home");
-  document.getElementById("tabbar").innerHTML=[["home","home","#/"],["lectures","book","#/lectures"],["exam","target","#/exam"],["settings","gear","#/settings"]]
-    .map(([k,ic,h])=>`<a href="${h}" class="${active===k?"on":""}">${icon(ic)}${t(UI[k])}</a>`).join("");
-
-  if(x){
-    const q=main.querySelector("#quiz");
-    if(q) quiz(q,x.quiz,(score,total)=>{
-      const r=score/total, was=passed(x.id);
-      if(best[x.id]==null||r>best[x.id]){best[x.id]=r;store.set("best",best);}
-      if(r===1&&!was){toast(`<span class="check">${icon("checkFill")}</span>${t(UI.perfect)}`);}
-      main.querySelector(".badge").outerHTML=`<span class="badge ${passed(x.id)?"ok":""}">${passed(x.id)?t(UI.passed):t(UI.notPassed)} · ${t(UI.best)}: ${Math.round(best[x.id]*100)}%</span>`;
-      return r===1?t(UI.perfect):t(UI.need);
+const CHARTS = {
+  ds(el){
+    el.innerHTML = head("ds") + `<div class="pl"></div>
+      <div class="ctrl">
+        <label for="dsp">${t(UI.price)}: <span><b id="dspv"></b></span><input type="range" id="dsp" min="1" max="9" step="1" value="7"></label>
+        <label for="dss">${t(UI.dshift)}<input type="range" id="dss" min="0" max="3" step="1" value="0"></label>
+      </div><div class="verdict" id="dsv"></div>`;
+    const W = 420, H = 300, L = 44, B = 260, R = 400, T = 16;
+    const X = q => L + q / 13 * (R - L), Y = p => B - p / 10 * (B - T);
+    const upd = () => {
+      const P = +el.querySelector("#dsp").value, sh = +el.querySelector("#dss").value;
+      const d = Math.max(0, 10 + sh - P), s = P, pe = (10 + sh) / 2;
+      let g = "";
+      for (let v = 0; v <= 10; v += 2){ g += line(L, Y(v), R, Y(v), "var(--line)", 1) + txt(L - 8, Y(v) + 4, v, "", "end"); }
+      for (let v = 0; v <= 12; v += 2) g += txt(X(v), B + 18, v, "", "middle");
+      g += line(L, T, L, B, "var(--muted)", 1.2) + line(L, B, R, B, "var(--muted)", 1.2);
+      const box = [L, T, R, B];
+      if (sh) g += seg(X(10), Y(0), X(0), Y(10), box, "var(--chart-c)", 2, "5 5");
+      g += seg(X(10 + sh), Y(0), X(sh), Y(10), box, "var(--chart-a)", 3);
+      g += txt(X(sh + 1.6), Y(8.4) - 6, sh ? "D'" : "D", "lab");
+      g += line(X(0), Y(0), X(10), Y(10), "var(--chart-b)", 3);
+      g += txt(X(9.6), Y(9.6) - 8, "S", "lab", "end");
+      g += line(L, Y(P), R, Y(P), "var(--ink)", 1.2, "3 4");
+      g += `<circle cx="${X(d)}" cy="${Y(P)}" r="5" fill="var(--chart-a)"/><circle cx="${X(s)}" cy="${Y(P)}" r="5" fill="var(--chart-b)"/>`;
+      if (d !== s) g += `<rect x="${X(Math.min(d, s))}" y="${Y(P) - 5}" width="${Math.abs(X(d) - X(s))}" height="10" rx="3" fill="${d > s ? "var(--chart-hi)" : "var(--chart-a)"}" opacity=".22"/>`;
+      g += `<circle cx="${X(pe)}" cy="${Y(pe)}" r="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>`;
+      g += txt(R, B - 8, t(UI.qty), "", "end") + txt(L + 6, T + 10, t(UI.price));
+      el.querySelector(".pl").innerHTML = NS(W, H + 10, g);
+      el.querySelector("#dspv").textContent = P + " tys. zł".replace("tys. zł", lang === "pl" ? "tys. zł" : "тыс. zł");
+      const v = el.querySelector("#dsv");
+      const peTxt = num(pe);
+      if (d === s){ v.className = "verdict ok"; v.innerHTML = `<b>${t(UI.ds_eq)}: P = ${peTxt}, Q = ${num(pe)}</b>${t(UI.ds_eqt)}`; }
+      else if (s > d){ v.className = "verdict lo"; v.innerHTML = `<b>${t(UI.ds_sur)}: ${s - d}</b>${fmt(t(UI.ds_surt), { s, d, p: peTxt })}`; }
+      else { v.className = "verdict hi"; v.innerHTML = `<b>${t(UI.ds_sho)}: ${d - s}</b>${fmt(t(UI.ds_shot), { s, d, p: peTxt })}`; }
+    };
+    el.querySelectorAll("input").forEach(x => x.oninput = upd); upd();
+  },
+  adas(el){
+    el.innerHTML = head("ad") + `<div class="pl"></div>
+      <div class="ctrl">
+        <label for="add">${t(UI.ad_d)}<span>${t(UI.ad_d_hint)}</span><input type="range" id="add" min="-50" max="50" value="-30"></label>
+        <label for="ads">${t(UI.ad_s)}<span>${t(UI.ad_s_hint)}</span><input type="range" id="ads" min="-50" max="50" value="0"></label>
+      </div><div class="verdict" id="adv"></div>`;
+    const W = 420, H = 300, L = 44, B = 260, R = 400, T = 16, YS = 125;
+    const X = v => L + v * 1.35, Y = p => B - p;
+    const upd = () => {
+      const d = +el.querySelector("#add").value, s = +el.querySelector("#ads").value;
+      // AD: P = 230 - 0.8(Y - d) ; SAS: P = 30 + 0.8(Y - s)  → Y = (200 + 0.8(d + s)) / 1.6
+      const Ye = (200 + 0.8 * (d + s)) / 1.6, Pe = 230 - 0.8 * (Ye - d);
+      let g = ""; const box = [L, T, R, B];
+      g += line(L, T, L, B, "var(--muted)", 1.2) + line(L, B, R, B, "var(--muted)", 1.2);
+      const gap = Ye - YS;
+      if (Math.abs(gap) > 2) g += `<rect x="${X(Math.min(Ye, YS))}" y="${T}" width="${Math.abs(X(Ye) - X(YS))}" height="${B - T}" fill="${gap < 0 ? "var(--chart-a)" : "var(--chart-hi)"}" opacity=".1"/>`;
+      g += line(X(YS), T, X(YS), B, "var(--muted)", 1.6, "6 5")
+        + seg(X(d - 40), Y(230 + 32), X(d + 260), Y(230 - 240), box, "var(--chart-a)", 3)
+        + seg(X(s - 40), Y(30 - 32), X(s + 240), Y(30 + 192), box, "var(--chart-b)", 3);
+      g += txt(X(YS) + 6, T + 12, "LAS", "lab");
+      const adLx = Math.min(250, Math.max(20, d + 225)), sasLx = Math.min(250, Math.max(20, s + 200));
+      g += txt(X(adLx), Y(230 - 0.8 * (adLx - d)) + 18, "AD", "lab", "middle");
+      g += txt(X(sasLx), Y(30 + 0.8 * (sasLx - s)) - 10, "SAS", "lab", "middle");
+      g += line(L, Y(Pe), X(Ye), Y(Pe), "var(--muted)", 1, "2 4") + line(X(Ye), Y(Pe), X(Ye), B, "var(--muted)", 1, "2 4");
+      g += `<circle cx="${X(Ye)}" cy="${Y(Pe)}" r="6.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.5"/>`;
+      g += txt(X(Ye) + 10, Y(Pe) - 8, "E", "lab");
+      g += txt(X(YS), B + 18, "Y*", "lab", "middle") + (Math.abs(gap) > 8 ? txt(X(Ye), B + 18, "Y", "", "middle") : "");
+      g += txt(R, B - 8, lang === "pl" ? "realny PKB (Y)" : "реальный ВВП (Y)", "", "end") + txt(L + 6, T + 10, lang === "pl" ? "poziom cen (P)" : "уровень цен (P)");
+      el.querySelector(".pl").innerHTML = NS(W, H + 10, g);
+      const v = el.querySelector("#adv"), pct = Math.round(Math.abs(gap) / YS * 100);
+      if (pct < 2){ v.className = "verdict ok"; v.innerHTML = `<b>${t(UI.ad_eq)}</b>${t(UI.ad_eqt)}`; }
+      else if (gap < 0){ v.className = "verdict lo"; v.innerHTML = `<b>${t(UI.ad_rec)}</b>${fmt(t(UI.ad_rect), { g: pct })}`; }
+      else { v.className = "verdict hi"; v.innerHTML = `<b>${t(UI.ad_inf)}</b>${fmt(t(UI.ad_inft), { g: pct })}`; }
+    };
+    el.querySelectorAll("input").forEach(x => x.oninput = upd); upd();
+  },
+  inflation(el){
+    const d = C.data.inflation, W = 440, H = 250, L = 34, B = 214, T = 14, R = 434, max = 15, min = -2;
+    const y = v => B - (v - min) / (max - min) * (B - T), bw = (R - L) / d.length;
+    let g = `<rect x="${L}" y="${y(3.5)}" width="${R - L}" height="${y(1.5) - y(3.5)}" fill="var(--ok)" opacity=".16"/>`;
+    [0, 5, 10, 15].forEach(v => g += line(L, y(v), R, y(v), "var(--line)", 1) + txt(L - 6, y(v) + 4, v, "", "end"));
+    d.forEach(([yr, v], i) => {
+      const x = L + i * bw + 2, c = v < 0 ? "var(--chart-lo)" : v > 3.5 ? "var(--chart-hi)" : "var(--chart-a)";
+      g += `<rect class="bar" tabindex="0" data-v="${yr}: ${num(v)}%" x="${x}" y="${Math.min(y(v), y(0))}" width="${bw - 4}" height="${Math.max(1.5, Math.abs(y(v) - y(0)))}" rx="2" fill="${c}"><title>${yr}: ${num(v)}%</title></rect>`;
+      if (yr % 3 === 0) g += txt(x + (bw - 4) / 2, B + 18, "’" + String(yr).slice(2), "", "middle");
+      if (yr === 2022) g += txt(x + (bw - 4) / 2, y(v) - 6, "14,4", "lab", "middle");
     });
-    const c=main.querySelector("#cards"); if(c) cards(c,x);
-    main.querySelectorAll("[data-chart]").forEach(el=>({adas,inflation})[el.dataset.chart]?.(el));
-  }
-  if(route==="exam") main.querySelector("#go").onclick=()=>{
-    const qs=C.topics.flatMap(z=>z.quiz).sort(()=>Math.random()-.5).slice(0,15);
-    quiz(main.querySelector("#quiz"),qs);
-  };
-  if(route==="settings"){
-    main.querySelectorAll("[data-lang]").forEach(b=>b.onclick=()=>{lang=b.dataset.lang;store.set("lang",lang);render();});
-    main.querySelectorAll("[data-theme]").forEach(b=>b.onclick=()=>{store.set("theme",b.dataset.theme);applyTheme();render();});
-    main.querySelector("#reset").onclick=()=>{if(confirm(t(UI.resetQ))){best={};store.set("best",best);render();}};
-  }
-  window.scrollTo(0,0); onScroll();
+    g += txt(R, y(3.5) - 4, `${t(UI.target)} 2,5 ± 1`, "", "end");
+    el.innerHTML = head("inf") + NS(W, H, g) + `<p class="cap" id="infv" style="margin:8px 0 0">${t(UI.src)}</p>`;
+    el.querySelectorAll(".bar").forEach(b => { const f = () => el.querySelector("#infv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
+  },
+  unemployment(el){
+    const d = C.data.unemployment, W = 440, H = 240, L = 34, B = 204, T = 14, R = 430, max = 20;
+    const x = i => L + i / (d.length - 1) * (R - L), y = v => B - v / max * (B - T);
+    let g = "";
+    [0, 5, 10, 15, 20].forEach(v => g += line(L, y(v), R, y(v), "var(--line)", 1) + txt(L - 6, y(v) + 4, v, "", "end"));
+    const pts = d.map(([yr, v], i) => `${x(i)},${y(v)}`).join(" ");
+    g += `<polygon points="${x(0)},${B} ${pts} ${x(d.length - 1)},${B}" fill="var(--chart-a)" opacity=".12"/>`;
+    g += `<polyline points="${pts}" fill="none" stroke="var(--chart-a)" stroke-width="2.6" stroke-linejoin="round"/>`;
+    d.forEach(([yr, v], i) => {
+      g += `<circle class="bar" tabindex="0" data-v="${yr}: ${num(v)}%" cx="${x(i)}" cy="${y(v)}" r="${[0, 5, d.length - 1].includes(i) ? 4.5 : 3}" fill="var(--surface)" stroke="var(--chart-a)" stroke-width="2"><title>${yr}: ${num(v)}%</title></circle>`;
+      if (yr % 3 === 1 || i === d.length - 1) g += txt(x(i), B + 18, "’" + String(yr).slice(2), "", "middle");
+    });
+    g += txt(x(0) + 8, y(19) - 6, "19,0", "lab") + txt(x(d.length - 1), y(5.5) - 10, "5,5", "lab", "end");
+    el.innerHTML = head("un") + NS(W, H, g) + `<p class="cap" id="unv" style="margin:8px 0 0">${t(UI.src)}</p>`;
+    el.querySelectorAll(".bar").forEach(b => { const f = () => el.querySelector("#unv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
+  },
+  gaps(el){
+    // AD: p = 140 − 0,7(x − 20 − d), SAS: p = 40 + 0,7(x − 20); przecięcie x = (128 + 0,7d) / 1,4
+    const panel = (ox, d, title, color) => {
+      const X = v => ox + 14 + v, Y = p => 172 - p, YS = 128 / 1.4;
+      const xe = (128 + 0.7 * d) / 1.4, pe = 40 + 0.7 * (xe - 20);
+      let g = line(X(0), 20, X(0), 172, "var(--muted)", 1.2) + line(X(0), 172, X(196), 172, "var(--muted)", 1.2);
+      g += `<rect x="${X(Math.min(xe, YS))}" y="22" width="${Math.abs(xe - YS)}" height="150" fill="${color}" opacity=".16"/>`;
+      g += line(X(YS), 24, X(YS), 172, "var(--muted)", 1.5, "5 4");
+      const box = [X(0), 22, X(180), 172];
+      g += seg(X(20 + d), Y(140), X(170 + d), Y(140 - 105), box, "var(--chart-a)", 2.6);
+      g += seg(X(20), Y(40), X(170), Y(145), box, "var(--chart-b)", 2.6);
+      g += `<circle cx="${X(xe)}" cy="${Y(pe)}" r="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2.2"/>`;
+      g += txt(X(xe) + (d < 0 ? -10 : 9), Y(pe) - 7, "E", "lab", d < 0 ? "end" : "start");
+      g += txt(X(YS), 188, "Y*", "lab", "middle") + txt(X(xe), 188, "Y", "", "middle");
+      g += txt(X(Math.min(176, 150 + d)), Y(140 - 0.7 * (Math.min(176, 150 + d) - 20 - d)) + 18, "AD", "lab", "middle") + txt(X(170), Y(145) - 6, "SAS", "lab", "end") + txt(X(YS) + 5, 32, "LAS", "lab");
+      g += txt(ox + 110, 214, title, "lab", "middle");
+      return g;
+    };
+    el.innerHTML = head("gaps") + NS(440, 224, panel(0, -40, t(UI.gap_rec), "var(--chart-a)") + panel(220, 40, t(UI.gap_inf), "var(--chart-hi)"));
+  },
+};
+
+// ---------- popup pojęcia ----------
+let popEl = null, popAnchor = null, popY = 0;
+function closePop(){
+  if (!popEl) return;
+  popEl.remove(); popEl = null;
+  popAnchor?.setAttribute("aria-expanded", "false"); popAnchor = null;
 }
-function onScroll(){document.getElementById("navbar").classList.toggle("scrolled",scrollY>40);}
-addEventListener("scroll",onScroll,{passive:true});
-addEventListener("hashchange",render);
+function openPop(anchor){
+  const id = anchor.dataset.t, g = TERM[id]; if (!g) return;
+  if (popAnchor === anchor){ closePop(); return; }
+  closePop();
+  const d = g[lang];
+  popEl = document.createElement("div");
+  popEl.className = "pop"; popEl.setAttribute("role", "dialog"); popEl.setAttribute("aria-label", d.n);
+  popEl.innerHTML = `<b>${esc(d.n)}</b><p>${esc(d.s)}</p>${lang === "ru" ? `<div class="examline">${t(UI.onExam)}: <b>${esc(g.pl.n)}</b></div>` : ""}<a href="#p-${id}">${t(UI.more)}${icon("arrow")}</a>`;
+  document.body.appendChild(popEl);
+  popAnchor = anchor; anchor.setAttribute("aria-expanded", "true");
+  const r = anchor.getClientRects()[0] || anchor.getBoundingClientRect();
+  const pw = popEl.offsetWidth, ph = popEl.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let left = Math.min(Math.max(12, r.left + r.width / 2 - pw / 2), vw - pw - 12);
+  const below = r.bottom + ph + 14 < vh || r.top < ph + 14;
+  popEl.classList.add(below ? "below" : "above");
+  popEl.style.left = left + "px";
+  popEl.style.top = (below ? r.bottom + 10 : r.top - ph - 10) + "px";
+  popEl.style.setProperty("--ax", Math.min(pw - 24, Math.max(12, r.left + r.width / 2 - left - 6)) + "px");
+  popY = scrollY;
+}
+document.addEventListener("click", e => {
+  const tr = e.target.closest(".term, .term-chip");
+  if (tr){ e.preventDefault(); openPop(tr); return; }
+  if (popEl && !popEl.contains(e.target)) closePop();
+});
+addEventListener("scroll", () => { if (popEl && Math.abs(scrollY - popY) > 6) closePop(); }, { passive: true });
+document.addEventListener("scroll", e => { if (popEl && e.target !== document) closePop(); }, { passive: true, capture: true });
+addEventListener("resize", closePop);
+
+// ---------- wyszukiwarka ----------
+const norm = s => s.toLowerCase().replace(/ł/g, "l").normalize("NFD").replace(/[̀-ͯ]/g, "");
+function searchIndex(){
+  const items = [];
+  GL.forEach(g => items.push({ kind: "t", href: "#p-" + g.id, title: g[lang].n, sub: g[lang].s, hay: norm(g[lang].n + " " + g[lang].s + " " + g.pl.n) }));
+  allSubs.forEach(s => {
+    const heads = [...t(s.body).matchAll(/^## (.+)$/gm)].map(m => m[1]);
+    items.push({ kind: "s", href: "#w" + s.id, title: s.id + " · " + t(s.title), sub: heads.join(" · "), hay: norm(t(s.title) + " " + heads.join(" ") + " " + t(s.body).replace(/\[\[[^|\]]+\|?([^\]]*)\]\]/g, "$1")) });
+  });
+  return items;
+}
+function openSearch(){
+  closePop();
+  if (document.querySelector(".overlay")) return;
+  const ov = document.createElement("div"); ov.className = "overlay";
+  ov.innerHTML = `<div class="spanel" role="dialog" aria-label="${t(UI.searchShort)}">
+    <div class="sinput">${icon("search")}<input id="sq" placeholder="${t(UI.search)}" autocomplete="off"><button id="sx">${t(UI.close)}</button></div>
+    <div class="sres" id="sr"></div></div>`;
+  document.body.appendChild(ov);
+  const idx = searchIndex(), inp = ov.querySelector("#sq"), res = ov.querySelector("#sr");
+  const close = () => ov.remove();
+  const draw = () => {
+    const q = norm(inp.value.trim());
+    if (!q){ res.innerHTML = `<div class="sgroup">${t(UI.gTopics)}</div>` + idx.filter(x => x.kind === "s").map(item).join(""); return; }
+    const words = q.split(/\s+/);
+    const scored = idx.map(x => {
+      if (!words.every(w => x.hay.includes(w))) return null;
+      const tt = norm(x.title); let sc = 0;
+      words.forEach(w => { if (tt.startsWith(w)) sc += 10; else if (tt.includes(w)) sc += 5; });
+      return { x, sc: sc + (x.kind === "t" ? 1 : 0) };
+    }).filter(Boolean).sort((a, b) => b.sc - a.sc);
+    const T = scored.filter(s => s.x.kind === "t").slice(0, 8), Su = scored.filter(s => s.x.kind === "s").slice(0, 6);
+    res.innerHTML = !T.length && !Su.length ? `<div class="sempty">${t(UI.noRes)}</div>`
+      : (T.length ? `<div class="sgroup">${t(UI.gTerms)}</div>${T.map(s => item(s.x)).join("")}` : "") + (Su.length ? `<div class="sgroup">${t(UI.gTopics)}</div>${Su.map(s => item(s.x)).join("")}` : "");
+    res.querySelector(".sitem")?.classList.add("sel");
+  };
+  const item = x => `<a class="sitem" href="${x.href}"><span class="ic">${icon(x.kind === "t" ? "tag" : "book")}</span><span><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></span></a>`;
+  inp.oninput = draw; draw(); inp.focus();
+  ov.onclick = e => { if (e.target === ov || e.target.closest("#sx") || e.target.closest(".sitem")) close(); };
+  inp.onkeydown = e => {
+    const all = [...res.querySelectorAll(".sitem")], cur = all.findIndex(a => a.classList.contains("sel"));
+    if (e.key === "Escape") close();
+    else if (e.key === "Enter" && all[cur]){ location.hash = all[cur].getAttribute("href"); close(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault(); all[cur]?.classList.remove("sel");
+      const n = all[(cur + (e.key === "ArrowDown" ? 1 : all.length - 1)) % all.length]; n?.classList.add("sel"); n?.scrollIntoView({ block: "nearest" });
+    }
+  };
+}
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); openSearch(); }
+  else if (e.key === "/" && !/input|textarea/i.test(document.activeElement.tagName)){ e.preventDefault(); openSearch(); }
+  else if (e.key === "Escape") closePop();
+});
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-open-search]")) openSearch();
+  const lb = e.target.closest("[data-lang]"); if (lb){ lang = lb.dataset.lang; store.set("lang", lang); render(false); }
+});
+
+// ---------- render ----------
+let tocObs = null, endObs = null;
+function render(scrollTop = true){
+  closePop(); tocObs?.disconnect(); endObs?.disconnect();
+  document.documentElement.lang = lang;
+  const r = route(), main = document.getElementById("main");
+  const L = r.n ? C.lectures.find(x => x.n === r.n) : null;
+  const s = r.v === "sub" ? findSub(r.id) : null, g = r.v === "term" ? TERM[r.id] : null;
+  renderChrome(r);
+  main.innerHTML =
+    r.v === "lecture" && L ? vLecture(L) :
+    r.v === "cards" && L ? vCards(L) :
+    r.v === "final" && L ? vFinal(L) :
+    s ? vSub(s) :
+    r.v === "glossary" ? vGlossary() :
+    g ? vTerm(g) :
+    r.v === "exam" ? vExam() :
+    r.v === "settings" ? vSettings() : vHome();
+  document.title = (s ? t(s.title) : g ? g[lang].n : L ? `${t(UI.lecture)} ${L.n}` : "") ? `${s ? t(s.title) : g ? g[lang].n : `${t(UI.lecture)} ${L.n}`} · Makro WSB` : "Makro WSB";
+
+  main.querySelectorAll("[data-chart]").forEach(el => CHARTS[el.dataset.chart]?.(el));
+  if (s){
+    S.last = s.id; save();
+    quiz(main.querySelector("#quiz"), s.quiz, r => { if (S.mini[s.id] == null || r > S.mini[s.id]){ S.mini[s.id] = r; save(); renderChrome(route()); } });
+    main.querySelectorAll("[data-goto]").forEach(a => a.onclick = e => { e.preventDefault(); document.getElementById(a.dataset.goto)?.scrollIntoView({ behavior: "smooth" }); });
+    const tocLinks = [...main.querySelectorAll(".toc a")];
+    tocObs = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting){ tocLinks.forEach(a => a.classList.toggle("on", a.dataset.goto === en.target.id)); } }), { rootMargin: "0px 0px -70% 0px" });
+    main.querySelectorAll(".prose h2").forEach(h => tocObs.observe(h));
+    endObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !S.read[s.id]){ S.read[s.id] = true; save(); renderChrome(route()); } });
+    endObs.observe(main.querySelector("#endmark"));
+  }
+  if (L && r.v === "cards") cards(main.querySelector("#cards"), lecTerms(L));
+  if (L && r.v === "final") quiz(main.querySelector("#quiz"), L.final, res => {
+    const k = "w" + L.n, was = lecPassed(L);
+    if (S.best[k] == null || res > S.best[k]){ S.best[k] = res; save(); }
+    if (res === 1 && !was) toast(`${icon("trophy")}${t(UI.passedToast)}`);
+  });
+  if (r.v === "glossary"){
+    const f = main.querySelector("#gfilter"), gl = main.querySelector("#glist");
+    gl.innerHTML = glossaryList(""); f.oninput = () => gl.innerHTML = glossaryList(f.value);
+  }
+  if (r.v === "exam") main.querySelector("#go").onclick = () => {
+    const pool = C.lectures.flatMap(x => [...x.final, ...x.subs.flatMap(s => s.quiz)]);
+    const seen = new Set(); const qs = pool.sort(() => Math.random() - .5).filter(q => !seen.has(q.q.pl) && seen.add(q.q.pl)).slice(0, 15);
+    quiz(main.querySelector("#quiz"), qs);
+  };
+  if (r.v === "settings"){
+    main.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { store.set("theme", b.dataset.theme); applyTheme(); render(false); });
+    main.querySelector("#examdate").onchange = e => { if (e.target.value) store.set("exam", e.target.value); };
+    const rb = main.querySelector("#reset"); let armed = false;
+    rb.onclick = () => {
+      if (!armed){ armed = true; rb.textContent = t(UI.resetSure); return; }
+      S.read = {}; S.mini = {}; S.best = {}; S.last = null; save(); toast(t(UI.resetDone)); render(false);
+    };
+  }
+  if (scrollTop) scrollTo(0, 0);
+}
+addEventListener("hashchange", () => render(true));
 applyTheme();
-render();
+render(false);
 </script>
-</body>
-</html>
