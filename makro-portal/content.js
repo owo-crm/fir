@@ -3,7 +3,7 @@
 // "> !zapamietaj|przyklad|uwaga tekst", "$$ wzór | podpis", "| tabela |", "{{chart:id}}",
 // pojęcia: [[id]] lub [[id|tekst]] (id z glossary.js), **pogrubienie**.
 window.COURSE = {
-  name: "Makro",
+  name: "Brainstorm",
   university: "WSB Gdańsk",
   lecturer: "dr Elżbieta Kwella",
   examDate: "2027-01-28",
@@ -138,6 +138,18 @@ Firma może być świetnie zarządzana, a i tak stracić, gdy zmieni się otocze
 ## Czym jest rynek
 [[rynek|Rynek]] to każde miejsce lub mechanizm, gdzie spotykają się kupujący i sprzedający: sklep, Allegro, giełda. Na rynku ustala się cena.
 
+## Oznaczenia
+Na wykresach i we wzorach używamy stałych skrótów:
+
+| Symbol | Znaczenie | Jednostka w przykładzie |
+|---|---|---|
+| P | cena (od ang. price) | tys. zł za komputer |
+| Q | ilość (od ang. quantity) | tys. komputerów rocznie |
+| D | popyt (demand), krzywa kupujących | – |
+| S | podaż (supply), krzywa producentów | – |
+| Q_D | ilość, którą **kupujący chcą kupić** przy cenie P | tys. sztuk |
+| Q_S | ilość, którą **producenci chcą sprzedać** przy cenie P | tys. sztuk |
+
 ## Popyt
 [[popyt|Popyt]] to nie to, co ludzie kupili, tylko to, co **chcieliby i mogliby kupić** przy różnych cenach. Dobrze opisuje go zdanie „ile ludzie kupiliby, gdyby cena wynosiła…”.
 
@@ -145,7 +157,7 @@ Firma może być świetnie zarządzana, a i tak stracić, gdy zmieni się otocze
 - **Efekt substytucji.** Gdy coś drożeje, zastępujemy to czymś tańszym.
 - **Efekt dochodowy.** Gdy coś drożeje, za tę samą pensję stać nas na mniej.
 
-> !przyklad Na wykładzie: popyt Polaków na komputery opisuje wzór Q₁ = 10 − P (cena w tys. zł, ilość w tys. sztuk rocznie). Przy cenie 3 tys. zł ludzie chcą kupić 7 tys. komputerów, przy cenie 8 tys. zł tylko 2 tys.
+> !przyklad Na wykładzie: popyt Polaków na komputery opisuje wzór Q_D = 10 − P. Czytamy go tak: przy cenie P tysięcy złotych kupujący chcą kupić 10 − P tysięcy komputerów rocznie. Przy cenie 3 tys. zł ludzie chcą kupić 7 tys. komputerów, przy cenie 8 tys. zł tylko 2 tys.
 
 ## Ruch po krzywej czy przesunięcie krzywej?
 To najczęstszy błąd na egzaminie.
@@ -161,7 +173,7 @@ Krzywą popytu w prawo przesuwa:
 > !uwaga „Komputery potaniały, więc wzrósł popyt na komputery” to błąd. Wzrosła **wielkość popytu** (ruch po krzywej). Sam popyt, czyli cała krzywa, się nie zmienił.
 
 ## Podaż
-[[podaz|Podaż]] to ilość, którą sprzedawcy **chcą zaoferować** przy różnych cenach. [[prawo-podazy|Prawo podaży]]: im wyższa cena, tym więcej producenci chcą sprzedać, bo rośnie ich zysk. Na wykładzie: Q₂ = P.
+[[podaz|Podaż]] to ilość, którą sprzedawcy **chcą zaoferować** przy różnych cenach. [[prawo-podazy|Prawo podaży]]: im wyższa cena, tym więcej producenci chcą sprzedać, bo rośnie ich zysk. Na wykładzie: Q_S = P, czyli przy cenie P tys. zł producenci chcą sprzedać P tys. komputerów.
 
 Krzywą podaży w prawo (więcej przy każdej cenie) przesuwa:
 - nowa, tańsza technologia,
@@ -171,7 +183,7 @@ Krzywą podaży w prawo (więcej przy każdej cenie) przesuwa:
 ## Równowaga rynkowa
 [[cena-rownowagi|Cena równowagi]] to cena, przy której kupujący chcą kupić dokładnie tyle, ile sprzedający chcą sprzedać.
 
-$$ Q₁ = Q₂  →  10 − P = P  →  P = 5, Q = 5 | Równowaga na rynku komputerów z wykładu: 5 tys. zł i 5 tys. sztuk rocznie
+$$ Q_D = Q_S  →  10 − P = P  →  P = 5, Q = 5 | Popyt = podaż. Równowaga na rynku komputerów z wykładu: 5 tys. zł i 5 tys. sztuk rocznie
 
 - Jeśli cena jest **wyższa** (np. 7), chętnych do kupna jest 3, a towaru 7. Powstaje [[nadwyzka|nadwyżka]] i cena spada.
 - Jeśli cena jest **niższa** (np. 3), chętnych jest 7, a towaru 3. Powstaje [[niedobor|niedobór]] i cena rośnie.
@@ -207,6 +219,18 @@ To właśnie [[niewidzialna-reka|niewidzialna ręka rynku]] Adama Smitha: nikt t
 ## Что такое рынок
 [[rynek|Рынок]] — любое место или механизм, где встречаются покупатели и продавцы: магазин, Allegro, биржа. На рынке устанавливается цена.
 
+## Обозначения
+На графиках и в формулах используются постоянные сокращения:
+
+| Символ | Значение | Единица в примере |
+|---|---|---|
+| P | цена (от англ. price) | тыс. злотых за компьютер |
+| Q | количество (от англ. quantity) | тыс. компьютеров в год |
+| D | спрос (demand), кривая покупателей | – |
+| S | предложение (supply), кривая производителей | – |
+| Q_D | количество, которое **покупатели хотят купить** при цене P | тыс. штук |
+| Q_S | количество, которое **производители хотят продать** при цене P | тыс. штук |
+
 ## Спрос
 [[popyt|Спрос]] — это не то, что люди купили, а то, что они **хотели бы и могли бы купить** при разных ценах. Его хорошо описывает фраза «сколько купили бы люди, если бы цена была…».
 
@@ -214,7 +238,7 @@ To właśnie [[niewidzialna-reka|niewidzialna ręka rynku]] Adama Smitha: nikt t
 - **Эффект замещения.** Когда что-то дорожает, мы заменяем это более дешёвым.
 - **Эффект дохода.** Когда что-то дорожает, на ту же зарплату можно купить меньше.
 
-> !przyklad На лекции спрос поляков на компьютеры описывает формула Q₁ = 10 − P (цена в тыс. злотых, количество в тыс. штук в год). При цене 3 тыс. люди хотят купить 7 тыс. компьютеров, при цене 8 тыс. — только 2 тыс.
+> !przyklad На лекции спрос поляков на компьютеры описывает формула Q_D = 10 − P. Читается так: при цене P тысяч злотых покупатели хотят купить 10 − P тысяч компьютеров в год. При цене 3 тыс. люди хотят купить 7 тыс. компьютеров, при цене 8 тыс. — только 2 тыс.
 
 ## Движение по кривой или сдвиг кривой?
 Это самая частая ошибка на экзамене.
@@ -230,7 +254,7 @@ To właśnie [[niewidzialna-reka|niewidzialna ręka rynku]] Adama Smitha: nikt t
 > !uwaga «Компьютеры подешевели, поэтому вырос спрос на компьютеры» — ошибка. Выросла **величина спроса** (движение по кривой). Сам спрос, то есть вся кривая, не изменился.
 
 ## Предложение
-[[podaz|Предложение]] — количество, которое продавцы **хотят предложить** при разных ценах. [[prawo-podazy|Закон предложения]]: чем выше цена, тем больше производители хотят продать, потому что растёт прибыль. На лекции: Q₂ = P.
+[[podaz|Предложение]] — количество, которое продавцы **хотят предложить** при разных ценах. [[prawo-podazy|Закон предложения]]: чем выше цена, тем больше производители хотят продать, потому что растёт прибыль. На лекции: Q_S = P, то есть при цене P тыс. злотых производители хотят продать P тыс. компьютеров.
 
 Кривую предложения вправо (больше при каждой цене) сдвигают:
 - новая, более дешёвая технология,
@@ -240,7 +264,7 @@ To właśnie [[niewidzialna-reka|niewidzialna ręka rynku]] Adama Smitha: nikt t
 ## Рыночное равновесие
 [[cena-rownowagi|Равновесная цена]] — цена, при которой покупатели хотят купить ровно столько, сколько продавцы хотят продать.
 
-$$ Q₁ = Q₂  →  10 − P = P  →  P = 5, Q = 5 | Равновесие на рынке компьютеров из лекции: 5 тыс. злотых и 5 тыс. штук в год
+$$ Q_D = Q_S  →  10 − P = P  →  P = 5, Q = 5 | Спрос = предложение. Равновесие на рынке компьютеров из лекции: 5 тыс. злотых и 5 тыс. штук в год
 
 - Если цена **выше** (например, 7), желающих купить 3, а товара 7. Возникает [[nadwyzka|избыток]], и цена падает.
 - Если цена **ниже** (например, 3), желающих 7, а товара 3. Возникает [[niedobor|дефицит]], и цена растёт.
@@ -279,7 +303,7 @@ $$ Q₁ = Q₂  →  10 − P = P  →  P = 5, Q = 5 | Равновесие на
             { q: { pl: "Laptopy podrożały. Co dzieje się z popytem na komputery stacjonarne?", ru: "Ноутбуки подорожали. Что происходит со спросом на настольные компьютеры?" },
               a: [{ pl: "Rośnie (krzywa w prawo)", ru: "Растёт (кривая вправо)" }, { pl: "Spada (krzywa w lewo)", ru: "Падает (кривая влево)" }, { pl: "Nie zmienia się", ru: "Не меняется" }],
               correct: 0, why: { pl: "Laptop jest substytutem. Gdy substytut drożeje, popyt na nasze dobro rośnie.", ru: "Ноутбук — заменитель. Когда заменитель дорожает, спрос на наш товар растёт." } },
-            { q: { pl: "Popyt: Q₁ = 10 − P, podaż: Q₂ = P. Jaka jest cena równowagi?", ru: "Спрос: Q₁ = 10 − P, предложение: Q₂ = P. Какова равновесная цена?" },
+            { q: { pl: "Popyt: Q_D = 10 − P, podaż: Q_S = P. Jaka jest cena równowagi?", ru: "Спрос: Q_D = 10 − P, предложение: Q_S = P. Какова равновесная цена?" },
               a: [{ pl: "3", ru: "3" }, { pl: "5", ru: "5" }, { pl: "7", ru: "7" }],
               correct: 1, why: { pl: "10 − P = P, więc P = 5 i Q = 5.", ru: "10 − P = P, значит P = 5 и Q = 5." } },
             { q: { pl: "Cena jest wyższa od ceny równowagi. Na rynku pojawia się:", ru: "Цена выше равновесной. На рынке возникает:" },
@@ -901,7 +925,7 @@ Na końcu najważniejsze. W warunkach doskonałej konkurencji cena ustala się t
         { q: { pl: "Spadek ceny komputerów powoduje:", ru: "Снижение цены компьютеров вызывает:" },
           a: [{ pl: "przesunięcie krzywej popytu w prawo", ru: "сдвиг кривой спроса вправо" }, { pl: "ruch wzdłuż krzywej popytu", ru: "движение вдоль кривой спроса" }, { pl: "przesunięcie krzywej podaży w prawo", ru: "сдвиг кривой предложения вправо" }],
           correct: 1, why: { pl: "Zmiana ceny samego dobra to ruch po krzywej.", ru: "Изменение цены самого товара — движение по кривой." } },
-        { q: { pl: "Popyt: Q₁ = 10 − P, podaż: Q₂ = P. Cena równowagi wynosi:", ru: "Спрос: Q₁ = 10 − P, предложение: Q₂ = P. Равновесная цена:" },
+        { q: { pl: "Popyt: Q_D = 10 − P, podaż: Q_S = P. Cena równowagi wynosi:", ru: "Спрос: Q_D = 10 − P, предложение: Q_S = P. Равновесная цена:" },
           a: [{ pl: "3", ru: "3" }, { pl: "5", ru: "5" }, { pl: "7", ru: "7" }, { pl: "10", ru: "10" }],
           correct: 1, why: { pl: "10 − P = P → P = 5, Q = 5.", ru: "10 − P = P → P = 5, Q = 5." } },
         { q: { pl: "Co przesuwa krzywą podaży w prawo?", ru: "Что сдвигает кривую предложения вправо?" },

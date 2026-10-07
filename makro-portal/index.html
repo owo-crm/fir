@@ -1,4 +1,4 @@
-<title>Makro WSB</title>
+<title>Brainstorm WSB</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -822,8 +822,8 @@ const CHARTS = {
         else if (s > d) market = Lg(`<b>Rynek: nadwyżka ${k(s - d)} tys.</b> Producenci chcą sprzedać ${k(s)} tys., a kupujący biorą tylko ${k(d)} tys. Magazyny się zapełniają, więc sprzedawcy zaczynają obniżać cenę. Gdy cena spada, kupujący chcą kupić więcej (ruch w dół po D), a producentom opłaca się produkować mniej (ruch w dół po S). Rynek dojdzie do równowagi E: cena ${k(Pe)} tys. zł, ilość ${k(Qe)} tys.`, `<b>Рынок: избыток ${k(s - d)} тыс.</b> Производители хотят продать ${k(s)} тыс., а покупатели берут только ${k(d)} тыс. Склады переполняются, и продавцы начинают снижать цену. Когда цена падает, покупатели хотят купить больше (движение вниз по D), а производителям выгодно производить меньше (движение вниз по S). Рынок придёт к равновесию E: цена ${k(Pe)} тыс., количество ${k(Qe)} тыс.`);
         else market = Lg(`<b>Rynek: niedobór ${k(d - s)} tys.</b> Kupujący chcą ${k(d)} tys., a w sprzedaży jest tylko ${k(s)} tys. Ludzie są gotowi zapłacić więcej, więc cena rośnie. Wtedy część kupujących rezygnuje (ruch w górę po D), a producentom opłaca się produkować więcej (ruch w górę po S). Rynek dojdzie do równowagi E: cena ${k(Pe)} tys. zł, ilość ${k(Qe)} tys.`, `<b>Рынок: дефицит ${k(d - s)} тыс.</b> Покупатели хотят ${k(d)} тыс., а в продаже только ${k(s)} тыс. Люди готовы платить больше, и цена растёт. Тогда часть покупателей отказывается (движение вверх по D), а производителям выгодно производить больше (движение вверх по S). Рынок придёт к равновесию E: цена ${k(Pe)} тыс., количество ${k(Qe)} тыс.`);
         body.querySelector("#dsx").innerHTML =
-          `<li><b>${Lg("Kupujący (D)", "Покупатели (D)")}.</b> ${Lg(`Przy cenie ${k(P)} tys. zł chcą kupić ${k(d)} tys. komputerów. Im wyższa cena, tym mniej osób uważa, że komputer jest wart swojej ceny.`, `При цене ${k(P)} тыс. они хотят купить ${k(d)} тыс. компьютеров. Чем выше цена, тем меньше людей считают, что компьютер её стоит.`)}${why_a}</li>
-           <li><b>${Lg("Producenci (S)", "Производители (S)")}.</b> ${Lg(`Przy cenie ${k(P)} tys. zł chcą sprzedać ${k(s)} tys. Opłaca im się produkować każdą sztukę, której koszt jest niższy od ceny. Wyższa cena = więcej opłacalnych sztuk.`, `При цене ${k(P)} тыс. они хотят продать ${k(s)} тыс. Им выгодно производить каждую штуку, которая обходится дешевле цены. Выше цена — больше выгодных штук.`)}${why_b}</li>
+          `<li><b>${Lg("Kupujący (D)", "Покупатели (D)")}.</b> ${Lg(`Przy cenie P = ${k(P)} tys. zł chcą kupić Q_D = ${k(d)} tys. komputerów. Im wyższa cena, tym mniej osób uważa, że komputer jest wart swojej ceny.`, `При цене P = ${k(P)} тыс. они хотят купить Q_D = ${k(d)} тыс. компьютеров. Чем выше цена, тем меньше людей считают, что компьютер её стоит.`)}${why_a}</li>
+           <li><b>${Lg("Producenci (S)", "Производители (S)")}.</b> ${Lg(`Przy cenie P = ${k(P)} tys. zł chcą sprzedać Q_S = ${k(s)} tys. Opłaca im się produkować każdą sztukę, której koszt jest niższy od ceny. Wyższa cena = więcej opłacalnych sztuk.`, `При цене P = ${k(P)} тыс. они хотят продать Q_S = ${k(s)} тыс. Им выгодно производить каждую штуку, которая обходится дешевле цены. Выше цена — больше выгодных штук.`)}${why_b}</li>
            <li>${market}</li>`;
       };
       body.querySelectorAll("input").forEach(x => x.oninput = upd); upd();
@@ -878,7 +878,7 @@ const CHARTS = {
       const a = sc.a, Pe = (10 + a) / 2;
       const last = hist[hist.length - 1];
       body.innerHTML = `<div class="scen"><b>${Lg("Scenariusz", "Сценарий")}</b><p>${esc(t(sc))}</p>
-          <p class="muted" style="font-size:14px;margin:6px 0 0">${Lg(`Popyt: Q = ${10 + a} − P. Twój koszt: k-ty tysiąc komputerów kosztuje Cię k tys. zł za sztukę (pomarańczowa linia). Ustaw cenę i produkcję tak, żeby sprzedać wszystko i żeby żadna sztuka nie była produkowana ze stratą.`, `Спрос: Q = ${10 + a} − P. Твои затраты: k-я тысяча компьютеров обходится в k тыс. за штуку (оранжевая линия). Установи цену и производство так, чтобы продать всё и не производить ни одной штуки себе в убыток.`)}</p></div>
+          <p class="muted" style="font-size:14px;margin:6px 0 0">${Lg(`Popyt (niebieska krzywa D): Q_D = ${10 + a} − P, czyli przy cenie P kupujący chcą ${10 + a} − P tys. sztuk. Podaż (pomarańczowa krzywa S) wynika z Twoich kosztów: k-ty tysiąc komputerów kosztuje Cię k tys. zł za sztukę, więc przy cenie P opłaca się sprzedać Q_S = P. Ustaw cenę i produkcję tak, żeby sprzedać wszystko i żeby żadna sztuka nie była produkowana ze stratą.`, `Спрос (синяя кривая D): Q_D = ${10 + a} − P, то есть при цене P покупатели хотят ${10 + a} − P тыс. штук. Предложение (оранжевая кривая S) следует из твоих затрат: k-я тысяча компьютеров обходится в k тыс. за штуку, поэтому при цене P выгодно продать Q_S = P. Установи цену и производство так, чтобы продать всё и не производить ни одной штуки себе в убыток.`)}</p></div>
         <div class="pl"></div>
         <div class="ctrl">
           <label for="gp">${Lg("Twoja cena (P)", "Твоя цена (P)")}<span><b id="gpv"></b></span><input type="range" id="gp" min="0.5" max="10" step="0.5" value="${last ? last.P : 8}"></label>
@@ -888,15 +888,15 @@ const CHARTS = {
         <div id="gres"></div><div id="gsolbox"></div><div id="ghist"></div>`;
       const draw = () => {
         const P = +body.querySelector("#gp").value, Q = +body.querySelector("#gq").value, Dp = Math.max(0, 10 + a - P);
-        let g = grid() + Dline(a, "var(--chart-a)", 3) + Sline(0, "var(--chart-b)", 2.4, showSol ? "" : "6 4");
-        g += txt(X(Math.max(0.6, 10 + a - 9.6)) + 8, Y(9.6), "D", "lab") + txt(X(9.6) - 8, Y(9.6), Lg("koszt = S", "затраты = S"), "lab", "end");
+        let g = grid() + Dline(a, "var(--chart-a)", 3) + Sline(0, "var(--chart-b)", 3);
+        g += txt(X(Math.max(0.6, 10 + a - 9.6)) + 8, Y(9.6), "D", "lab") + txt(X(9.6) - 8, Y(9.6), "S", "lab", "end");
         hist.forEach(h => g += `<circle cx="${X(h.Q)}" cy="${Y(h.P)}" r="4" fill="none" stroke="var(--faint)" stroke-width="1.5"/>`);
         g += line(L, Y(P), R, Y(P), "var(--ink)", 1.1, "3 4") + line(X(Q), T, X(Q), B, "var(--chart-b)", 1.1, "3 4");
         g += `<rect x="${X(Math.min(Q, Dp))}" y="${Y(P) - 6}" width="${Math.abs(X(Q) - X(Dp))}" height="12" rx="3" fill="${Q > Dp ? "var(--chart-a)" : "var(--chart-hi)"}" opacity=".2"/>`;
         g += dot(Dp, P, "var(--chart-a)", 4.5) + `<circle cx="${X(Q)}" cy="${Y(P)}" r="6" fill="var(--chart-b)" stroke="var(--surface)" stroke-width="2"/>`;
         if (showSol || solved) g += ring(Pe, Pe) + txt(X(Pe) + 9, Y(Pe) + 16, "E", "lab");
         body.querySelector(".pl").innerHTML = NS(W, H + 6, g);
-        body.querySelector("#gpv").textContent = k(P) + Lg(" tys. zł", " тыс. zł") + " · " + Lg(`kupujący chcą ${k(Dp)} tys.`, `покупатели хотят ${k(Dp)} тыс.`);
+        body.querySelector("#gpv").textContent = k(P) + Lg(" tys. zł", " тыс. zł") + " · " + Lg(`Q_D = ${k(Dp)} tys.`, `Q_D = ${k(Dp)} тыс.`);
         body.querySelector("#gqv").textContent = k(Q) + Lg(" tys. szt.", " тыс. шт.") + " · " + Lg(`koszt ostatniej sztuki ${k(Q)} tys. zł`, `стоимость последней штуки ${k(Q)} тыс.`);
       };
       const renderHist = () => {
@@ -921,9 +921,9 @@ const CHARTS = {
       body.querySelector("#gsol").onclick = () => {
         showSol = true; draw();
         body.querySelector("#gsolbox").innerHTML = `<div class="solution"><b>${Lg("Rozwiązanie krok po kroku", "Решение по шагам")}</b><ol>
-          <li>${Lg(`Popyt: przy cenie P kupujący chcą Q = ${10 + a} − P.`, `Спрос: при цене P покупатели хотят Q = ${10 + a} − P.`)}</li>
-          <li>${Lg("Podaż (Twój koszt): opłaca się produkować dopóty, dopóki koszt kolejnej sztuki jest niższy od ceny. Koszt k-tej sztuki to k, więc przy cenie P chcesz produkować Q = P.", "Предложение (твои затраты): производить выгодно, пока следующая штука обходится дешевле цены. k-я штука стоит k, значит при цене P ты хочешь производить Q = P.")}</li>
-          <li>${Lg(`Równowaga: popyt = podaż → ${10 + a} − P = P → 2P = ${10 + a} → <b>P = ${k(Pe)} tys. zł, Q = ${k(Pe)} tys. szt.</b>`, `Равновесие: спрос = предложение → ${10 + a} − P = P → 2P = ${10 + a} → <b>P = ${k(Pe)} тыс., Q = ${k(Pe)} тыс. шт.</b>`)}</li>
+          <li>${Lg(`Popyt D: Q_D = ${10 + a} − P.`, `Спрос D: Q_D = ${10 + a} − P.`)}</li>
+          <li>${Lg("Podaż (Twój koszt): opłaca się produkować dopóty, dopóki koszt kolejnej sztuki jest niższy od ceny. Koszt k-tej sztuki to k, więc podaż S to Q_S = P.", "Предложение (твои затраты): производить выгодно, пока следующая штука обходится дешевле цены. k-я штука стоит k, значит предложение S: Q_S = P.")}</li>
+          <li>${Lg(`Równowaga: Q_D = Q_S → ${10 + a} − P = P → 2P = ${10 + a} → <b>P = ${k(Pe)} tys. zł, Q = ${k(Pe)} tys. szt.</b>`, `Равновесие: Q_D = Q_S → ${10 + a} − P = P → 2P = ${10 + a} → <b>P = ${k(Pe)} тыс., Q = ${k(Pe)} тыс. шт.</b>`)}</li>
           <li>${Lg("Rozwiązanie rozsądne to każda para, przy której Q = popyt przy danej cenie (nic nie zalega, nikt nie odchodzi). Optymalne jest tylko jedno: dodatkowo cena = koszt ostatniej sztuki. Wyższa cena da Ci chwilowo większy zysk, ale przyciągnie konkurentów i rynek i tak zepchnie ją do równowagi. Niższa oznacza produkcję ze stratą.", "Разумное решение — любая пара, при которой Q = спрос при этой цене (ничего не залёживается, никто не уходит). Оптимальное только одно: ещё и цена = стоимость последней штуки. Более высокая цена временно даст больше прибыли, но привлечёт конкурентов, и рынок всё равно вернёт её к равновесию. Более низкая означает производство в убыток.")}</li>
         </ol></div>`;
       };
@@ -1134,7 +1134,7 @@ function render(scrollTop = true){
     g ? vTerm(g) :
     r.v === "exam" ? vExam() :
     r.v === "settings" ? vSettings() : vHome();
-  document.title = (s ? t(s.title) : g ? g[lang].n : L ? `${t(UI.lecture)} ${L.n}` : "") ? `${s ? t(s.title) : g ? g[lang].n : `${t(UI.lecture)} ${L.n}`} · Makro WSB` : "Makro WSB";
+  document.title = (s ? t(s.title) : g ? g[lang].n : L ? `${t(UI.lecture)} ${L.n}` : "") ? `${s ? t(s.title) : g ? g[lang].n : `${t(UI.lecture)} ${L.n}`} · Brainstorm WSB` : "Brainstorm WSB";
 
   main.querySelectorAll("[data-chart]").forEach(el => CHARTS[el.dataset.chart]?.(el));
   if (s){
