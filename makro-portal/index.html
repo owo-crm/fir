@@ -77,6 +77,7 @@ svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-widt
 /* flashcards */
 .flash{background:var(--card);border-radius:16px;min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .flash .w{font-size:26px;font-weight:600}
+.flash .def{font-size:19px;font-weight:500;line-height:1.4}
 .flash .s{color:var(--muted);font-size:13px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 
@@ -141,6 +142,7 @@ const UI = {
   continue:{pl:"Kontynuuj",ru:"Продолжить"}, allDone:{pl:"Wszystkie wykłady zaliczone!",ru:"Все лекции зачтены!"},
   summary:{pl:"Notatki",ru:"Конспект"}, formulas:{pl:"Wzory",ru:"Формулы"}, terms:{pl:"Pojęcia",ru:"Термины"},
   cards:{pl:"Fiszki",ru:"Карточки"}, quiz:{pl:"Test",ru:"Тест"}, chart:{pl:"Wykres",ru:"График"},
+  term:{pl:"Pojęcie",ru:"Термин"}, meaning:{pl:"Znaczenie",ru:"Значение"},
   flip:{pl:"Dotknij, aby odwrócić",ru:"Нажми, чтобы перевернуть"}, know:{pl:"Umiem",ru:"Знаю"}, again:{pl:"Jeszcze raz",ru:"Ещё раз"},
   next:{pl:"Dalej",ru:"Дальше"}, finish:{pl:"Zakończ",ru:"Завершить"}, retry:{pl:"Spróbuj ponownie",ru:"Пройти снова"},
   passed:{pl:"Zaliczone",ru:"Зачтено"}, notPassed:{pl:"Niezaliczone",ru:"Не зачтено"}, best:{pl:"Najlepszy wynik",ru:"Лучший результат"},
@@ -215,7 +217,7 @@ function vLecture(x, tab){
   let body="";
   if(tab==="summary") body=`<div class="group"><ul class="note">${(x.summary[lang]||x.summary.pl).map(s=>`<li>${esc(s)}</li>`).join("")}</ul></div>`;
   if(tab==="formulas") body=`<div class="group plain">${x.formulas.map(f=>`<div class="cell"><span class="body"><span class="formula">${esc(f.f)}</span><small>${esc(t(f.d))}</small></span></div>`).join("")}</div>`;
-  if(tab==="terms") body=`<div class="group plain">${x.terms.map(r=>`<div class="cell"><span class="body"><b>${esc(lang==="pl"?r.pl:r.ru)}</b><small>${esc(lang==="pl"?r.ru:r.pl)}${r.en?` · ${esc(r.en)}`:""}</small></span></div>`).join("")}</div>`;
+  if(tab==="terms") body=`<div class="group plain">${x.terms.map(r=>`<div class="cell"><span class="body"><b>${esc(lang==="pl"?r.pl:r.ru)}</b><small>${r.def?esc(t(r.def)):""}</small><small>${esc(lang==="pl"?r.ru:r.pl)}${r.en?` · ${esc(r.en)}`:""}</small></span></div>`).join("")}</div>`;
   if(tab==="chart") body=`<div class="group" style="padding:16px" id="chart"></div>`;
   if(tab==="cards") body=`<div id="cards"></div>`;
   if(tab==="quiz") body=`<div id="quiz"></div>`;
@@ -254,9 +256,9 @@ function cards(el, x){
     if(!deck.length){el.innerHTML=`<div class="group result"><span class="check">${icon("checkFill")}</span><p>${x.terms.length}/${x.terms.length}</p></div>
       <div style="margin-top:12px"><button class="btn gray" id="re">${t(UI.retry)}</button></div>`;el.querySelector("#re").onclick=()=>cards(el,x);return;}
     const r=x.terms[deck[i%deck.length]];
-    const front=lang==="pl"?r.pl:r.ru, back=(lang==="pl"?r.ru:r.pl)+(r.en?`\n${r.en}`:"");
-    el.innerHTML=`<div class="flash" id="fc"><span class="s">${flipped?(lang==="pl"?"RU · EN":"PL · EN"):lang.toUpperCase()} · ${deck.length}</span>
-      <div class="w" style="white-space:pre-line;margin:16px 0">${esc(flipped?back:front)}</div><span class="s">${t(UI.flip)}</span></div>
+    const front=lang==="pl"?r.pl:r.ru, back=r.def?t(r.def):(lang==="pl"?r.ru:r.pl);
+    el.innerHTML=`<div class="flash" id="fc"><span class="s">${t(flipped?UI.meaning:UI.term)} · ${deck.length}</span>
+      <div class="w${flipped?" def":""}" style="margin:16px 0">${esc(flipped?back:front)}</div>${flipped?`<span class="s" style="margin-bottom:8px">${esc(lang==="pl"?r.ru:r.pl)}</span>`:""}<span class="s">${t(UI.flip)}</span></div>
       <div class="row2"><button class="btn gray" id="ag">${t(UI.again)}</button><button class="btn" id="kn">${t(UI.know)}</button></div>`;
     el.querySelector("#fc").onclick=()=>{flipped=!flipped;draw();};
     el.querySelector("#ag").onclick=()=>{i++;flipped=false;draw();};
