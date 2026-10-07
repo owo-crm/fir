@@ -7,7 +7,7 @@ window.COURSE = {
   topics: [
     {
       id: "pkb",
-      week: 1,
+      lecture: 1,
       title: { pl: "PKB i mierzenie gospodarki", ru: "ВВП и измерение экономики" },
       summary: {
         pl: [
@@ -59,7 +59,7 @@ window.COURSE = {
     },
     {
       id: "inflacja",
-      week: 2,
+      lecture: 2,
       title: { pl: "Inflacja i bezrobocie", ru: "Инфляция и безработица" },
       summary: {
         pl: [
@@ -97,7 +97,7 @@ window.COURSE = {
     },
     {
       id: "adas",
-      week: 3,
+      lecture: 3,
       title: { pl: "Model AD–AS", ru: "Модель AD–AS" },
       chart: "adas",
       summary: {
@@ -133,7 +133,7 @@ window.COURSE = {
     },
     {
       id: "pieniadz",
-      week: 4,
+      lecture: 4,
       title: { pl: "Pieniądz i polityka pieniężna", ru: "Деньги и денежно-кредитная политика" },
       summary: {
         pl: [
