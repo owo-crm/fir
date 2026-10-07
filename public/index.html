@@ -688,6 +688,7 @@ function vSettings(){
       <div class="setrow"><b>${t(UI.language)}</b>${seg("lang", lang, [["pl","Polski"],["ru","Русский"]])}</div>
       <div class="setrow"><b>${t(UI.theme)}</b>${seg("theme", th, [["auto",t(UI.auto)],["light",t(UI.light)],["dark",t(UI.dark)]])}</div>
       <div class="setrow"><label for="examdate"><b>${t(UI.examDate)}</b></label><input type="date" id="examdate" value="${esc(store.get("exam", C.examDate))}"></div>
+      <div class="setrow"><span class="muted" style="font-size:14px">${lang === "pl" ? "Zbieramy anonimowe statystyki użycia: które strony są otwierane i ile czasu na nich spędzasz. Bez imion, kont i adresów IP." : "Мы собираем анонимную статистику: какие страницы открываются и сколько времени на них проводят. Без имён, аккаунтов и IP-адресов."}</span><a href="admin.html" class="muted" style="font-size:13px">Admin</a></div>
       <div class="setrow"><button class="danger" id="reset">${t(UI.reset)}</button></div>
     </div></div>`;
 }
@@ -1053,7 +1054,7 @@ function openPop(anchor){
 }
 document.addEventListener("click", e => {
   const tr = e.target.closest(".term, .term-chip");
-  if (tr){ e.preventDefault(); openPop(tr); return; }
+  if (tr){ e.preventDefault(); TRACK.ev("term", tr.dataset.t, 0); openPop(tr); return; }
   if (popEl && !popEl.contains(e.target)) closePop();
 });
 addEventListener("scroll", () => { if (popEl && Math.abs(scrollY - popY) > 6) closePop(); }, { passive: true });
@@ -1097,7 +1098,7 @@ function openSearch(){
     res.querySelector(".sitem")?.classList.add("sel");
   };
   const item = x => `<a class="sitem" href="${x.href}"><span class="ic">${icon(x.kind === "t" ? "tag" : "book")}</span><span><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></span></a>`;
-  inp.oninput = draw; draw(); inp.focus();
+  let st; inp.oninput = () => { draw(); clearTimeout(st); st = setTimeout(() => { const v = inp.value.trim(); if (v.length > 2) TRACK.ev("search", v.toLowerCase(), 0); }, 1500); }; draw(); inp.focus();
   ov.onclick = e => { if (e.target === ov || e.target.closest("#sx") || e.target.closest(".sitem")) close(); };
   inp.onkeydown = e => {
     const all = [...res.querySelectorAll(".sitem")], cur = all.findIndex(a => a.classList.contains("sel"));
@@ -1119,10 +1120,37 @@ document.addEventListener("click", e => {
   const lb = e.target.closest("[data-lang]"); if (lb){ lang = lb.dataset.lang; store.set("lang", lang); render(false); }
 });
 
+// ---------- anonimowa statystyka (tylko na własnym hostingu z /api/t) ----------
+const TRACK = (() => {
+  const on = /^https?:$/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.hostname);
+  let vid = store.get("vid", null); if (!vid){ vid = (crypto.randomUUID?.() || String(Math.random()).slice(2)); store.set("vid", vid); }
+  const q = []; let page = "start", active = 0, lastMove = Date.now(), lastTick = Date.now();
+  const flush = () => {
+    if (!on || !q.length) return;
+    const body = JSON.stringify({ v: vid, lang, d: matchMedia("(max-width:900px)").matches ? "m" : "d", e: q.splice(0) });
+    try { navigator.sendBeacon?.("/api/t", new Blob([body], { type: "application/json" })) || fetch("/api/t", { method: "POST", body, keepalive: true }).catch(() => {}); } catch {}
+  };
+  const tick = () => {
+    const now = Date.now();
+    if (document.visibilityState === "visible" && now - lastMove < 60000) active += now - lastTick;
+    lastTick = now;
+  };
+  const pushTime = () => { tick(); if (active >= 1000){ q.push(["time", page, Math.round(active / 1000)]); active = 0; } };
+  ["pointerdown", "keydown", "scroll", "touchstart"].forEach(ev => addEventListener(ev, () => { tick(); lastMove = Date.now(); }, { passive: true }));
+  setInterval(() => { pushTime(); flush(); }, 30000);
+  document.addEventListener("visibilitychange", () => { pushTime(); if (document.visibilityState === "hidden") flush(); else lastTick = Date.now(); });
+  addEventListener("pagehide", () => { pushTime(); flush(); });
+  return {
+    view(p){ pushTime(); page = p; q.push(["view", p, 0]); },
+    ev(type, p, val){ q.push([type, String(p).slice(0, 80), val | 0]); },
+  };
+})();
+
 // ---------- render ----------
 let tocObs = null, endObs = null;
 function render(scrollTop = true){
   closePop(); tocObs?.disconnect(); endObs?.disconnect();
+  TRACK.view(location.hash.replace(/^#/, "") || "start");
   document.documentElement.lang = lang;
   const r = route(), main = document.getElementById("main");
   const L = r.n ? C.lectures.find(x => x.n === r.n) : null;
@@ -1142,7 +1170,7 @@ function render(scrollTop = true){
   main.querySelectorAll("[data-chart]").forEach(el => CHARTS[el.dataset.chart]?.(el));
   if (s){
     S.last = s.id; save();
-    quiz(main.querySelector("#quiz"), s.quiz, r => { if (S.mini[s.id] == null || r > S.mini[s.id]){ S.mini[s.id] = r; save(); renderChrome(route()); } });
+    quiz(main.querySelector("#quiz"), s.quiz, r => { TRACK.ev("mini", s.id, Math.round(r * 100)); if (S.mini[s.id] == null || r > S.mini[s.id]){ S.mini[s.id] = r; save(); renderChrome(route()); } });
     main.querySelectorAll("[data-goto]").forEach(a => a.onclick = e => { e.preventDefault(); document.getElementById(a.dataset.goto)?.scrollIntoView({ behavior: "smooth" }); });
     const tocLinks = [...main.querySelectorAll(".toc a")];
     tocObs = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting){ tocLinks.forEach(a => a.classList.toggle("on", a.dataset.goto === en.target.id)); } }), { rootMargin: "0px 0px -70% 0px" });
@@ -1154,6 +1182,7 @@ function render(scrollTop = true){
   if (L && r.v === "final") quiz(main.querySelector("#quiz"), L.final, res => {
     const k = "w" + L.n, was = lecPassed(L);
     if (S.best[k] == null || res > S.best[k]){ S.best[k] = res; save(); }
+    TRACK.ev("final", "w" + L.n, Math.round(res * 100));
     if (res === 1 && !was) toast(`${icon("trophy")}${t(UI.passedToast)}`);
   });
   if (r.v === "glossary"){
