@@ -153,8 +153,9 @@ const UI = {
   language:{pl:"Język",ru:"Язык"}, theme:{pl:"Motyw",ru:"Тема"}, auto:{pl:"Automatyczny",ru:"Авто"}, light:{pl:"Jasny",ru:"Светлая"}, dark:{pl:"Ciemny",ru:"Тёмная"},
   reset:{pl:"Resetuj postęp",ru:"Сбросить прогресс"}, resetQ:{pl:"Na pewno usunąć cały postęp?",ru:"Точно удалить весь прогресс?"},
   examDate:{pl:"Data egzaminu",ru:"Дата экзамена"},
-  shiftD:{pl:"Przesunięcie AD (np. wzrost G)",ru:"Сдвиг AD (например, рост G)"}, shiftS:{pl:"Przesunięcie SRAS (np. szok podażowy)",ru:"Сдвиг SRAS (например, шок предложения)"},
-  demo:{pl:"Dane testowe — prawdziwe materiały zostaną dodane później.",ru:"Тестовые данные — настоящие материалы будут добавлены позже."},
+  shiftD:{pl:"Przesunięcie AD (np. wzrost G)",ru:"Сдвиг AD (например, рост G)"}, shiftS:{pl:"Przesunięcie SAS (np. szok podażowy)",ru:"Сдвиг SAS (например, шок предложения)"},
+  ch_adas:{pl:"Model AD–AS",ru:"Модель AD–AS"}, ch_inflation:{pl:"Inflacja w Polsce 2003–2024 (%)",ru:"Инфляция в Польше 2003–2024 (%)"},
+  target:{pl:"cel NBP 2,5% ± 1",ru:"цель NBP 2,5% ± 1"}, program:{pl:"Program kursu",ru:"Программа курса"}, soon:{pl:"wkrótce",ru:"скоро"},
 };
 
 const store = {
@@ -204,21 +205,25 @@ function vHome(){
     <div class="hdr">${t(UI.continue)}</div>
     <div class="group">${nx?lectureCell(nx):`<div class="cell"><span class="ico" style="background:var(--green)">${icon("trophy")}</span><span class="body">${t(UI.allDone)}</span></div>`}</div>
     <p class="foot">${t(UI.rule)}</p>
-    <p class="foot" style="margin-top:24px">${t(UI.demo)}</p>`};
+`};
 }
 function vLectures(){
+  const have=new Set(lectures.map(x=>x.lecture));
+  const rest=(C.program||[]).filter(p=>!have.has(p.n));
   return {title:t(UI.lectures), html:`<h1 class="large">${t(UI.lectures)}</h1>
-    <div class="group">${lectures.map(lectureCell).join("")}</div><p class="foot">${t(UI.rule)}</p>`};
+    <div class="group">${lectures.map(lectureCell).join("")}</div><p class="foot">${t(UI.rule)}</p>
+    ${rest.length?`<div class="hdr">${t(UI.program)}</div><div class="group">${rest.map(p=>`<div class="cell" style="opacity:.55">
+      <span class="ico" style="background:var(--muted)">${icon("lock")}</span><span class="body">${esc(t(p))}<small>${t(UI.lecture)} ${p.n} · ${t(UI.soon)}</small></span></div>`).join("")}</div>`:""}`};
 }
 function vLecture(x, tab){
-  const tabs=["summary","formulas","terms","cards","quiz"]; if(x.chart) tabs.splice(1,0,"chart");
+  const tabs=["summary","formulas","terms","cards","quiz"]; if(x.charts?.length) tabs.splice(1,0,"chart");
   if(!tabs.includes(tab)) tab="summary";
   const ok=passed(x.id);
   let body="";
-  if(tab==="summary") body=`<div class="group"><ul class="note">${(x.summary[lang]||x.summary.pl).map(s=>`<li>${esc(s)}</li>`).join("")}</ul></div>`;
+  if(tab==="summary") body=x.summary.map(s=>`<div class="hdr">${esc(t(s.h))}</div><div class="group"><ul class="note">${(s.pts[lang]||s.pts.pl).map(p=>`<li>${esc(p)}</li>`).join("")}</ul></div>`).join("");
   if(tab==="formulas") body=`<div class="group plain">${x.formulas.map(f=>`<div class="cell"><span class="body"><span class="formula">${esc(f.f)}</span><small>${esc(t(f.d))}</small></span></div>`).join("")}</div>`;
   if(tab==="terms") body=`<div class="group plain">${x.terms.map(r=>`<div class="cell"><span class="body"><b>${esc(lang==="pl"?r.pl:r.ru)}</b><small>${r.def?esc(t(r.def)):""}</small><small>${esc(lang==="pl"?r.ru:r.pl)}${r.en?` · ${esc(r.en)}`:""}</small></span></div>`).join("")}</div>`;
-  if(tab==="chart") body=`<div class="group" style="padding:16px" id="chart"></div>`;
+  if(tab==="chart") body=x.charts.map(c=>`<div class="hdr">${t(UI["ch_"+c])}</div><div class="group" style="padding:16px" data-chart="${c}"></div>`).join("");
   if(tab==="cards") body=`<div id="cards"></div>`;
   if(tab==="quiz") body=`<div id="quiz"></div>`;
   return {title:t(x.title), back:["#/lectures",t(UI.lectures)], html:`
@@ -232,7 +237,7 @@ function vExam(){
   const total=C.topics.reduce((s,x)=>s+x.quiz.length,0);
   return {title:t(UI.exam), html:`<h1 class="large">${t(UI.exam)}</h1>
     <div id="quiz"><div class="group"><div class="cell"><span class="ico" style="background:var(--red)">${icon("target")}</span>
-      <span class="body">${t(UI.examDesc)}<small>${Math.min(10,total)} ${t(UI.questions)}</small></span></div></div>
+      <span class="body">${t(UI.examDesc)}<small>${Math.min(15,total)} ${t(UI.questions)}</small></span></div></div>
       <div style="margin-top:16px"><button class="btn" id="go">${icon("play")} ${t(UI.startExam)}</button></div></div>`};
 }
 function vSettings(){
@@ -311,12 +316,25 @@ function adas(el){
       line(X(d-40),250+32,X(d+250),250-200,"var(--blue)",3)+
       line(X(s-40),50-32,X(s+230),50+184,"var(--orange)",3)+`</g>`+
       line(40,20,40,290,"var(--muted)",1)+line(40,20,390,20,"var(--muted)",1)+
-      `<text x="${X(125)+4}" y="20">LRAS</text><text x="${X(d+230)}" y="${300-(250-0.8*230)-8}">AD</text><text x="${X(s+215)}" y="${300-(50+0.8*215)-8}">SRAS</text>`+
+      `<text x="${X(125)+4}" y="20">LAS</text><text x="${X(d+230)}" y="${300-(250-0.8*230)-8}">AD</text><text x="${X(s+215)}" y="${300-(50+0.8*215)-8}">SAS</text>`+
       `<circle cx="${X(Y)}" cy="${300-P}" r="6" fill="var(--card)" stroke="var(--text)" stroke-width="2.5"/>`+
       `<text x="380" y="295" text-anchor="end">Y</text><text x="28" y="34">P</text>`;
     el.querySelector("#eq").textContent=`Y* ≈ ${Y.toFixed(0)} · P* ≈ ${(P/1.25).toFixed(0)}`;
   };
   el.querySelectorAll("input").forEach(i=>i.oninput=upd); upd();
+}
+
+function inflation(el){
+  const d=C.data.inflation, W=400, H=230, L=30, B=200, top=14, max=15, min=-2;
+  const y=v=>B-(v-min)/(max-min)*(B-top), bw=(W-L-6)/d.length;
+  let s=`<rect x="${L}" y="${y(3.5)}" width="${W-L}" height="${y(1.5)-y(3.5)}" fill="var(--green)" opacity=".15"/>`;
+  [0,5,10,15].forEach(v=>s+=`<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--sep)"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`);
+  d.forEach(([yr,v],i)=>{const x=L+4+i*bw, c=v<0?"var(--teal)":v>3.5?"var(--red)":"var(--blue)";
+    s+=`<rect x="${x}" y="${Math.min(y(v),y(0))}" width="${bw-3}" height="${Math.max(1,Math.abs(y(v)-y(0)))}" rx="2" fill="${c}"><title>${yr}: ${String(v).replace(".",",")}%</title></rect>`;
+    if(yr%3===0||yr===2022) s+=`<text x="${x+bw/2-1}" y="${H-12}" text-anchor="middle">${String(yr).slice(2)}</text>`;
+    if(yr===2022) s+=`<text x="${x+bw/2-1}" y="${y(v)-4}" text-anchor="middle" style="fill:var(--text);font-weight:600">14,4</text>`;});
+  el.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}" style="width:100%;display:block">${s}</svg>
+    <p class="sub" style="margin:8px 0 0"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--green);opacity:.4"></span> ${t(UI.target)} · GUS</p>`;
 }
 
 // ---------- router ----------
@@ -343,10 +361,10 @@ function render(){
       return r===1?t(UI.perfect):t(UI.need);
     });
     const c=main.querySelector("#cards"); if(c) cards(c,x);
-    const ch=main.querySelector("#chart"); if(ch) adas(ch);
+    main.querySelectorAll("[data-chart]").forEach(el=>({adas,inflation})[el.dataset.chart]?.(el));
   }
   if(route==="exam") main.querySelector("#go").onclick=()=>{
-    const qs=C.topics.flatMap(z=>z.quiz).sort(()=>Math.random()-.5).slice(0,10);
+    const qs=C.topics.flatMap(z=>z.quiz).sort(()=>Math.random()-.5).slice(0,15);
     quiz(main.querySelector("#quiz"),qs);
   };
   if(route==="settings"){
