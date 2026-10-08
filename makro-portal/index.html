@@ -735,6 +735,7 @@ function vSettings(){
       <div class="setrow"><b>${t(UI.theme)}</b>${seg("theme", th, [["auto",t(UI.auto)],["light",t(UI.light)],["dark",t(UI.dark)]])}</div>
       <div class="setrow"><label for="examdate"><b>${t(UI.examDate)}</b></label><input type="date" id="examdate" value="${esc(store.get("exam", C.examDate))}"></div>
       <div class="setrow"><span class="muted" style="font-size:14px">${lang === "pl" ? "Zbieramy anonimowe statystyki użycia: które strony są otwierane i ile czasu na nich spędzasz. Bez imion, kont i adresów IP." : "Мы собираем анонимную статистику: какие страницы открываются и сколько времени на них проводят. Без имён, аккаунтов и IP-адресов."}</span><a href="admin.html" class="muted" style="font-size:13px">Admin</a> <a href="#dev-gra" class="muted" style="font-size:13px">Dev: gra</a></div>
+      <div class="setrow"><span><b>Beta</b><br><span class="muted" style="font-size:13px">${lang === "pl" ? "Gra ekonomiczna 3D (wersja testowa)" : "Экономическая 3D-игра (тестовая версия)"}</span></span><a class="btn" href="#dev-gra">${icon("cube")}${lang === "pl" ? "Otwórz grę" : "Открыть игру"}</a></div>
       <div class="setrow"><button class="danger" id="reset">${t(UI.reset)}</button></div>
     </div></div>`;
 }
