@@ -307,43 +307,51 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   .pn a.next{text-align:left}
 }
 
-/* ---------- gra ---------- */
-.game{display:flex;flex-direction:column;gap:16px}
-.ghead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
-.gbrief{padding:16px 18px;display:flex;flex-direction:column;gap:8px}
-.gbrief p{margin:0}
-.ggoals ul{margin:4px 0 0;padding-left:20px;font-size:14px;color:var(--muted)}
-.gmain{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
-.gworld{display:flex;flex-direction:column;gap:12px;min-width:0}
-.gstage{position:relative;width:100%;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#bfe6ff,#eaf6ff)}
+/* ---------- gra (pełny ekran) ---------- */
+body.gaming{overflow:hidden}
+body.gaming .tabbar, body.gaming .topbar{display:none}
+.gfull{position:fixed;inset:0;z-index:40;background:linear-gradient(180deg,#bfe6ff,#f0f8ff);display:grid;grid-template-rows:auto 1fr;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);font-family:var(--font-body);color:#14202e}
+.gtop{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap}
+.gtop h1{font:600 clamp(14px,2vw,20px) var(--font-display);margin:0 auto 0 4px;white-space:nowrap}
+.gbtn{height:36px;padding:0 12px;border-radius:10px;background:rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.12);font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:#14202e}
+.gbtn.primary{background:#2347c5;color:#fff}
+.gbtn:disabled{opacity:.5}
+.gstats{display:flex;gap:6px;flex-wrap:wrap}
+.gstat{background:rgba(255,255,255,.9);border-radius:10px;padding:3px 9px;display:flex;flex-direction:column;line-height:1.2;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.gstat span{font-size:10px;color:#5a6676;text-transform:uppercase;letter-spacing:.04em}
+.gstat b{font-size:14px;font-variant-numeric:tabular-nums}
+.gstat.bad{background:#fde3dc} .gstat.bad b{color:#c23a1a}
+.gbody{position:relative;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 360px}
+.gstage{position:relative;min-height:0;min-width:0}
 .gstage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
-.gstage.nogl{aspect-ratio:auto;padding:16px;background:var(--surface);border:1px solid var(--line)}
-.gload{position:absolute;inset:0;display:grid;place-items:center;color:#24476e;font-weight:600}
-.gstage.nogl .gload{position:static}
+.gload{position:absolute;inset:0;display:grid;place-items:center;color:#24476e;font-weight:600;padding:16px;text-align:center}
 .glabels{position:absolute;inset:0;pointer-events:none}
-.glabel{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.92);color:#1b2a3a;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap;display:flex;gap:6px;align-items:center}
+.glabel{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.94);color:#1b2a3a;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap;display:flex;gap:6px;align-items:center}
 .glabel.on{background:#2347c5;color:#fff}
 .glabel i{font-style:normal;width:18px;height:18px;border-radius:50%;background:#e2574c;color:#fff;display:grid;place-items:center;font-size:11px}
-.gstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.gstat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column}
-.gstat span{font-size:12px;color:var(--muted)}
-.gstat b{font-size:17px;font-variant-numeric:tabular-nums}
-.gstat.bad{border-color:var(--bad);background:var(--bad-soft)} .gstat.bad b{color:var(--bad)}
-.gnextbtn{align-self:stretch}
-.gpanel{padding:18px;display:flex;flex-direction:column;gap:12px;position:sticky;top:20px}
-.grole{margin:0;font-size:15px;line-height:1.55}
-.gextra{margin:0;padding:10px 12px;border-radius:10px;background:var(--sunken);font-size:14px}
-.gctl{display:grid;gap:4px;font-size:14px;font-weight:600}
+.gpanel{margin:0 12px 12px 0;background:rgba(255,255,255,.96);border-radius:18px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:16px;display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:0}
+.gpanel h2{font:600 18px var(--font-display);margin:0}
+.grole{margin:0;font-size:14px;line-height:1.5}
+.gextra{margin:0;padding:8px 10px;border-radius:10px;background:#eef2f7;font-size:13px}
+.gctl{display:grid;gap:3px;font-size:13px;font-weight:600}
 .gctl span{display:flex;justify-content:space-between;gap:8px}
-.gctl b{color:var(--accent)}
-.gctl small{font-weight:400;color:var(--muted);line-height:1.45}
-.glist{display:grid;gap:8px;margin-top:8px}
-.greport{padding:18px}
-.greport ul{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px;line-height:1.55}
+.gctl b{color:#2347c5}
+.gctl small{font-weight:400;color:#5a6676;line-height:1.4;font-size:12px}
+.gctl input{width:100%;accent-color:#2347c5}
+.glist{display:grid;gap:6px}
+.gmodal{position:absolute;inset:0;z-index:5;background:rgba(15,25,40,.35);display:grid;place-items:center;padding:16px}
+.gcard{background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:20px;max-width:560px;width:100%;max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.5}
+.gcard h2{font:600 20px var(--font-display);margin:0}
+.gcard ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.gcard p{margin:0}
 .ggrade{list-style:none;padding:0!important}
-.ggrade .ok{color:var(--ok)} .ggrade .no{color:var(--bad)}
-.gamecard .ic3d{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink)}
-@media (max-width:900px){.gmain{grid-template-columns:1fr}.gpanel{position:static}.gstats{grid-template-columns:repeat(2,minmax(0,1fr))}.gstage{aspect-ratio:1/1}}
+.ggrade .ok{color:#13804a} .ggrade .no{color:#c23a1a}
+.gfull .term{color:inherit}
+@media (max-width:900px){
+  .gbody{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+  .gpanel{margin:0 8px 8px;max-height:42vh;border-radius:16px;padding:12px}
+  .gstat{padding:2px 7px} .gstat b{font-size:12.5px}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -537,7 +545,7 @@ function route(){
   if ((m = h.match(/^w(\d+\.\d+)$/))) return { v: "sub", id: m[1] };
   if (h === "slownik") return { v: "glossary" };
   if ((m = h.match(/^p-([a-z0-9-]+)$/))) return { v: "term", id: m[1] };
-  if (h === "gra" || h === "gra-1") return { v: "game" };
+  if (h === "dev-gra") return { v: "game" };
   if (h === "egzamin") return { v: "exam" };
   if (h === "ustawienia") return { v: "settings" };
   return { v: "home" };
@@ -556,14 +564,13 @@ function renderChrome(r){
     <nav class="nav" aria-label="${t(UI.start)}">
       ${navItem("start", "home", "#start")}
       ${lecNav}
-      ${navItem("game", "cube", "#gra")}
       ${navItem("glossary", "dict", "#slownik")}
       ${navItem("exam", "target", "#egzamin")}
       ${navItem("settings", "gear", "#ustawienia")}
     </nav>
     <div class="side-foot"><div class="seg" role="group" aria-label="${t(UI.language)}">${["pl","ru"].map(l => `<button data-lang="${l}" class="${lang === l ? "on" : ""}">${l === "pl" ? "Polski" : "Русский"}</button>`).join("")}</div></div>`;
-  document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button><a class="iconbtn" href="#ustawienia" aria-label="${t(UI.settings)}">${icon("gear")}</a>`;
-  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#w1"],["game","cube","#gra"],["glossary","dict","#slownik"],["exam","target","#egzamin"]]
+  document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button>`;
+  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#w1"],["glossary","dict","#slownik"],["exam","target","#egzamin"],["settings","gear","#ustawienia"]]
     .map(([k, ic, h]) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k])}</a>`).join("");
 }
 
@@ -600,7 +607,6 @@ function vHome(){
       <p class="muted" style="margin:6px 0 0;font-size:14px">${t(UI.soonLead)}</p>
       <div class="soonlist">${C.program.map(p => `<div>${icon("lock")}<span class="n">${p.n}</span>${esc(t(p))}</div>`).join("")}</div>
     </section>
-    <a class="card continue gamecard" href="#gra"><span class="ic3d">${icon("cube")}</span><span class="body"><span class="muted" style="font-size:13px">${lang === "pl" ? "Nowość · gra 3D" : "Новинка · 3D-игра"}</span><b>${lang === "pl" ? "Misja 1: Nieurodzaj — rządź gospodarką w kryzysie" : "Миссия 1: Неурожай — управляй экономикой в кризис"}</b></span>${icon("arrow")}</a>
     <section class="stack">
       <h2 class="h2">${t(UI.popular)}</h2>
       <div class="chips">${pop.map(id => `<button type="button" class="chip term-chip" data-t="${id}">${icon("tag")}${esc(tn(id).n)}</button>`).join("")}</div>
@@ -1230,6 +1236,7 @@ function render(scrollTop = true){
     const f = main.querySelector("#gfilter"), gl = main.querySelector("#glist");
     gl.innerHTML = glossaryList(""); f.oninput = () => gl.innerHTML = glossaryList(f.value);
   }
+  if (r.v !== "game") { document.body.classList.remove("gaming"); document.querySelector(".gfull")?.remove(); }
   if (r.v === "game") window.BrainstormGame?.mount(main.querySelector("#gamebox"), { lang, inline, esc, track: (a, b, c) => TRACK.ev(a, b, c) });
   if (r.v === "exam") main.querySelector("#go").onclick = () => {
     const pool = C.lectures.flatMap(x => [...x.final, ...x.subs.flatMap(s => s.quiz)]);

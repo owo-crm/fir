@@ -156,13 +156,13 @@
   function report(st, r, lang){
     const L = (pl, ru) => lang === "ru" ? ru : pl;
     const d = st.history[st.history.length - 1].d, out = [];
-    out.push(L(`Podaż zboża: rolnicy ${Math.round(r.dom)}% + import ${Math.round(r.imp)}% + rezerwy ${Math.round(r.rel)}% = <b>${Math.round(r.S)}%</b> normalnej ilości.`,
-               `Предложение зерна: фермеры ${Math.round(r.dom)}% + импорт ${Math.round(r.imp)}% + резерв ${Math.round(r.rel)}% = <b>${Math.round(r.S)}%</b> от нормы.`));
-    if (r.capped) out.push(L(`<b>Cena maksymalna ${r1(r.p)} zł jest poniżej ceny równowagi.</b> Ludzie chcą kupić więcej, niż jest chleba: niedobór ${Math.round(r.shortage)}%. Powstały kolejki, a część chleba trafia na czarny rynek. To klasyczny skutek ceny maksymalnej.`,
-                             `<b>Максимальная цена ${r1(r.p)} zł ниже равновесной.</b> Люди хотят купить больше, чем есть хлеба: дефицит ${Math.round(r.shortage)}%. Появились очереди, часть хлеба уходит на чёрный рынок. Классическое следствие потолка цен.`));
-    else if (r.S < 95) out.push(L(`Podaży jest mniej niż zwykle, więc [[cena-rownowagi|cena równowagi]] wzrosła do <b>${r1(r.p)} zł</b>. Chleb to dobro podstawowe: popyt prawie nie spada, dlatego nawet mały brak mocno podnosi cenę.`,
-                                  `Предложения меньше обычного, поэтому [[cena-rownowagi|равновесная цена]] выросла до <b>${r1(r.p)} zł</b>. Хлеб — базовый товар: спрос почти не падает, поэтому даже небольшая нехватка сильно поднимает цену.`));
-    else out.push(L(`Podaż jest bliska normy, więc chleb kosztuje <b>${r1(r.p)} zł</b>.`, `Предложение близко к норме, поэтому хлеб стоит <b>${r1(r.p)} zł</b>.`));
+    out.push(L(`Podaż zboża: rolnicy ${Math.round(r.dom)}% + import ${Math.round(r.imp)}% + rezerwy ${Math.round(r.rel)}% = **${Math.round(r.S)}%** normalnej ilości.`,
+               `Предложение зерна: фермеры ${Math.round(r.dom)}% + импорт ${Math.round(r.imp)}% + резерв ${Math.round(r.rel)}% = **${Math.round(r.S)}%** от нормы.`));
+    if (r.capped) out.push(L(`**Cena maksymalna ${r1(r.p)} zł jest poniżej ceny równowagi.** Ludzie chcą kupić więcej, niż jest chleba: niedobór ${Math.round(r.shortage)}%. Powstały kolejki, a część chleba trafia na czarny rynek. To klasyczny skutek ceny maksymalnej.`,
+                             `**Максимальная цена ${r1(r.p)} zł ниже равновесной.** Люди хотят купить больше, чем есть хлеба: дефицит ${Math.round(r.shortage)}%. Появились очереди, часть хлеба уходит на чёрный рынок. Классическое следствие потолка цен.`));
+    else if (r.S < 95) out.push(L(`Podaży jest mniej niż zwykle, więc [[cena-rownowagi|cena równowagi]] wzrosła do **${r1(r.p)} zł**. Chleb to dobro podstawowe: popyt prawie nie spada, dlatego nawet mały brak mocno podnosi cenę.`,
+                                  `Предложения меньше обычного, поэтому [[cena-rownowagi|равновесная цена]] выросла до **${r1(r.p)} zł**. Хлеб — базовый товар: спрос почти не падает, поэтому даже небольшая нехватка сильно поднимает цену.`));
+    else out.push(L(`Podaż jest bliska normy, więc chleb kosztuje **${r1(r.p)} zł**.`, `Предложение близко к норме, поэтому хлеб стоит **${r1(r.p)} zł**.`));
     if (d.tariff >= 30 && r.p > GOALS.price) out.push(L("Wysokie cło zatrzymało większość importu. Rolnicy są chronieni, ale płacą za to konsumenci.", "Высокая пошлина остановила большую часть импорта. Фермеры защищены, но платят за это потребители."));
     if (d.tariff <= 10 && r.farmers < 45) out.push(L("Tani import obniżył cenę zboża, więc dochody krajowych rolników spadły.", "Дешёвый импорт снизил цену зерна, поэтому доходы местных фермеров упали."));
     if (d.subsidy > 0) out.push(L(`Dopłaty ${d.subsidy} mln zł wsparły rolników i zwiększą następne zbiory.`, `Дотации ${d.subsidy} млн zł поддержали фермеров и увеличат следующие урожаи.`));
@@ -186,7 +186,7 @@
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = new THREE.Scene();
     const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
-    cam.position.set(22, 24, 22); cam.lookAt(0, 0, 0);
+    cam.position.set(22, 22.5, 22); cam.lookAt(0, -1.5, 0);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
     const sun = new THREE.DirectionalLight(0xfff1dd, 0.75);
     sun.position.set(12, 22, 6); sun.castShadow = true;
@@ -229,12 +229,12 @@
       box(3.9, 0.3, 2.9, PAL.stone, 0, 3.1, 0, g); roof(4, 3, 0.9, PAL.roofBlue, 0, 3.4, 0, g);
       cyl(0.04, 0.04, 1.6, PAL.dark, 1.6, 4.1, -0.9, 6, g); box(0.8, 0.25, 0.04, PAL.flagW, 2.0, 5.3, -0.9, g); box(0.8, 0.25, 0.04, PAL.flagR, 2.0, 5.05, -0.9, g); }
     // NBP: bank z monetą
-    { const g = group("nbp", -1.2 + 3.6, -5.4);
+    { const g = group("nbp", -1.3, -5.6);
       box(3, 2.4, 2.6, PAL.stone, 0, 1, 0, g); box(3.3, 0.3, 2.9, PAL.white, 0, 3.4, 0, g);
       for (let i = -1; i <= 1; i += 1) cyl(0.13, 0.13, 2.2, PAL.white, i, 1, 1.4, 8, g);
       const coin = cyl(0.8, 0.8, 0.22, PAL.gold, 0, 4.1, 0, 20, g); coin.rotation.x = Math.PI / 2; coin.position.y = 4.6; }
     // Rezerwy: silosy
-    { const g = group("rezerwy", 5.2, -5.4);
+    { const g = group("rezerwy", 4.4, -5.2);
       [[-0.8, 0], [0.8, 0], [0, -1.1]].forEach(([x, z]) => { cyl(0.75, 0.75, 3, 0xe6e9ef, x, 1, z, 14, g); const c = cyl(0.01, 0.78, 0.7, PAL.roofGreen, x, 4, z, 14, g); });
       g.userData.level = []; }
     // Farma: stodoła + pola
@@ -312,12 +312,12 @@
     function resize(){
       const r = canvas.parentElement.getBoundingClientRect(); w = r.width; h = r.height;
       renderer.setSize(w, h, false);
-      const aspect = w / h, s = aspect < 1 ? 13.5 / aspect * 0.78 : 12.5;
+      const aspect = w / h, s = aspect < 1 ? 13 / aspect : (aspect > 1.6 ? 10.2 : 11.5 / Math.sqrt(aspect / 1.2));
       cam.left = -s * aspect; cam.right = s * aspect; cam.top = s; cam.bottom = -s; cam.updateProjectionMatrix();
       render();
     }
     function render(){ renderer.render(scene, cam); }
-    const anchors = { rzad: [-5.6, 6.2, -5.2], nbp: [2.4, 5.8, -5.4], rezerwy: [5.2, 5.4, -5.4], farma: [-5.4, 4.2, 4.8], piekarnia: [0.6, 4.6, 4.6], sklep: [4.2, 3.6, 4.6], granica: [8.8, 3, -3.2] };
+    const anchors = { rzad: [-5.6, 6.2, -5.2], nbp: [-1.3, 5.8, -5.6], rezerwy: [4.4, 5.4, -5.2], farma: [-5.4, 4.2, 4.8], piekarnia: [0.6, 4.6, 4.6], sklep: [4.2, 3.6, 4.6], granica: [8.8, 3, -3.2] };
     function screenPos(id){
       const p = new THREE.Vector3(...anchors[id]).project(cam);
       return { x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h };
@@ -333,20 +333,22 @@
     const LS = "makro2.game1";
     try { const best = JSON.parse(localStorage.getItem(LS) || "null"); if (best) st.best = best; } catch {}
 
-    el.innerHTML = `<div class="game">
-      <header class="ghead">
-        <div><span class="eyebrow">${L("Gra ekonomiczna", "Экономическая игра")}</span><h1 class="h1" style="font-size:clamp(22px,3.4vw,30px)">${T.title}</h1></div>
-        <div class="gq" id="gq"></div>
-      </header>
-      <section class="card gbrief"><p>${T.brief}</p><p class="muted" style="margin:0;font-size:14px">${T.how}</p>
-        <div class="ggoals" id="ggoals"></div></section>
-      <div class="gmain">
-        <div class="gworld"><div class="gstage" id="gstage"><canvas id="gcv" aria-label="${T.title}"></canvas><div class="glabels" id="glabels"></div><div class="gload" id="gload">${T.loading}</div></div>
-          <div class="gstats" id="gstats"></div></div>
-        <aside class="card gpanel" id="gpanel"></aside>
+    document.querySelector(".gfull")?.remove();
+    const host = document.createElement("div"); host.className = "gfull"; document.body.appendChild(host); document.body.classList.add("gaming");
+    el = host;
+    el.innerHTML = `<div class="gtop">
+        <a class="gbtn" href="#start" aria-label="${L("Wyjdź", "Выйти")}">✕</a>
+        <h1>${T.title}</h1>
+        <div class="gstats" id="gstats"></div>
+        <span class="gbtn" id="gq"></span>
+        <button class="gbtn" id="ginfo">${T.goals}</button>
+        <button class="gbtn primary" id="gnext"></button>
       </div>
-      <section id="greport"></section>
-    </div>`;
+      <div class="gbody">
+        <div class="gstage" id="gstage"><canvas id="gcv" aria-label="${T.title}"></canvas><div class="glabels" id="glabels"></div><div class="gload" id="gload">${T.loading}</div></div>
+        <aside class="gpanel" id="gpanel"></aside>
+        <div id="gmodal"></div>
+      </div>`;
     const $ = s => el.querySelector(s);
 
     function view(){
@@ -363,9 +365,8 @@
         pill(T.budget, (st.budget >= 0 ? "+" : "") + r1(st.budget) + L(" mln", " млн"), st.budget < GOALS.budget),
         pill(T.farmers, Math.round(r.farmers) + "/100", r.farmers < GOALS.farmers),
         pill(T.consumers, Math.round(r.consumers) + "/100", r.consumers < 40),
-      ].join("") : `<p class="muted" style="margin:0;font-size:14px">${L("Wskaźniki pojawią się po pierwszym kwartale.", "Показатели появятся после первого квартала.")}</p>`;
-      $("#gq").innerHTML = st.done ? `<span class="pill ok">${L("Koniec misji", "Миссия завершена")}</span>` : `<span class="pill">${T.quarter} ${st.q + 1} / 4</span>`;
-      $("#ggoals").innerHTML = `<b>${T.goals}</b><ul>${[T.g1, T.g2, T.g3, T.g4].map(g => `<li>${g}</li>`).join("")}</ul>`;
+      ].join("") : "";
+      $("#gq").textContent = st.done ? L("Koniec misji", "Миссия завершена") : `${T.quarter} ${st.q + 1}/4`;
     }
     function bubbles(){
       if (!world) return;
@@ -398,6 +399,14 @@
         show();
       });
     }
+    function modal(html){
+      const m = $("#gmodal");
+      m.innerHTML = html ? `<div class="gmodal"><div class="gcard">${html}<button class="gbtn primary" id="gclose" style="align-self:flex-end">${L("Dalej", "Дальше")} →</button></div></div>` : "";
+      m.querySelector("#gclose")?.addEventListener("click", () => modal(""));
+      m.querySelector("#grestart")?.addEventListener("click", restart);
+    }
+    const intro = () => modal(`<h2>${T.title}</h2><p>${T.brief}</p><p style="color:#5a6676">${T.how}</p><b>${T.goals}</b><ul>${[T.g1, T.g2, T.g3, T.g4].map(g => `<li>${g}</li>`).join("")}</ul>`);
+    function restart(){ st = newState(); modal(""); world?.apply(view()); stats(); panel(); bubbles(); nextBtn(); intro(); }
     function select(id){ sel = id; world?.highlight(id); world?.render(); panel(); bubbles(); }
     function next(){
       if (st.done) return;
@@ -406,45 +415,40 @@
       world?.apply(view());
       stats(); panel(); bubbles();
       const msgs = report(st, r, lang);
-      let html = `<div class="card greport"><h2 class="h2">${T.report} · ${T.quarter} ${st.q}</h2><ul>${msgs.map(m => `<li>${inline(m)}</li>`).join("")}</ul>`;
+      let html = `<h2>${T.report} · ${T.quarter} ${st.q}</h2><ul>${msgs.map(m => `<li>${inline(m)}</li>`).join("")}</ul>`;
       if (st.done){
         const g = grade(st);
         try { const prev = JSON.parse(localStorage.getItem(LS) || "null"); if (!prev || g.stars > prev) localStorage.setItem(LS, JSON.stringify(g.stars)); } catch {}
         track?.("game", "1-end", g.stars);
         const row = (ok, t) => `<li class="${ok ? "ok" : "no"}">${ok ? "✓" : "✗"} ${t}</li>`;
-        html += `<h2 class="h2" style="margin-top:18px">${T.summary}: ${"★".repeat(g.stars)}${"☆".repeat(3 - g.stars)}</h2>
+        html += `<h2 style="margin-top:6px">${T.summary}: ${"★".repeat(g.stars)}${"☆".repeat(3 - g.stars)}</h2>
           <ul class="ggrade">${row(g.okPrice && g.okShort, T.g1 + " / " + T.g2)}${row(g.okFarm, T.g3)}${row(g.okBud, T.g4)}</ul>
           <p>${L("Wniosek: przy nieurodzaju podaż spada, a popyt na chleb prawie się nie zmienia, więc cena mocno rośnie. Najskuteczniej działa zwiększenie podaży (import, rezerwy). Cena maksymalna nie dodaje ani jednego bochenka, tylko zamienia drożyznę w kolejki. Każde rozwiązanie ma koszt: dla rolników, konsumentów albo budżetu.",
                  "Вывод: при неурожае предложение падает, а спрос на хлеб почти не меняется, поэтому цена сильно растёт. Эффективнее всего увеличить предложение (импорт, резервы). Потолок цен не добавляет ни одной буханки, а лишь превращает дороговизну в очереди. У каждого решения есть цена: для фермеров, потребителей или бюджета.")}</p>
-          <p class="muted">${T.learn}: <a href="#w1.2">1.2</a> · <a href="#p-niedobor">${esc(window.GLOSSARY.find(g => g.id === "niedobor")[lang].n)}</a> · <a href="#p-polityka-fiskalna">${esc(window.GLOSSARY.find(g => g.id === "polityka-fiskalna")[lang].n)}</a></p>
-          <button class="btn" id="grestart">${T.restart}</button>`;
+          <button class="gbtn" id="grestart">${T.restart}</button>`;
       }
-      html += "</div>";
-      $("#greport").innerHTML = html;
-      $("#grestart")?.addEventListener("click", () => { st = newState(); $("#greport").innerHTML = ""; world?.apply(view()); stats(); panel(); bubbles(); nextBtn(); });
+      modal(html);
       nextBtn();
-      $("#greport").scrollIntoView({ behavior: "smooth", block: "start" });
     }
     function nextBtn(){
-      let b = $("#gnext");
-      if (!b){ b = document.createElement("button"); b.id = "gnext"; b.className = "btn gnextbtn"; $(".gworld").appendChild(b); b.onclick = next; }
-      b.hidden = st.done; b.textContent = `${T.next} (${Math.min(st.q + 1, 4)}/4) →`;
+      const b = $("#gnext"); b.onclick = next;
+      b.disabled = st.done; b.textContent = st.done ? L("Koniec", "Конец") : `${T.next} →`;
     }
 
     el.addEventListener("click", e => { const b = e.target.closest("[data-b]"); if (b){ select(b.dataset.b); } });
-    stats(); panel(); nextBtn();
+    $("#ginfo").onclick = intro;
+    stats(); panel(); nextBtn(); intro();
 
     loadThree().then(THREE => {
       const load = $("#gload");
       let ok = !!THREE;
       if (ok){ try { world = makeScene(THREE, $("#gcv")); } catch (e) { ok = false; } }
-      if (!ok){ load.textContent = T.noGL; $("#gstage").classList.add("nogl"); panel(); return; }
+      if (!ok){ load.textContent = T.noGL; panel(); return; }
       load.remove();
       world.resize(); world.apply(view()); bubbles();
       const cv = $("#gcv");
       cv.addEventListener("click", e => { const id = world.pick(e.clientX, e.clientY); if (id) select(id); });
-      const ro = new ResizeObserver(() => { world.resize(); bubbles(); }); ro.observe($("#gstage"));
-      el._dispose = () => { ro.disconnect(); world.dispose(); };
+      const ro = new ResizeObserver(() => { if (!host.isConnected){ ro.disconnect(); world.dispose(); return; } world.resize(); bubbles(); }); ro.observe($("#gstage"));
     });
   }
 
