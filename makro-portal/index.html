@@ -306,6 +306,44 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   .pn{grid-template-columns:1fr}
   .pn a.next{text-align:left}
 }
+
+/* ---------- gra ---------- */
+.game{display:flex;flex-direction:column;gap:16px}
+.ghead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.gbrief{padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.gbrief p{margin:0}
+.ggoals ul{margin:4px 0 0;padding-left:20px;font-size:14px;color:var(--muted)}
+.gmain{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.gworld{display:flex;flex-direction:column;gap:12px;min-width:0}
+.gstage{position:relative;width:100%;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#bfe6ff,#eaf6ff)}
+.gstage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+.gstage.nogl{aspect-ratio:auto;padding:16px;background:var(--surface);border:1px solid var(--line)}
+.gload{position:absolute;inset:0;display:grid;place-items:center;color:#24476e;font-weight:600}
+.gstage.nogl .gload{position:static}
+.glabels{position:absolute;inset:0;pointer-events:none}
+.glabel{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.92);color:#1b2a3a;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap;display:flex;gap:6px;align-items:center}
+.glabel.on{background:#2347c5;color:#fff}
+.glabel i{font-style:normal;width:18px;height:18px;border-radius:50%;background:#e2574c;color:#fff;display:grid;place-items:center;font-size:11px}
+.gstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.gstat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column}
+.gstat span{font-size:12px;color:var(--muted)}
+.gstat b{font-size:17px;font-variant-numeric:tabular-nums}
+.gstat.bad{border-color:var(--bad);background:var(--bad-soft)} .gstat.bad b{color:var(--bad)}
+.gnextbtn{align-self:stretch}
+.gpanel{padding:18px;display:flex;flex-direction:column;gap:12px;position:sticky;top:20px}
+.grole{margin:0;font-size:15px;line-height:1.55}
+.gextra{margin:0;padding:10px 12px;border-radius:10px;background:var(--sunken);font-size:14px}
+.gctl{display:grid;gap:4px;font-size:14px;font-weight:600}
+.gctl span{display:flex;justify-content:space-between;gap:8px}
+.gctl b{color:var(--accent)}
+.gctl small{font-weight:400;color:var(--muted);line-height:1.45}
+.glist{display:grid;gap:8px;margin-top:8px}
+.greport{padding:18px}
+.greport ul{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:8px;line-height:1.55}
+.ggrade{list-style:none;padding:0!important}
+.ggrade .ok{color:var(--ok)} .ggrade .no{color:var(--bad)}
+.gamecard .ic3d{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink)}
+@media (max-width:900px){.gmain{grid-template-columns:1fr}.gpanel{position:static}.gstats{grid-template-columns:repeat(2,minmax(0,1fr))}.gstage{aspect-ratio:1/1}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -318,6 +356,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
 <script src="glossary.js"></script>
 <script src="content.js"></script>
+<script src="game.js"></script>
 <script>
 "use strict";
 const C = window.COURSE, GL = window.GLOSSARY;
@@ -347,6 +386,7 @@ const I = {
   alert:'<path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4.5M12 17.5v.01"/>',
   play:'<path d="M7 4.5v15l12-7.5-12-7.5Z"/>',
   x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  cube:'<path d="M12 2.8 20.5 7.5v9L12 21.2 3.5 16.5v-9L12 2.8Z"/><path d="m3.5 7.5 8.5 4.7 8.5-4.7M12 12.2v9"/>',
   globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"/>',
 };
 const icon = (n, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
@@ -355,7 +395,7 @@ const LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V13M9.3 
 // ---------- teksty interfejsu ----------
 const UI = {
   start:{pl:"Start",ru:"Главная"}, lectures:{pl:"Wykłady",ru:"Лекции"}, glossary:{pl:"Słownik",ru:"Словарь"},
-  exam:{pl:"Egzamin",ru:"Экзамен"}, settings:{pl:"Ustawienia",ru:"Настройки"}, lecture:{pl:"Wykład",ru:"Лекция"},
+  exam:{pl:"Egzamin",ru:"Экзамен"}, game:{pl:"Gra",ru:"Игра"}, settings:{pl:"Ustawienia",ru:"Настройки"}, lecture:{pl:"Wykład",ru:"Лекция"},
   search:{pl:"Szukaj pojęcia lub tematu…",ru:"Искать понятие или тему…"}, searchShort:{pl:"Szukaj",ru:"Поиск"},
   hello:{pl:"Co dziś powtarzamy?",ru:"Что повторяем сегодня?"},
   heroLead:{pl:"Wszystkie tematy z makroekonomii w jednym miejscu: krótkie artykuły, interaktywne wykresy, słownik pojęć i testy.",ru:"Все темы по макроэкономике в одном месте: понятные статьи, интерактивные графики, словарь понятий и тесты."},
@@ -497,11 +537,12 @@ function route(){
   if ((m = h.match(/^w(\d+\.\d+)$/))) return { v: "sub", id: m[1] };
   if (h === "slownik") return { v: "glossary" };
   if ((m = h.match(/^p-([a-z0-9-]+)$/))) return { v: "term", id: m[1] };
+  if (h === "gra" || h === "gra-1") return { v: "game" };
   if (h === "egzamin") return { v: "exam" };
   if (h === "ustawienia") return { v: "settings" };
   return { v: "home" };
 }
-function tabOf(r){ return { home:"start", lecture:"lectures", cards:"lectures", final:"lectures", sub:"lectures", glossary:"glossary", term:"glossary", exam:"exam", settings:"settings" }[r.v]; }
+function tabOf(r){ return { home:"start", lecture:"lectures", cards:"lectures", final:"lectures", sub:"lectures", glossary:"glossary", term:"glossary", game:"game", exam:"exam", settings:"settings" }[r.v]; }
 
 function renderChrome(r){
   const tab = tabOf(r);
@@ -515,13 +556,14 @@ function renderChrome(r){
     <nav class="nav" aria-label="${t(UI.start)}">
       ${navItem("start", "home", "#start")}
       ${lecNav}
+      ${navItem("game", "cube", "#gra")}
       ${navItem("glossary", "dict", "#slownik")}
       ${navItem("exam", "target", "#egzamin")}
       ${navItem("settings", "gear", "#ustawienia")}
     </nav>
     <div class="side-foot"><div class="seg" role="group" aria-label="${t(UI.language)}">${["pl","ru"].map(l => `<button data-lang="${l}" class="${lang === l ? "on" : ""}">${l === "pl" ? "Polski" : "Русский"}</button>`).join("")}</div></div>`;
-  document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button>`;
-  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#w1"],["glossary","dict","#slownik"],["exam","target","#egzamin"],["settings","gear","#ustawienia"]]
+  document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button><a class="iconbtn" href="#ustawienia" aria-label="${t(UI.settings)}">${icon("gear")}</a>`;
+  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#w1"],["game","cube","#gra"],["glossary","dict","#slownik"],["exam","target","#egzamin"]]
     .map(([k, ic, h]) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k])}</a>`).join("");
 }
 
@@ -558,6 +600,7 @@ function vHome(){
       <p class="muted" style="margin:6px 0 0;font-size:14px">${t(UI.soonLead)}</p>
       <div class="soonlist">${C.program.map(p => `<div>${icon("lock")}<span class="n">${p.n}</span>${esc(t(p))}</div>`).join("")}</div>
     </section>
+    <a class="card continue gamecard" href="#gra"><span class="ic3d">${icon("cube")}</span><span class="body"><span class="muted" style="font-size:13px">${lang === "pl" ? "Nowość · gra 3D" : "Новинка · 3D-игра"}</span><b>${lang === "pl" ? "Misja 1: Nieurodzaj — rządź gospodarką w kryzysie" : "Миссия 1: Неурожай — управляй экономикой в кризис"}</b></span>${icon("arrow")}</a>
     <section class="stack">
       <h2 class="h2">${t(UI.popular)}</h2>
       <div class="chips">${pop.map(id => `<button type="button" class="chip term-chip" data-t="${id}">${icon("tag")}${esc(tn(id).n)}</button>`).join("")}</div>
@@ -1160,6 +1203,7 @@ function render(scrollTop = true){
     s ? vSub(s) :
     r.v === "glossary" ? vGlossary() :
     g ? vTerm(g) :
+    r.v === "game" ? `<div class="page" id="gamebox"></div>` :
     r.v === "exam" ? vExam() :
     r.v === "settings" ? vSettings() : vHome();
   document.title = (s ? t(s.title) : g ? g[lang].n : L ? `${t(UI.lecture)} ${L.n}` : "") ? `${s ? t(s.title) : g ? g[lang].n : `${t(UI.lecture)} ${L.n}`} · Brainstorm WSB` : "Brainstorm WSB";
@@ -1186,6 +1230,7 @@ function render(scrollTop = true){
     const f = main.querySelector("#gfilter"), gl = main.querySelector("#glist");
     gl.innerHTML = glossaryList(""); f.oninput = () => gl.innerHTML = glossaryList(f.value);
   }
+  if (r.v === "game") window.BrainstormGame?.mount(main.querySelector("#gamebox"), { lang, inline, esc, track: (a, b, c) => TRACK.ev(a, b, c) });
   if (r.v === "exam") main.querySelector("#go").onclick = () => {
     const pool = C.lectures.flatMap(x => [...x.final, ...x.subs.flatMap(s => s.quiz)]);
     const seen = new Set(); const qs = pool.sort(() => Math.random() - .5).filter(q => !seen.has(q.q.pl) && seen.add(q.q.pl)).slice(0, 15);
