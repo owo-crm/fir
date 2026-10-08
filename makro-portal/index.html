@@ -311,16 +311,40 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 body.gaming{overflow:hidden}
 body.gaming .tabbar, body.gaming .topbar{display:none}
 .gfull{position:fixed;inset:0;z-index:40;background:linear-gradient(180deg,#bfe6ff,#f0f8ff);display:grid;grid-template-rows:auto 1fr;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);font-family:var(--font-body);color:#14202e}
-.gtop{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap}
-.gtop h1{font:600 clamp(14px,2vw,20px) var(--font-display);margin:0 auto 0 4px;white-space:nowrap}
-.gbtn{height:36px;padding:0 12px;border-radius:10px;background:rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.12);font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:#14202e}
+.gtop{display:flex;flex-direction:column;gap:6px;padding:8px 10px 4px}
+.grow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gtitle{font:600 15px var(--font-display);white-space:nowrap}
+.gmonth{font-weight:700;font-size:13px;padding:0 8px;color:#24476e}
+.gctrls{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.gbtn{height:34px;padding:0 11px;border-radius:10px;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.12);font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:#14202e;white-space:nowrap}
 .gbtn.primary{background:#2347c5;color:#fff}
 .gbtn:disabled{opacity:.5}
-.gstats{display:flex;gap:6px;flex-wrap:wrap}
-.gstat{background:rgba(255,255,255,.9);border-radius:10px;padding:3px 9px;display:flex;flex-direction:column;line-height:1.2;box-shadow:0 2px 6px rgba(0,0,0,.08)}
-.gstat span{font-size:10px;color:#5a6676;text-transform:uppercase;letter-spacing:.04em}
-.gstat b{font-size:14px;font-variant-numeric:tabular-nums}
-.gstat.bad{background:#fde3dc} .gstat.bad b{color:#c23a1a}
+.gstats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.gstat{background:rgba(255,255,255,.92);border-radius:10px;padding:3px 8px;display:flex;flex-direction:column;line-height:1.2;box-shadow:0 2px 6px rgba(0,0,0,.08);min-width:0;border-bottom:3px solid #4cc78a}
+.gstat span{font-size:10px;color:#5a6676;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gstat b{font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gstat.bad{background:#fde3dc;border-bottom-color:#c23a1a} .gstat.bad b{color:#c23a1a}
+.gfx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.gfloat{position:absolute;transform:translate(-50%,-100%);font-weight:800;font-size:14px;padding:2px 8px;border-radius:8px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);animation:gfl 1.8s ease-out forwards;white-space:nowrap}
+.gfloat.up{color:#13804a} .gfloat.down{color:#c23a1a}
+@keyframes gfl{0%{opacity:0;margin-top:6px}15%{opacity:1}80%{opacity:1}100%{opacity:0;margin-top:-34px}}
+.gbox{background:#f3f6fa;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.gtbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.gtbl td,.gtbl th{padding:3px 4px;border-bottom:1px solid #e3e8ef;text-align:left}
+.gtbl td:not(:first-child),.gtbl th:not(:first-child){text-align:right}
+.gtbl tr.sum td{font-weight:800;border-bottom:0}
+.gforecast{border:2px solid #2347c5;border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.5}
+.gforecast ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.gverd{margin:4px 0 0;font-weight:600;font-size:13px}
+.gverd.ok{color:#13804a} .gverd.no{color:#c23a1a}
+.gsmall{margin:0;font-size:12.5px;color:#5a6676;line-height:1.45}
+.gback{align-self:flex-start;font-size:13px;color:#2347c5;font-weight:600}
+.ggoal,.glog{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.ggoal .ok{color:#13804a} .ggoal .no{color:#c23a1a}
+.glog li{font-size:12.5px;color:#3a4756}
+.gdef{background:#eef2fd;border-radius:12px;padding:10px 12px;font-size:13.5px}
+@media (max-width:900px){.gtitle{display:none}.gctrls{margin-left:0}.gstats{grid-template-columns:repeat(3,minmax(0,1fr))}.gbtn{height:32px;padding:0 9px;font-size:12px}}
+@media (prefers-reduced-motion:reduce){.gfloat{animation:none;opacity:1}}
 .gbody{position:relative;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 360px}
 .gstage{position:relative;min-height:0;min-width:0}
 .gstage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
