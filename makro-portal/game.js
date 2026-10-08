@@ -57,7 +57,10 @@
       bakeryFull: ["🔥", L("Piekarnie pracują na pełnych obrotach", "Пекарни работают на пределе"), "baker", L("Piece chodzą całą dobę, a kolejka i tak jest.", "Печи работают круглосуточно, а очередь всё равно есть.")],
       queues: ["🧺", L(`Kolejki po chleb (brakuje ${v}%)`, `Очереди за хлебом (не хватает ${v}%)`), "journalist", L("Półki pustoszeją przed południem.", "Полки пустеют до полудня.")],
       queuesCap: ["🧺", L("Tani chleb, puste półki", "Дешёвый хлеб, пустые полки"), "journalist", L("Cena jest niska — tylko chleba nie ma.", "Цена низкая — только хлеба нет.")],
-      jobsDown: ["👷", L(`Firmy zwalniają (bezrobocie ${v}%)`, `Фирмы увольняют (безработица ${v}%)`), "worker", L("U nas skrócili zmiany.", "У нас сократили смены.")],
+      jobsDown: ["👷", L(`Bezrobocie przekroczyło 9% (${v}%)`, `Безработица превысила 9% (${v}%)`), "worker", L("U nas skrócili zmiany, a nowych ofert brak.", "У нас сократили смены, а новых вакансий нет.")],
+      inflLow: ["🧊", L(`Ceny spadają — deflacja (${v}%)`, `Цены падают — дефляция (${v}%)`), "nbp", L("Ludzie odkładają zakupy, bo jutro będzie taniej.", "Люди откладывают покупки — завтра будет дешевле.")],
+      forecastDrought: ["🌤️", L(`Synoptycy: ryzyko suszy tego lata ok. ${Math.round(v)}%`, `Синоптики: риск засухи этим летом ~${Math.round(v)}%`), "farmer", L("Patrzymy w niebo i liczymy zapasy.", "Смотрим в небо и считаем запасы.")],
+      forecastEnergy: ["🛢️", L(`Analitycy: rośnie ryzyko szoku na rynku energii (${Math.round(v)}%)`, `Аналитики: растёт риск шока на рынке энергии (${Math.round(v)}%)`), "minister", L("Rynki ropy są nerwowe.", "Нефтяные рынки нервничают.")],
       jobsUp: ["🤝", L(`Firmy szukają pracowników (bezrobocie ${v}%)`, `Фирмы ищут работников (безработица ${v}%)`), "worker", L("Pierwszy raz od dawna mam wybór.", "Впервые за долгое время есть выбор.")],
       inflHigh: ["🛒", L(`Inflacja przekroczyła 5% (${v}%)`, `Инфляция превысила 5% (${v}%)`), "nbp", L("Ceny rosną szybciej, niż byśmy chcieli.", "Цены растут быстрее, чем хотелось бы.")],
       rainLow: ["🌤️", L("Opady poniżej normy", "Осадки ниже нормы"), "farmer", L("Ziemia jest sucha. Boimy się o zbiory.", "Земля сухая. Боимся за урожай.")],
@@ -375,7 +378,7 @@
     const LS = "makro2.game1", LS_TUT = "makro2.game1.tut", LS_SAVE = "makro2.novaria";
     let s = null, world = null, timer = null, speed = 1, tab = null, sel = null, why = null, previewT = 0;
     const sound = makeSound(), prevVals = {};
-    try { const sv = JSON.parse(localStorage.getItem(LS_SAVE) || "null"); if (sv && sv.v === 1 && sv.s && !sv.s.over) s = sv.s; } catch {}
+    try { const sv = JSON.parse(localStorage.getItem(LS_SAVE) || "null"); if (sv && sv.v === 2 && sv.s && !sv.s.over) s = sv.s; } catch {}
     if (!s) s = S.newGame();
 
     document.querySelector(".gfull")?.remove();
@@ -401,14 +404,14 @@
     const H = () => s.hist[s.hist.length - 1] || S.snapshot(s);
     const ago = n => s.hist[Math.max(0, s.hist.length - 1 - n)] || H();
     const D = () => S.date(s.day);
-    const save = () => { try { localStorage.setItem(LS_SAVE, JSON.stringify({ v: 1, s: { ...s, _rng: null } })); } catch {} };
+    const save = () => { try { localStorage.setItem(LS_SAVE, JSON.stringify({ v: 2, s: { ...s, _rng: null, hist: s.hist.slice(-120) } })); } catch {} };
 
     // ---------- KPI: stan dziś + trend 30 dni
     const kpiDef = () => {
       const h = H(), a = ago(30), sh = 100 * h.short / Math.max(1, h.demand);
       return [
         { k: "gdp", v: X.n0(h.Y) + L(" mln", " млн"), d: (h.Y / a.Y - 1) * 100, good: 1, sub: L("na miesiąc", "в месяц") },
-        { k: "infl", v: X.pct(h.infl), d: h.infl - a.infl, good: -1, sub: L("rok do roku", "год к году"), bad: h.infl > 6 || h.infl < -1 },
+        { k: "infl", v: X.pct(h.infl), d: h.infl - a.infl, good: inflGood(a.infl, h.infl) || 0, target: 1, sub: L("cel NBP 2,5%", "цель NBP 2,5%"), bad: h.infl > 5 || h.infl < 0 },
         { k: "jobs", v: X.pct(100 - h.unemp), d: a.unemp - h.unemp, good: 1, sub: L("bezrobocie ", "безработица ") + X.pct(h.unemp), bad: h.unemp > 9 },
         { k: "budget", v: X.sgn(h.budget) + L(" mln", " млн"), d: h.budget - a.budget, good: 1, sub: L("dług ", "долг ") + Math.round(h.debtRatio * 100) + L("% PKB", "% ВВП"), bad: h.debtRatio > 0.9 },
         { k: "bread", v: X.zl(h.bread), d: (h.bread / a.bread - 1) * 100, good: -1, sub: sh > 1 ? L("brakuje ", "не хватает ") + X.pct(sh) : L("półki pełne", "полки полны"), bad: sh > 2 },
@@ -420,13 +423,13 @@
       $("#nvdate").textContent = `${X.year} ${d.year + 1}/8 · ${X.months[d.month]} · ${X.day} ${d.day + 1}`;
       $("#nvdbar").style.width = (100 * s.day / S.TOTAL) + "%";
       host.querySelectorAll("[data-sp]").forEach(b => b.classList.toggle("on", +b.dataset.sp === (timer ? speed : 0)));
-      $("#nvkpi").innerHTML = kpiDef().map(k => { const tr = Math.abs(k.d) < 0.05 ? "→" : k.d > 0 ? "↑" : "↓", good = tr === "→" ? "n" : (k.d > 0) === (k.good > 0) ? "g" : "b";
+      $("#nvkpi").innerHTML = kpiDef().map(k => { const tr = Math.abs(k.d) < 0.05 ? "→" : k.d > 0 ? "↑" : "↓", good = tr === "→" ? "n" : k.target ? (k.good > 0 ? "g" : k.good < 0 ? "b" : "n") : (k.d > 0) === (k.good > 0) ? "g" : "b";
         return `<button class="nv-kpi ${k.bad ? "bad" : ""}" data-why="${k.k}"><span>${X.kpi[k.k]}</span><b>${k.v} <i class="${good}">${tr}</i></b><small>${k.sub}</small></button>`; }).join("");
     }
 
     // ---------- wydarzenia, ryzyka i wiadomości (na mapie)
     function feed(){
-      const evs = s.events.map(e => { const ph = S.phaseOf(e), E = X.ev[e.k]; return `<button class="nv-ev ${ph}" data-evk="${e.k}">${E.icon} <b>${E.name}</b> <span>${X.phase[ph]}</span></button>`; }).join("");
+      const evs = s.events.map(e => { const ph = S.phaseOf(e), E = X.ev[e.k]; return `<button class="nv-ev ${e.k === "boom" ? "good" : ph}" data-evk="${e.k}">${E.icon} <b>${E.name}</b> <span>${phaseName(e.k, ph)}</span></button>`; }).join("");
       const risk = Object.entries(s.risks || {}).filter(([k, p]) => p >= 0.25 && !s.events.some(e => e.k === k)).sort((a, b) => b[1] - a[1]).slice(0, 2)
         .map(([k, p]) => `<button class="nv-ev risk" data-tab-go="economy">${X.ev[k].icon} ${L("Ryzyko", "Риск")}: ${X.ev[k].name} <b>${Math.round(p * 100)}%</b></button>`).join("");
       const news = s.news.slice(-3).reverse().map(n => { const [ic, title] = newsText(n, lang); return `<button class="nv-news" data-tab-go="news"><i>${ic}</i>${esc(title)}</button>`; }).join("");
@@ -438,7 +441,7 @@
     function alertOf(id){
       const sh = s.b.short / Math.max(1, s.b.demand);
       if (id === "sklep" && sh > 0.02) return "🧺";
-      if (id.startsWith("piekarnia") && s.b.prod < s.b.demand * 0.97 && s.b.grainLimit < s.b.cap) return "⚠️";
+      if (id.startsWith("piekarnia") && s.b.limit === "grain") return "⚠️";
       if (id === "farma" && s.w.rain < 0.82 && D().month >= 2 && D().month <= 8) return "🌵";
       if (id === "silosy" && s.g.stock < s.b.prod * 1.2) return "⚠️";
       if (id === "fabryka" && s.events.some(e => e.k === "recession" || e.k === "energy")) return "📉";
@@ -460,7 +463,7 @@
       const cards = {
         farma: [L("Farmy", "Фермы"), [row(L("Pracownicy", "Работники"), X.n0(1900 * (0.8 + 0.2 * h.crop))), row(L("Prognoza zbiorów", "Прогноз урожая"), X.n0(h.harvestF) + " t"), row(L("Stan upraw", "Состояние посевов"), Math.round(h.crop * 100) + "%", h.crop < 0.85 ? "bad" : ""), row(L("Opady", "Осадки"), Math.round(h.rain * 100) + L("% normy", "% нормы"), h.rain < 0.85 ? "bad" : ""), row(L("Nawadnianie", "Орошение"), Math.round(s.infra.irrigation * 100) + "%"), row(L("Ryzyko suszy", "Риск засухи"), Math.round((s.risks.drought || 0) * 100) + "%", (s.risks.drought || 0) > 0.3 ? "bad" : "")], "grain"],
         silosy: [L("Silosy zbożowe", "Зерновые силосы"), [row(L("Zapas rynkowy", "Рыночный запас"), X.n0(g.stock) + " t"), row(L("Wystarczy na", "Хватит на"), Math.round(g.stock / Math.max(1, b.prod) * 30) + L(" dni", " дн.")), row(L("Rezerwa państwa", "Госрезерв"), X.n0(g.reserve) + " t"), row(L("Cena zboża", "Цена зерна"), X.n0(g.price) + " zł/t"), row(L("Import / eksport", "Импорт / экспорт"), `${X.n0(g.imp)} / ${X.n0(g.exp)} ${L("t/mies.", "т/мес.")}`)], "grain"],
-        piekarnia: [L("Piekarnie", "Пекарни"), [row(L("Moc", "Мощность"), X.n0(b.cap) + L(" tys./mies.", " тыс./мес.")), row(L("Produkcja", "Выпуск"), X.n0(b.prod) + L(" tys.", " тыс.")), row(L("Wykorzystanie mocy", "Загрузка"), Math.round(100 * b.prod / b.cap) + "%"), row(L("Pracownicy", "Работники"), X.n0(150 * b.bakeries * (0.6 + 0.4 * b.prod / b.cap))), `<div class="nv-con">${L("Główne ograniczenie", "Главное ограничение")}: <b>${b.grainLimit < b.cap && b.prod < b.demand ? "🌾 " + L("brak zboża", "нехватка зерна") : b.prod >= b.cap * 0.99 ? "🏭 " + L("moc pieców", "мощность печей") : "🛒 " + L("popyt", "спрос")}</b></div>`], "bread"],
+        piekarnia: [L("Piekarnie", "Пекарни"), [row(L("Moc", "Мощность"), X.n0(b.cap) + L(" tys./mies.", " тыс./мес.")), row(L("Produkcja", "Выпуск"), X.n0(b.prod) + L(" tys.", " тыс.")), row(L("Wykorzystanie mocy", "Загрузка"), Math.round(100 * b.prod / b.cap) + "%"), row(L("Pracownicy", "Работники"), X.n0(150 * b.bakeries * (0.6 + 0.4 * b.prod / b.cap))), row(L("Zboża w magazynach na", "Зерна на складах на"), Math.round(g.stock / Math.max(1, b.prod) * 30) + L(" dni", " дн."), g.stock < b.prod * 0.5 ? "bad" : ""), `<div class="nv-con">${L("Dlaczego nie pieką więcej", "Почему не пекут больше")}: <b>${{ grain: "🌾 " + L("brakuje zboża w magazynach — piece stoją", "не хватает зерна на складах — печи простаивают"), cap: "🏭 " + L("piece pracują na 100% mocy", "печи работают на 100%"), grainPrice: "💰 " + L("drogie zboże → drogi chleb → ludzie kupują mniej", "дорогое зерно → дорогой хлеб → люди покупают меньше"), energyPrice: "⚡ " + L("droga energia → drogi chleb → ludzie kupują mniej", "дорогая энергия → дорогой хлеб → люди покупают меньше"), demand: "🛒 " + L("tyle ludzie chcą kupić po tej cenie", "столько люди хотят купить по этой цене") }[b.limit] || ""}</b></div>`], "bread"],
         sklep: [L("Sklepy", "Магазины"), [row(L("Cena chleba", "Цена хлеба"), X.zl(Math.min(b.price, s.p.cap || 99))), row(L("Popyt", "Спрос"), X.n0(b.demand) + L(" tys.", " тыс.")), row(L("Podaż", "Предложение"), X.n0(b.prod) + L(" tys.", " тыс.")), row(L("Sprzedaż", "Продажи"), X.n0(b.sales) + L(" tys.", " тыс.")), row(L("Niedobór", "Дефицит"), X.n0(b.short) + L(" tys.", " тыс."), b.short > 1 ? "bad" : "")], "bread"],
         rzad: [L("Rząd", "Правительство"), [row(L("Saldo (tempo/mies.)", "Сальдо (темп/мес.)"), X.sgn(h.budget) + L(" mln", " млн")), row(L("Dług", "Долг"), X.n0(m.debt) + L(" mln", " млн")), row(L("Dług / PKB", "Долг / ВВП"), Math.round(h.debtRatio * 100) + "%"), row(L("Odsetki", "Проценты"), X.n1(m.spendItems.interest * 30) + L(" mln/mies.", " млн/мес."))], "budget"],
         nbp: [L("Narodowy Bank Polski", "Национальный банк"), [row(L("Stopa", "Ставка"), X.n1(s.p.rate) + "%"), row(L("Działa już (opóźnienie)", "Уже действует (задержка)"), X.n1(m.rateEff) + "%"), row(L("Stopa realna", "Реальная ставка"), X.n1(m.realRate) + "%"), row(L("Inflacja", "Инфляция"), X.pct(m.infl))], "infl"],
@@ -476,86 +479,89 @@
     function showCard(id, x, y){ sel = id; world?.highlight(id); const el = $("#nvcard"); el.hidden = false; el.innerHTML = objCard(id); placeCard(x, y); labels(); track?.("game", "obj", id); }
     function hideCard(){ sel = null; $("#nvcard").hidden = true; world?.highlight(null); labels(); }
 
-    // ---------- „Dlaczego?” — graf przyczynowy (węzły klikalne), bez ściany tekstu
-    const ABS = ["infl", "unemp", "rate", "budget", "NX"];
-    const NODE = {
-      rain: h => ["🌧️", L("Opady", "Осадки"), Math.round(h.rain * 100) + "%", "rain", 1],
-      crop: h => ["🌱", L("Stan upraw", "Посевы"), Math.round(h.crop * 100) + "%", "crop", 1],
-      harvest: h => ["🌾", L("Prognoza zbiorów", "Прогноз урожая"), X.n0(h.harvestF) + " t", "harvestF", 1],
-      stock: h => ["🏚️", L("Zapas zboża", "Запас зерна"), X.n0(h.stock) + " t", "stock", 1],
-      imp: h => ["🚢", L("Import zboża", "Импорт зерна"), X.n0(h.imp) + L(" t/mies.", " т/мес."), "imp", 1],
-      grain: h => ["💰", L("Cena zboża", "Цена зерна"), X.n0(h.grain) + " zł/t", "grain", -1, "grain"],
-      prod: h => ["🏭", L("Produkcja chleba", "Выпуск хлеба"), X.n0(h.prod) + L(" tys.", " тыс."), "prod", 1],
-      short: h => ["⚠️", L("Niedobór", "Дефицит"), X.n0(h.short) + L(" tys.", " тыс."), "short", -1],
-      bread: h => ["🍞", L("Cena chleba", "Цена хлеба"), X.zl(h.bread), "bread", -1, "bread"],
-      energy: h => ["⚡", L("Ceny energii", "Цены энергии"), Math.round(h.energy * 100) + "%", "energy", -1],
-      realInc: h => ["👛", L("Dochód realny", "Реальный доход"), Math.round(h.realInc * 100) + "%", "realInc", 1],
-      conf: h => ["🙂", L("Nastroje", "Настроения"), Math.round(h.conf * 100) + "%", "conf", 1],
-      rate: h => ["🏦", L("Stopa NBP", "Ставка NBP"), X.n1(h.rate) + "%", "rate", -1, "infl"],
-      C: h => ["🛍️", L("Konsumpcja", "Потребление"), X.n0(h.C) + L(" mln", " млн"), "C", 1],
-      I: h => ["🏗️", L("Inwestycje", "Инвестиции"), X.n0(h.I) + L(" mln", " млн"), "I", 1],
-      G: h => ["🏛️", L("Wydatki państwa", "Госрасходы"), X.n0(h.G) + L(" mln", " млн"), "G", 1, "budget"],
-      NX: h => ["🌍", L("Eksport netto", "Чистый экспорт"), X.sgn(h.NX) + L(" mln", " млн"), "NX", 1],
-      gdp: h => ["📈", L("PKB", "ВВП"), X.n0(h.Y) + L(" mln", " млн"), "Y", 1, "gdp"],
-      unemp: h => ["👷", L("Bezrobocie", "Безработица"), X.pct(h.unemp), "unemp", -1, "jobs"],
-      infl: h => ["📊", L("Inflacja", "Инфляция"), X.pct(h.infl), "infl", -1, "infl"],
-      budget: h => ["🧾", L("Saldo budżetu", "Сальдо бюджета"), X.sgn(h.budget) + L(" mln", " млн"), "budget", 1, "budget"],
-      debt: h => ["💸", L("Dług / PKB", "Долг / ВВП"), Math.round(h.debtRatio * 100) + "%", "debtRatio", -1],
-      approval: h => ["🗳️", L("Poparcie", "Поддержка"), Math.round(h.approval) + "%", "approval", 1, "approval"],
-    };
-    function whyModel(k){
-      const h = H(), a = ago(30);
-      const nodes = keys => keys.map(key => { const [ic, lab, val, f, goodDir, link] = NODE[key](h); const abs = ABS.includes(key); const dv = abs ? h[f] - a[f] : a[f] ? (h[f] / a[f] - 1) * 100 : 0; return { ic, lab, val, dv, abs, good: Math.abs(dv) < 0.3 ? 0 : (dv > 0) === (goodDir > 0) ? 1 : -1, link }; });
-      let chain, cause, side = [];
-      if (k === "bread" || k === "grain"){
-        const drivers = [["grain", h.costGrain - a.costGrain], ["energy", h.costEnergy - a.costEnergy], ["labor", h.costLabor - a.costLabor], ["scarcity", (h.scarcity - a.scarcity) * 3.6]].sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
-        const top = drivers[0][0], weak = h.harvestF < S.HARVEST0 * 0.92;
-        chain = top === "energy" ? ["energy", "bread"] : top === "scarcity" ? (weak ? ["rain", "harvest", "stock", "prod", "short", "bread"] : ["stock", "prod", "short", "bread"]) : weak ? ["rain", "crop", "harvest", "grain", "bread"] : ["stock", "imp", "grain", "bread"];
-        if (k === "grain") chain = ["rain", "harvest", "stock", "imp", "grain"];
-        cause = { grain: L("cena zboża", "цена зерна"), energy: L("koszty energii", "стоимость энергии"), labor: L("rosnące płace i ceny", "растущие зарплаты и цены"), scarcity: L("brak chleba na rynku (popyt > podaż)", "нехватка хлеба (спрос > предложения)") }[top];
-        if (Math.abs(drivers[0][1]) < 0.02) cause = L("cena stabilna — rynek blisko równowagi", "цена стабильна — рынок близок к равновесию");
-        if (k === "grain") cause = h.harvestF < S.HARVEST0 * 0.92 ? L("słabsza prognoza zbiorów", "слабый прогноз урожая") : h.stock < h.prod * 1.5 ? L("kończą się zapasy przed żniwami", "запасы заканчиваются до жатвы") : L("podaż i zapasy w normie", "предложение и запасы в норме");
-        if (s.b.capped) cause = L("cena maksymalna — tani chleb, ale go brakuje", "потолок цены — дешёвый хлеб, но его не хватает");
-        side = [[L("🌾 Zboże", "🌾 Зерно"), h.costGrain], [L("👷 Praca", "👷 Труд"), h.costLabor], [L("⚡ Energia", "⚡ Энергия"), h.costEnergy], [L("🏪 Marża i niedobór", "🏪 Маржа и дефицит"), h.bread - h.costGrain - h.costLabor - h.costEnergy]];
-      } else if (k === "infl"){
-        const y1 = s.hist[Math.max(0, s.hist.length - 361)]?.bread || h.bread;
-        const food = 0.15 * ((h.bread / y1 - 1) * 100), en = (h.energy - 1) * 12, dem = 0.45 * s.m.ygap;
-        const top = [["food", food], ["energy", en], ["demand", dem]].sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0][0];
-        chain = top === "energy" ? ["energy", "bread", "infl", "realInc"] : top === "food" ? ["harvest", "grain", "bread", "infl", "realInc"] : ["rate", "conf", "C", "gdp", "infl"];
-        cause = { food: L("drożejąca żywność (szok podażowy)", "дорожающая еда (шок предложения)"), energy: L("droga energia (inflacja kosztowa)", "дорогая энергия (инфляция издержек)"), demand: s.m.ygap > 0 ? L("popyt przewyższa możliwości gospodarki (inflacja popytowa)", "спрос превышает возможности экономики (инфляция спроса)") : L("słaby popyt hamuje ceny", "слабый спрос сдерживает цены") }[top];
-        side = [[L("🍞 Żywność", "🍞 Еда"), food], [L("⚡ Energia", "⚡ Энергия"), en], [L("📈 Popyt", "📈 Спрос"), dem], [L("🔮 Oczekiwania", "🔮 Ожидания"), s.m.inflE]];
-      } else if (k === "gdp" || k === "jobs"){
-        const top = ["C", "I", "G", "NX"].map(c => [c, h[c] - a[c]]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0][0];
-        chain = { C: ["conf", "realInc", "C"], I: ["rate", "I"], G: ["G"], NX: ["energy", "NX"] }[top].concat(k === "jobs" ? ["gdp", "unemp"] : ["gdp"]);
-        cause = { C: L("konsumpcja gospodarstw domowych", "потребление домохозяйств"), I: L("inwestycje firm (kredyt i stopy)", "инвестиции фирм (кредит и ставки)"), G: L("wydatki państwa", "госрасходы"), NX: L("handel zagraniczny", "внешняя торговля") }[top];
-        side = [["🛍️ C", h.C], ["🏗️ I", h.I], ["🏛️ G", h.G], ["🌍 NX", h.NX]];
-      } else if (k === "budget"){
-        chain = ["gdp", "unemp", "budget", "debt"];
-        const R = s.m.rev, Sp = s.m.spendItems;
-        side = [[L("💼 Podatek dochodowy", "💼 Подоходный налог"), R.tax * 30], ["🧾 VAT", R.vat * 30], [L("⚓ Cła", "⚓ Пошлины"), R.tariff * 30], [L("🏥 Usługi publiczne", "🏥 Госуслуги"), -Sp.services * 30], [L("🤝 Transfery i zasiłki", "🤝 Трансферы и пособия"), -Sp.transfers * 30], [L("🚜 Dopłaty rolne", "🚜 Агродотации"), -Sp.farm * 30], [L("🏗️ Inwestycje", "🏗️ Инвестиции"), -Sp.projects * 30], [L("💸 Odsetki", "💸 Проценты"), -Sp.interest * 30]].filter(x => Math.abs(x[1]) > 0.01);
-        const big = side.filter(x => x[1] < 0).sort((x, y) => x[1] - y[1])[0];
-        cause = h.budget < 0 ? L(`wydatki większe niż wpływy (największa pozycja: ${big[0]})`, `расходы больше доходов (крупнейшая статья: ${big[0]})`) : L("wpływy pokrywają wydatki", "доходы покрывают расходы");
-      } else {
-        chain = ["realInc", "unemp", "infl", "short", "approval"];
-        side = [[L("👛 Dochody realne", "👛 Реальные доходы"), 40 * (h.realInc - 1)], [L("👷 Bezrobocie", "👷 Безработица"), -2.6 * (h.unemp - 5)], [L("📊 Inflacja", "📊 Инфляция"), -1.8 * Math.max(0, h.infl - 3)], [L("🧺 Kolejki", "🧺 Очереди"), -1.2 * 100 * h.short / Math.max(1, h.demand)], [L("💼 Podatki", "💼 Налоги"), -0.6 * (s.p.tax - 22)], [L("🏥 Usługi i transfery", "🏥 Услуги и трансферы"), 4 * (s.p.spend - 17.5) + 0.1 * (s.p.transfers - 25)]];
-        cause = side.slice().sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0][0];
+    // ---------- „Dlaczego?”: dokładne rozbicie zmiany każdego wskaźnika na przyczyny (suma części = zmiana)
+    const inflGood = (from, to) => Math.abs(to - 2.5) < Math.abs(from - 2.5) - 0.02 ? 1 : Math.abs(to - 2.5) > Math.abs(from - 2.5) + 0.02 ? -1 : 0;
+    const lnPart = (total, pairs) => { const ls = pairs.map(([n, a, b]) => [n, a > 0 && b > 0 ? Math.log(b / a) : 0]); const sum = ls.reduce((x, y) => x + y[1], 0); return ls.map(([n, l]) => [n, Math.abs(sum) > 1e-9 ? total * l / sum : 0]); };
+    function explain(key, a, z){
+      const P = (lab, v) => [lab, v];
+      const pe = z.pe || s.pe, pa = a.pe || s.pe;
+      switch (key){
+        case "bread": { const m = (h) => h.bread - h.costGrain - h.costLabor - h.costEnergy;
+          return { t: L("Cena chleba", "Цена хлеба"), u: "zł", f: x => X.zl(x), good: -1, from: a.bread, to: z.bread,
+            parts: [P("🌾 " + L("koszt zboża", "стоимость зерна"), z.costGrain - a.costGrain), P("👷 " + L("płace (ceny w gospodarce)", "зарплаты (общие цены)"), z.costLabor - a.costLabor), P("⚡ " + L("energia", "энергия"), z.costEnergy - a.costEnergy), P("🏪 " + L("marża: niedobór lub nadwyżka chleba", "маржа: дефицит или излишек хлеба"), m(z) - m(a))],
+            kids: ["grain", "short", "infl"], how: L("cena bochenka = zboże + płace + energia + marża (marża rośnie, gdy chleba brakuje). Cena dochodzi do celu stopniowo.", "цена буханки = зерно + зарплаты + энергия + маржа (маржа растёт при нехватке). Цена идёт к цели постепенно.") }; }
+        case "grain": return { t: L("Cena zboża", "Цена зерна"), u: "zł/t", f: x => X.n0(x) + " zł/t", good: -1, from: a.grain, to: z.grain, factors: true,
+            parts: [[L("📦 Zapas na rynku", "📦 Запас на рынке"), X.n0(a.stock) + " t", X.n0(z.stock) + " t", z.stock - a.stock, 1], [L("⏳ Zapas wystarcza do żniw w", "⏳ Запаса хватит до жатвы на"), Math.round(a.ratio * 100) + "%", Math.round(z.ratio * 100) + "%", z.ratio - a.ratio, 1], [L("🌾 Prognoza zbiorów", "🌾 Прогноз урожая"), X.n0(a.harvestF) + " t", X.n0(z.harvestF) + " t", z.harvestF - a.harvestF, 1], [L("🔮 Oczekiwania rynku (×)", "🔮 Ожидания рынка (×)"), X.n1(a.expect || 1), X.n1(z.expect || 1), (z.expect || 1) - (a.expect || 1), -1], [L("🚢 Import / 📤 eksport", "🚢 Импорт / 📤 экспорт"), `${X.n0(a.imp)} / ${X.n0(a.exp)}`, `${X.n0(z.imp)} / ${X.n0(z.exp)}`, (z.imp - z.exp) - (a.imp - a.exp), 1], [L("🌍 Cena importu (świat + cło + transport)", "🌍 Цена импорта (мир + пошлина + транспорт)"), X.n0(a.parity) + " zł/t", X.n0(z.parity) + " zł/t", 0, 0]],
+            kids: ["harvest", "bread"], how: L("Zboże drożeje, gdy zapasów może nie wystarczyć do żniw. Gdy w kraju drożej niż import — przypływa import i hamuje cenę. Pełne magazyny = słaba prognoza prawie nie podnosi ceny.", "Зерно дорожает, когда запасов может не хватить до жатвы. Когда внутри дороже импорта — приходит импорт и сдерживает цену. Полные склады = плохой прогноз почти не поднимает цену.") };
+        case "harvest": return { t: L("Prognoza zbiorów", "Прогноз урожая"), u: "t", f: x => X.n0(x) + " t", good: 1, from: a.harvestF, to: z.harvestF, factors: true,
+            parts: [[L("🌧️ Opady (% normy)", "🌧️ Осадки (% нормы)"), Math.round(a.rain * 100) + "%", Math.round(z.rain * 100) + "%", z.rain - a.rain, 1], [L("🌱 Stan upraw", "🌱 Состояние посевов"), Math.round(a.crop * 100) + "%", Math.round(z.crop * 100) + "%", z.crop - a.crop, 1], [L("💧 Nawadnianie", "💧 Орошение"), "", Math.round(s.infra.irrigation * 100) + "%", 0, 0], [L("🚜 Dopłaty rolne (działające)", "🚜 Агродотации (действующие)"), X.n1(pa.farmSub) + L(" mln", " млн"), X.n1(pe.farmSub) + L(" mln", " млн"), pe.farmSub - pa.farmSub, 1]],
+            kids: ["grain"], how: L("Stan upraw kształtuje się od kwietnia do sierpnia: deszcz poprawia, susza pogarsza. Nawadnianie łagodzi suszę. Żniwa: lipiec–wrzesień.", "Состояние посевов складывается с апреля по август: дождь улучшает, засуха ухудшает. Орошение смягчает засуху. Жатва: июль–сентябрь.") };
+        case "short": return { t: L("Niedobór chleba", "Дефицит хлеба"), u: L("tys.", "тыс."), f: x => X.n0(x) + L(" tys.", " тыс."), good: -1, from: a.short, to: z.short,
+            parts: [P("🛒 " + L("popyt (ile chcą kupić)", "спрос (сколько хотят купить)"), z.demand - a.demand), P("🏭 " + L("produkcja (ile upieczono)", "выпуск (сколько испекли)"), -(z.prod - a.prod))].map(([n, v]) => [n, v]),
+            kids: ["bread", "grain"], how: L("niedobór = popyt − produkcja. Produkcję ogranicza mniejsze z: zboże w magazynach, moc pieców.", "дефицит = спрос − выпуск. Выпуск ограничивает меньшее из: зерно на складах, мощность печей.") };
+        case "infl": return { t: L("Inflacja", "Инфляция"), u: "%", f: x => X.pct(x), good: 0, from: a.infl, to: z.infl,
+            parts: [P("🔮 " + L("oczekiwania (co ludzie myślą o cenach)", "ожидания (что люди думают о ценах)"), (z.pi?.expect || 0) - (a.pi?.expect || 0)), P("📈 " + L("popyt vs. możliwości gospodarki", "спрос vs. возможности экономики"), (z.pi?.demand || 0) - (a.pi?.demand || 0)), P("⚡ " + L("energia (inflacja kosztowa)", "энергия (инфляция издержек)"), (z.pi?.energy || 0) - (a.pi?.energy || 0)), P("🍞 " + L("żywność", "еда"), (z.pi?.food || 0) - (a.pi?.food || 0))],
+            kids: ["gdp", "bread", "rate"], how: L("Cel NBP: 2,5% — za wysoka zjada dochody, za niska (deflacja) hamuje gospodarkę. Wyższa stopa schładza popyt i oczekiwania po kilku miesiącach.", "Цель NBP: 2,5% — слишком высокая съедает доходы, слишком низкая (дефляция) тормозит экономику. Высокая ставка охлаждает спрос и ожидания через несколько месяцев.") };
+        case "gdp": return { t: L("PKB (popyt w gospodarce)", "ВВП (спрос в экономике)"), u: L("mln", "млн"), f: x => X.n0(x) + L(" mln", " млн"), good: 1, from: a.Y, to: z.Y,
+            parts: [P("🛍️ C — " + L("konsumpcja", "потребление"), z.C - a.C), P("🏗️ I — " + L("inwestycje firm", "инвестиции фирм"), z.I - a.I), P("🏛️ G — " + L("wydatki państwa", "госрасходы"), z.G - a.G), P("🌍 NX — " + L("eksport netto", "чистый экспорт"), z.NX - a.NX)],
+            kids: ["C", "I", "unemp"], how: L("PKB = C + I + G + NX. Produkcja nadąża za popytem z opóźnieniem ok. 3 tygodni; większy PKB = więcej pracy i dochodów (mnożnik).", "ВВП = C + I + G + NX. Производство догоняет спрос с задержкой ~3 недели; больше ВВП = больше работы и доходов (мультипликатор).") };
+        case "C": return { t: L("Konsumpcja", "Потребление"), u: L("mln", "млн"), f: x => X.n0(x) + L(" mln", " млн"), good: 1, from: a.C, to: z.C,
+            parts: lnPart(z.C - a.C, [["🙂 " + L("nastroje", "настроения"), a.conf, z.conf], ["👛 " + L("dochód do dyspozycji", "располагаемый доход"), a.inc?.cBase, z.inc?.cBase], ["🏦 " + L("koszt kredytu (stopa)", "стоимость кредита (ставка)"), a.inc?.cRate, z.inc?.cRate], ["🧺 " + L("puste półki", "пустые полки"), a.inc?.cShort, z.inc?.cShort]]),
+            kids: ["disp", "rate"], how: L("Ludzie wydają ok. 78% dodatkowego dochodu. Dobre nastroje i tani kredyt zwiększają zakupy.", "Люди тратят ~78% дополнительного дохода. Хорошие настроения и дешёвый кредит увеличивают покупки.") };
+        case "disp": return { t: L("Dochód do dyspozycji", "Располагаемый доход"), u: L("mln", "млн"), f: x => X.n0(x) + L(" mln", " млн"), good: 1, from: a.inc?.disp || 0, to: z.inc?.disp || 0,
+            parts: [P("💼 " + L("pensje i zyski (70% PKB)", "зарплаты и прибыль (70% ВВП)"), (z.inc?.income || 0) - (a.inc?.income || 0)), P("🧾 " + L(`podatek dochodowy (działa ${X.n1(pa.tax)}% → ${X.n1(pe.tax)}%)`, `подоходный налог (действует ${X.n1(pa.tax)}% → ${X.n1(pe.tax)}%)`), -((z.inc?.tax || 0) - (a.inc?.tax || 0))), P("🤝 " + L("transfery socjalne", "соцтрансферы"), (z.inc?.transfers || 0) - (a.inc?.transfers || 0)), P("🧑‍🔧 " + L("zasiłki dla bezrobotnych", "пособия по безработице"), (z.inc?.benefits || 0) - (a.inc?.benefits || 0))],
+            kids: ["gdp", "realInc", "budget"], how: L(`Dochód do dyspozycji = pensje − podatek + transfery + zasiłki. Przy podatku ${X.n1(pe.tax)}% państwo zabiera ${X.n1(pe.tax)} zł z każdych 100 zł — mniej zostaje na zakupy, ale więcej trafia do budżetu.`, `Располагаемый доход = зарплаты − налог + трансферы + пособия. При налоге ${X.n1(pe.tax)}% государство забирает ${X.n1(pe.tax)} zł из каждых 100 zł — меньше остаётся на покупки, но больше идёт в бюджет.`) };
+        case "realInc": { const dl = Math.log((z.inc?.disp || 1) / (a.inc?.disp || 1)) * 100, pl = Math.log(z.cpi / a.cpi) * 100;
+          return { t: L("Dochód realny (siła nabywcza)", "Реальный доход (покупательная способность)"), u: "%", f: x => Math.round(x * 100) + "%", good: 1, from: a.realInc, to: z.realInc, pct: true,
+            parts: [P("👛 " + L("dochód w złotówkach", "доход в злотых"), dl / 100), P("🏷️ " + L("wzrost cen (inflacja)", "рост цен (инфляция)"), -pl / 100)],
+            kids: ["disp", "infl"], how: L("Dochód realny = ile możesz kupić. Rośnie, gdy pensje rosną szybciej niż ceny. Podatki obniżają go od razu, inflacja — powoli.", "Реальный доход = сколько можно купить. Растёт, когда зарплаты растут быстрее цен. Налоги снижают его сразу, инфляция — постепенно.") }; }
+        case "I": return { t: L("Inwestycje firm", "Инвестиции фирм"), u: L("mln", "млн"), f: x => X.n0(x) + L(" mln", " млн"), good: 1, from: a.I, to: z.I,
+            parts: lnPart(z.I - a.I, [["🙂 " + L("nastroje firm", "настроения фирм"), a.iParts?.conf, z.iParts?.conf], ["💳 " + L("dostępność kredytu", "доступность кредита"), a.iParts?.credit, z.iParts?.credit], ["🏦 " + L("stopa realna (koszt kredytu)", "реальная ставка (цена кредита)"), a.iParts?.iRate, z.iParts?.iRate], ["🏗️ " + L("budowy państwa", "госстройки"), a.iParts?.iProj, z.iParts?.iProj], ["📈 " + L("wzrost gospodarki", "рост экономики"), a.iParts?.trend, z.iParts?.trend]]),
+            kids: ["rate", "gdp"], how: L("Firmy inwestują, gdy kredyt jest tani i dostępny, a nastroje dobre. Stopa NBP działa z opóźnieniem ok. 1,5 miesiąca.", "Фирмы инвестируют, когда кредит дешёв и доступен, а настроения хорошие. Ставка NBP действует с задержкой ~1,5 месяца.") };
+        case "rate": return { t: L("Stopa NBP (działająca)", "Ставка NBP (действующая)"), u: "%", f: x => X.n1(x) + "%", good: 0, from: a.rateEff, to: z.rateEff, factors: true,
+            parts: [[L("🎯 Ustawiona stopa", "🎯 Установленная ставка"), X.n1(a.rate) + "%", X.n1(z.rate) + "%", 0, 0], [L("⏳ Już działa", "⏳ Уже действует"), X.n1(a.rateEff) + "%", X.n1(z.rateEff) + "%", 0, 0], [L("📉 Stopa realna (minus oczekiwana inflacja)", "📉 Реальная ставка (минус ожидаемая инфляция)"), X.n1(a.realRate) + "%", X.n1(z.realRate) + "%", 0, 0]],
+            kids: ["I", "C", "infl"], how: L("Stopa działa stopniowo (ok. 45 dni). Wyższa: droższy kredyt → mniej inwestycji i zakupów → niższa inflacja, ale wyższe bezrobocie.", "Ставка действует постепенно (~45 дней). Выше: дороже кредит → меньше инвестиций и покупок → ниже инфляция, но выше безработица.") };
+        case "unemp": { const yE = v => v.Y * 1e6 / (10000 * v.prodIdx) / v.LF * 100;
+          return { t: L("Bezrobocie", "Безработица"), u: "%", f: x => X.pct(x), good: -1, from: a.unemp, to: z.unemp,
+            parts: [P("📉 " + L("produkcja (PKB)", "производство (ВВП)"), -((z.Y * 1e6 / (10000 * a.prodIdx) / a.LF * 100) - yE(a))), P("⚙️ " + L("wydajność (mniej ludzi na tę samą produkcję)", "производительность (меньше людей на тот же выпуск)"), -(yE(z) - z.Y * 1e6 / (10000 * a.prodIdx) / a.LF * 100)), P("🏗️ " + L("budowy i inne", "стройки и прочее"), 0)].map((p2, i, arr) => i === 2 ? [p2[0], (z.unemp - a.unemp) - arr[0][1] - arr[1][1]] : p2),
+            kids: ["gdp"], how: L("Firmy zatrudniają, gdy rośnie produkcja. Bezrobocie 4–5% to norma (ludzie zmieniają pracę); poniżej 4% firmom trudno znaleźć pracowników i płace rosną szybciej.", "Фирмы нанимают, когда растёт производство. Безработица 4–5% — норма (люди меняют работу); ниже 4% фирмам трудно найти работников, и зарплаты растут быстрее.") }; }
+        case "budget": { const R = (h, k) => (h.rev?.[k] || 0), Sp = (h, k) => (h.spend?.[k] || 0);
+          return { t: L("Saldo budżetu", "Сальдо бюджета"), u: L("mln", "млн"), f: x => X.sgn(x) + L(" mln", " млн"), good: 1, from: a.budget, to: z.budget,
+            parts: [P("💼 " + L("podatek dochodowy", "подоходный налог"), R(z, "tax") - R(a, "tax")), P("🧾 VAT", R(z, "vat") - R(a, "vat")), P("⚓ " + L("cła", "пошлины"), R(z, "tariff") - R(a, "tariff")), P("🌾 " + L("rezerwa (sprzedaż − zakupy)", "резерв (продажи − закупки)"), (R(z, "reserve") - Sp(z, "reserve")) - (R(a, "reserve") - Sp(a, "reserve"))), P("🏥 " + L("usługi publiczne", "госуслуги"), -(Sp(z, "services") - Sp(a, "services"))), P("🤝 " + L("transfery i zasiłki", "трансферы и пособия"), -(Sp(z, "transfers") - Sp(a, "transfers"))), P("🚜 " + L("dopłaty rolne", "агродотации"), -(Sp(z, "farm") - Sp(a, "farm"))), P("🏗️ " + L("inwestycje", "инвестиции"), -(Sp(z, "projects") - Sp(a, "projects"))), P("💸 " + L("odsetki od długu", "проценты по долгу"), -(Sp(z, "interest") - Sp(a, "interest")))],
+            kids: ["disp", "gdp"], how: L("Zmiany podatków i wydatków wchodzą stopniowo (20–45 dni): urzędy wdrażają, ludzie reagują. Gdy PKB rośnie, wpływy rosną same.", "Изменения налогов и расходов вступают постепенно (20–45 дней): ведомства внедряют, люди реагируют. Когда ВВП растёт, доходы растут сами.") }; }
+        case "approval": { const A = (h, k) => h.ap?.[k] || 0;
+          return { t: L("Poparcie (cel, do którego zmierza)", "Поддержка (к чему стремится)"), u: L("pkt", "п."), f: x => Math.round(x) + "%", good: 1, from: a.approval, to: z.approval,
+            parts: [P("👛 " + L("dochody realne", "реальные доходы"), A(z, "income") - A(a, "income")), P("👷 " + L("bezrobocie", "безработица"), A(z, "jobs") - A(a, "jobs")), P("📊 " + L("inflacja daleko od 2,5%", "инфляция далеко от 2,5%"), A(z, "infl") - A(a, "infl")), P("🧺 " + L("kolejki po chleb", "очереди за хлебом"), A(z, "queues") - A(a, "queues")), P("💼 " + L("podatki", "налоги"), A(z, "tax") - A(a, "tax")), P("🏥 " + L("usługi i transfery", "услуги и трансферы"), A(z, "services") - A(a, "services"))],
+            kids: ["realInc", "unemp", "infl"], how: L("Poparcie podąża za warunkami życia z opóźnieniem ok. miesiąca. Czasem dobra decyzja jest niepopularna (np. wyższy podatek, by spłacać dług).", "Поддержка следует за условиями жизни с задержкой ~месяц. Иногда правильное решение непопулярно (например, выше налог, чтобы гасить долг).") }; }
       }
-      return { chain: nodes(chain), cause, side };
+      return null;
     }
-    function whyHtml(k){
-      const W = whyModel(k), title = { bread: L("Cena chleba", "Цена хлеба"), grain: L("Cena zboża", "Цена зерна"), infl: X.kpi.infl, gdp: X.kpi.gdp, jobs: X.kpi.jobs, budget: X.kpi.budget, approval: X.kpi.approval }[k];
-      const last = W.chain[W.chain.length - 1];
-      const nodes = W.chain.map((n, i) => `<button class="nv-node ${n.good > 0 ? "g" : n.good < 0 ? "b" : ""}" ${n.link && n.link !== k ? `data-why="${n.link}"` : ""}><i>${n.ic}</i><span>${n.lab}</span><b>${n.val}</b><em>${Math.abs(n.dv) < 0.05 ? "→" : (n.dv > 0 ? "↑ +" : "↓ −") + X.n1(Math.abs(n.dv)) + (n.abs ? L(" pp", " пп") : "%")}</em></button>${i < W.chain.length - 1 ? '<div class="nv-arr">↓</div>' : ""}`).join("");
-      const maxS = Math.max(...W.side.map(x => Math.abs(x[1])), 0.001);
-      const fmtS = v => k === "bread" || k === "grain" ? X.zl(v) : k === "gdp" || k === "jobs" ? X.n0(v) : X.sgn(v);
-      const sideH = W.side.map(([n, v]) => `<div class="nv-sbar"><span>${n}</span><i class="${k === "budget" || k === "approval" ? (v >= 0 ? "g" : "b") : ""}" style="width:${Math.abs(v) / maxS * 100}%"></i><b>${fmtS(v)}</b></div>`).join("");
-      const sideT = { bread: L("Z czego składa się cena bochenka", "Из чего состоит цена буханки"), grain: L("Koszty bochenka", "Издержки буханки"), infl: L("Skąd inflacja (pkt proc.)", "Откуда инфляция (п.п.)"), gdp: L("PKB = C + I + G + NX (mln/mies.)", "ВВП = C + I + G + NX (млн/мес.)"), jobs: L("PKB = C + I + G + NX (mln/mies.)", "ВВП = C + I + G + NX (млн/мес.)"), budget: L("Wpływy i wydatki (mln/mies.)", "Доходы и расходы (млн/мес.)"), approval: L("Co wpływa na poparcie (pkt)", "Что влияет на поддержку (п.)") }[k];
-      return `<div class="nv-whyh"><small>${X.why}</small><h2>${title}: ${last.val}</h2><p class="nv-muted">${L("Zmiany w ostatnich 30 dniach. Dotknij węzła, aby zajrzeć głębiej.", "Изменения за 30 дней. Нажми на узел, чтобы копнуть глубже.")}</p></div>
-        <div class="nv-graph">${nodes}</div>
-        <p class="nv-cause"><b>${X.mainCause}:</b> ${W.cause}</p>
-        <details class="nv-more"><summary>${sideT}</summary>${sideH}</details>`;
+    const KEYMAP = { jobs: "unemp", gdp: "gdp", infl: "infl", budget: "budget", bread: "bread", approval: "approval", grain: "grain" };
+    function partGood(E, v){ if (Math.abs(v) < 1e-6) return 0; if (E.good === 0) return inflGood(E.from, E.from + v) || (v > 0 ? -1 : 1) * Math.sign(E.from - 2.5 || 1); return (v > 0) === (E.good > 0) ? 1 : -1; }
+    function explainHtml(key, a, z, compact){
+      const E = explain(key, a, z); if (!E) return "";
+      const d = E.to - E.from, fd = E.pct ? X.n1(d * 100) + L(" pp", " пп") : E.u === "%" ? X.n1(d) + L(" pp", " пп") : E.f(Math.abs(d)).replace(/^[+−±]/, "");
+      const dir = Math.abs(d) < 1e-6 ? "→" : d > 0 ? "↑" : "↓", g = key === "infl" ? inflGood(E.from, E.to) : Math.abs(d) < 1e-6 ? 0 : (d > 0) === (E.good > 0) ? 1 : -1;
+      let body;
+      if (E.factors){
+        body = `<table class="nv-tbl"><tr><th>${L("czynnik", "фактор")}</th><th>${L("było", "было")}</th><th>${L("jest", "стало")}</th></tr>${E.parts.map(([n, f0, f1, dv, gd]) => `<tr><td>${n}</td><td>${f0}</td><td class="${!gd || Math.abs(dv) < 1e-6 ? "" : (dv > 0) === (gd > 0) ? "g" : "b"}">${f1}</td></tr>`).join("")}</table>`;
+      } else {
+        const mx = Math.max(...E.parts.map(p => Math.abs(p[1])), 1e-9), fmtP = v => E.pct ? X.sgn(v * 100) + L(" pp", " пп") : E.u === "%" ? X.sgn(v) + L(" pp", " пп") : E.u === "zł" ? (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2).replace(".", ",") + " zł" : X.sgn(v) + " " + E.u;
+        const sorted = E.parts.slice().sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
+        body = `<div class="nv-dec">${sorted.map(([n, v]) => { const gg = partGood(E, v); return `<div class="nv-sbar dec"><span>${n}</span><i class="${gg > 0 ? "g" : gg < 0 ? "b" : ""}" style="width:${Math.abs(v) / mx * 100}%"></i><b>${fmtP(v)}</b></div>`; }).join("")}</div>`;
+        const top = sorted[0];
+        if (top && Math.abs(top[1]) > 1e-6 && !compact) body += `<p class="nv-cause"><b>${X.mainCause}:</b> ${top[0].replace(/^\S+\s/, "")} (${fmtP(top[1])})</p>`;
+      }
+      return `<div class="nv-exp"><div class="nv-exph"><b>${E.t}</b><span>${E.f(E.from)} → <b>${E.f(E.to)}</b> <i class="${g > 0 ? "g" : g < 0 ? "b" : "n"}">${dir} ${fd}</i></span></div>${body}
+        ${compact ? "" : `<p class="nv-muted">ℹ️ ${E.how}</p><div class="nv-chips">${E.kids.map(k2 => `<button data-drill="${k2}">${L("Głębiej", "Глубже")}: ${explain(k2, a, z)?.t || k2} →</button>`).join("")}</div>`}</div>`;
     }
-    function openWhy(k){ why = k; modal(whyHtml(k), "why"); track?.("game", "why", k); }
+    let whyStack = [];
+    function whyHtml(){
+      const k = whyStack[whyStack.length - 1], z = H(), a = ago(30);
+      const crumbs = whyStack.map((kk, i) => `<button data-crumb="${i}" class="${i === whyStack.length - 1 ? "on" : ""}">${explain(kk, a, z)?.t || kk}</button>`).join("<em>›</em>");
+      return `<div class="nv-whyh"><small>${X.why} · ${L("ostatnie 30 dni", "последние 30 дней")}</small><div class="nv-crumbs">${crumbs}</div></div>${explainHtml(k, a, z)}`;
+    }
+    function openWhy(k){ why = true; whyStack = [KEYMAP[k] || k]; modal(whyHtml(), "why"); track?.("game", "why", k); }
 
     // ---------- zakładki
     const spark = (vals, color = "#2347c5", hh = 70) => { if (vals.length < 2) return `<p class="nv-muted">${L("Dane zbiorą się z czasem.", "Данные накопятся со временем.")}</p>`; const mn = Math.min(...vals), mx = Math.max(...vals), W = 300; const pts = vals.map((v, i) => `${(i / (vals.length - 1) * W).toFixed(1)},${(hh - 8 - (v - mn) / ((mx - mn) || 1) * (hh - 16)).toFixed(1)}`).join(" "); return `<div class="nv-spk"><svg class="nv-spark" viewBox="0 0 ${W} ${hh}" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="2.2" vector-effect="non-scaling-stroke" points="${pts}"/></svg><small>${X.n1(mx)}</small><small>${X.n1(mn)}</small></div>`; };
@@ -583,6 +589,7 @@
           <div class="nv-tiles"><div><small>${L("Saldo / mies.", "Сальдо / мес.")}</small><b class="${h.budget < 0 ? "bad" : ""}">${X.sgn(h.budget)}</b></div><div><small>${L("Dług, mln", "Долг, млн")}</small><b>${X.n0(m.debt)}</b></div><div><small>${L("Dług / PKB", "Долг / ВВП")}</small><b class="${h.debtRatio > 0.9 ? "bad" : ""}">${Math.round(h.debtRatio * 100)}%</b></div><div><small>${L("Oprocentowanie długu", "Ставка по долгу")}</small><b>${X.n1(m.govRate)}%</b></div></div>
           <div class="nv-box"><b>${L("Skąd pieniądze (mln/mies.)", "Откуда деньги (млн/мес.)")}</b>${bars(rv, "g")}</div>
           <div class="nv-box"><b>${L("Na co (mln/mies.)", "Куда (млн/мес.)")}</b>${bars(sp, "b")}</div>
+          <p class="nv-muted">⏳ ${L("Zmiany podatków i wydatków wchodzą stopniowo (20–45 dni) — budżet nie zmienia się w dniu decyzji.", "Изменения налогов и расходов вступают постепенно (20–45 дней) — бюджет не меняется в день решения.")}</p>
           <div class="nv-chain">➖ ${L("deficyt", "дефицит")} → 🧾 ${L("pożyczki", "займы")} → 💸 ${L("dług ↑", "долг ↑")} → 📈 ${L("odsetki ↑", "проценты ↑")}</div>
           <button class="nv-why" data-why="budget">${X.why}</button>`;
       }
@@ -623,6 +630,7 @@
     function policyHtml(){
       return `<h2>${X.tabs.policy}</h2><p class="nv-muted">${L("Zmieniasz warunki — ludzie i firmy reagują z opóźnieniem. Po przesunięciu suwaka zobaczysz skutki za 3 i 6 miesięcy.", "Ты меняешь условия — люди и фирмы реагируют с задержкой. После движения ползунка увидишь последствия через 3 и 6 месяцев.")}</p>
         ${POL().map(p => { const lock = !S.unlocked(s, p.k); return `<div class="nv-pol ${lock ? "locked" : ""}"><label for="pp-${p.k}"><span>${p.ic} ${p.n}</span><b id="pv-${p.k}">${p.f(s.p[p.k])}</b></label>
+          ${!lock && LAGTXT[p.k] && Math.abs((p.k === "rate" ? s.m.rateEff : s.pe[p.k]) - s.p[p.k]) > 0.05 ? `<small class="nv-lag">⏳ ${L("teraz działa", "сейчас действует")} ${p.f(Math.round((p.k === "rate" ? s.m.rateEff : s.pe[p.k]) * 10) / 10)} · ${L("pełny efekt po ok.", "полный эффект через ~")} ${LAGTXT[p.k]} ${L("dniach", "дн.")}</small>` : ""}
           ${lock ? `<small class="nv-muted">🔒 ${L(`Dostępne od miesiąca ${S.UNLOCK[p.k] + 1}`, `Доступно с месяца ${S.UNLOCK[p.k] + 1}`)}</small>` : `<input type="range" id="pp-${p.k}" data-pol="${p.k}" min="${p.min}" max="${p.max}" step="${p.step}" value="${s.p[p.k]}"><div class="nv-pc">${p.chain.join(" <em>→</em> ")}</div><div class="nv-prev" id="pr-${p.k}"></div>`}</div>`; }).join("")}`;
     }
     function previewPolicy(k){
@@ -630,7 +638,7 @@
       const prev = prevVals[k] ?? s.p[k];
       if (prev === s.p[k]){ pr.innerHTML = ""; return; }
       const b0 = S.project(s, 180, { [k]: prev }), alt = S.project(s, 180, { [k]: s.p[k] });
-      const rows = [["📈 " + L("PKB", "ВВП"), "Y", 1, 0], ["📊 " + L("Inflacja", "Инфляция"), "infl", -1, 1], ["👷 " + L("Bezrobocie", "Безработица"), "unemp", -1, 1], ["🍞 " + L("Chleb", "Хлеб"), "bread", -1, 0], ["🧾 " + L("Saldo, mln", "Сальдо, млн"), "budget", 1, 2]];
+      const rows = [["📈 " + L("PKB", "ВВП"), "Y", 1, 0], ["📊 " + L("Inflacja", "Инфляция"), "infl", -1, 1], ["👷 " + L("Bezrobocie", "Безработица"), "unemp", -1, 1], ["🍞 " + L("Chleb", "Хлеб"), "bread", -1, 0], ["🧾 " + L("Saldo, mln", "Сальдо, млн"), "budget", 1, 2], ["👛 " + L("Dochód realny", "Реальный доход"), "realInc", 1, 0], ["🗳️ " + L("Poparcie", "Поддержка"), "approval", 1, 2]];
       const cell = (a, b2, good, abs) => { if (a == null || b2 == null) return "<td></td>"; const d = abs ? b2 - a : (b2 / a - 1) * 100; const cls = Math.abs(d) < 0.05 ? "" : (d > 0) === (good > 0) ? "g" : "b"; return `<td class="${cls}">${Math.abs(d) < 0.05 ? "≈" : (d > 0 ? "+" : "−") + X.n1(Math.abs(d)) + (abs === 1 ? L(" pp", " пп") : abs === 2 ? "" : "%")}</td>`; };
       pr.innerHTML = `<table class="nv-tbl"><tr><th>${L("różnica vs. bez zmiany", "разница vs. без изменения")}</th><th>3 ${L("mies.", "мес.")}</th><th>6 ${L("mies.", "мес.")}</th></tr>${rows.map(([n, f, good, abs]) => `<tr><td>${n}</td>${[2, 5].map(c => cell(b0[c]?.[f], alt[c]?.[f], good, abs)).join("")}</tr>`).join("")}</table>`;
     }
@@ -671,19 +679,14 @@
     }
 
     // ---------- modal i powiadomienia
-    function modal(html, kind){
-      $("#nvmodal").innerHTML = html ? `<div class="nv-modal" data-kind="${kind || ""}"><div class="nv-mcard">${html}<button class="nv-btn" data-mclose>${kind === "intro" ? L("Zaczynam ▶", "Начинаю ▶") : L("Zamknij", "Закрыть")}</button></div></div>` : "";
-    }
-    function toast(html, ms = 7000, cls = ""){
-      const box = $("#nvtoasts"), t = document.createElement("div"); t.className = "nv-toast " + cls; t.innerHTML = html; box.appendChild(t);
-      setTimeout(() => t.classList.add("out"), ms); setTimeout(() => t.remove(), ms + 400);
-      while (box.children.length > (matchMedia("(max-width:900px)").matches ? 1 : 3)) box.firstChild.remove();
+    function modal(html, kind, btn){
+      $("#nvmodal").innerHTML = html ? `<div class="nv-modal ${kind === "report" || kind === "crisis" || kind === "end" ? "full" : ""}" data-kind="${kind || ""}"><div class="nv-mcard">${html}<button class="nv-btn" data-mclose>${btn || (kind === "intro" ? L("Zaczynam ▶", "Начинаю ▶") : L("Zamknij", "Закрыть"))}</button></div></div>` : "";
     }
     function unlockConcept(k){
       if (s.concepts[k] != null) return;
-      s.concepts[k] = s.day; const c = CON[k];
-      toast(`<small>💡 ${L("Właśnie to zobaczyłeś", "Ты только что это увидел")}</small><div class="nv-chain">${c.chain.join(" → ")}</div><b>${L("To się nazywa", "Это называется")}: ${c.t}</b>`, 9000, "learn");
-      sound.ping(); track?.("game", "concept", k);
+      s.concepts[k] = s.day; (s.newConcepts = s.newConcepts || []).push(k);
+      host.querySelector('[data-tab="learn"]')?.classList.add("dot");
+      track?.("game", "concept", k);
     }
     // doświadczenie → wyjaśnienie → pojęcie
     function learnHooks(tag){
@@ -704,35 +707,88 @@
       if (s.m.debtRatio > 0.7) unlockConcept("debt");
     }
 
-    // ---------- raport miesiąca: kafelki, wartości na koniec miesiąca = górny pasek w tej chwili
-    function monthReport(){
+    // ---------- pełnoekranowe raporty: co zrobiłeś → co się stało → dlaczego
+    const LAGTXT = { tax: 30, spend: 45, transfers: 20, farmSub: 30, tariff: 20, rate: 45, reserve: 0, cap: 0 };
+    const AFFECTS = { tax: ["disp", "realInc", "budget", "approval"], spend: ["gdp", "unemp", "budget"], transfers: ["realInc", "budget", "approval"], rate: ["I", "infl", "unemp"], tariff: ["grain", "budget"], reserve: ["short", "bread", "grain"], cap: ["short", "bread"], farmSub: ["harvest", "budget"], build: ["budget", "unemp", "gdp"] };
+    const VAL = { disp: h => h.inc?.disp, realInc: h => h.realInc, budget: h => h.budget, approval: h => h.approval, gdp: h => h.Y, unemp: h => h.unemp, I: h => h.I, infl: h => h.infl, grain: h => h.grain, short: h => h.short, bread: h => h.bread, harvest: h => h.harvestF };
+    function decisionHtml(d, now){
+      const names = Object.fromEntries(POL().map(p => [p.k, p]));
+      const lag = LAGTXT[d.k] ?? 0, age = s.day - d.day, pe = s.pe?.[d.k];
+      const what = d.k === "build" ? `🏗️ ${L("Budowa", "Стройка")}: <b>${PN[d.v]}</b>` : `${names[d.k].ic} ${names[d.k].n}: <b>${names[d.k].f(d.from)} → ${names[d.k].f(d.v)}</b>`;
+      const status = d.k === "build" ? L("pieniądze płyną co miesiąc, efekt po ukończeniu", "деньги уходят ежемесячно, эффект после завершения") : !lag ? L("działa od razu", "действует сразу") : age >= lag * 2.5 ? L("działa w pełni", "действует полностью") : L(`wchodzi stopniowo (ok. ${lag} dni) — teraz działa ${d.k === "rate" ? X.n1(s.m.rateEff) + "%" : names[d.k].f(Math.round(pe * 10) / 10)}`, `вступает постепенно (~${lag} дн.) — сейчас действует ${d.k === "rate" ? X.n1(s.m.rateEff) + "%" : names[d.k].f(Math.round(pe * 10) / 10)}`);
+      const fx = d.before ? (AFFECTS[d.k] || []).map(k => { const f = VAL[k]; const b0 = f({ ...d.before, inc: d.before.disp != null ? { disp: d.before.disp } : null }), b1 = f(now); if (b0 == null || b1 == null) return ""; const E = explain(k, now, now); const dd = b1 - b0; return `<span class="nv-fx">${E.t}: ${E.f(b0)} → <b>${E.f(b1)}</b></span>`; }).join("") : "";
+      return `<li>${what}<br><small class="nv-muted">⏳ ${status}</small>${fx ? `<div class="nv-fxs"><small>${L("Od decyzji", "С момента решения")} (${age} ${L("dni", "дн.")}):</small>${fx}</div>` : ""}</li>`;
+    }
+    let reportMode = (() => { try { return localStorage.getItem("makro2.novaria.rep") || "month"; } catch { return "month"; } })(), resume = 0;
+    function pauseFor(){ resume = timer ? speed : resume; clearInterval(timer); timer = null; hud(); visual(); }
+    function monthReport(force){
       const r = s.lastReport; if (!r) return;
-      const prev = s.monthly[s.monthly.length - 2];
-      const tile = (n, v, d, goodUp, fmtD) => `<div><small>${n}</small><b>${v}</b>${d != null ? `<i class="${Math.abs(d) < 0.05 ? "n" : (d > 0) === goodUp ? "g" : "b"}">${d > 0 ? "↑" : d < 0 ? "↓" : "→"} ${fmtD(Math.abs(d))}</i>` : ""}</div>`;
-      const top = s.news.filter(n => n.day >= s.day - 30).slice(-2).map(n => { const [ic, t] = newsText(n, lang); return `<li>${ic} ${esc(t)}</li>`; }).join("");
-      toast(`<small>📅 ${L("Koniec miesiąca", "Конец месяца")}: ${X.months[r.month]}, ${X.year} ${r.year + 1}</small>
-        <div class="nv-tiles sm">${tile(L("PKB", "ВВП"), X.n0(r.YEnd), prev ? (r.YEnd / prev.YEnd - 1) * 100 : null, true, v => X.n1(v) + "%")}${tile(L("Inflacja", "Инфляция"), X.pct(r.infl), prev ? r.infl - prev.infl : null, false, v => X.n1(v))}${tile(L("Bezrobocie", "Безработица"), X.pct(r.unemp), r.unemp - r.unempStart, false, v => X.n1(v))}${tile(L("Chleb", "Хлеб"), X.zl(r.breadEnd), (r.breadEnd / r.breadStart - 1) * 100, false, v => X.n1(v) + "%")}${tile(L("Saldo w miesiącu", "Сальдо за месяц"), X.sgn(r.budget), null)}${tile(L("Poparcie", "Поддержка"), Math.round(r.approval) + "%", prev ? r.approval - prev.approval : null, true, v => X.n1(v))}</div>
-        ${top ? `<ul>${top}</ul>` : ""}`, speed >= 16 ? 3500 : 8000, "month");
+      const quiet = !r.decisions.length && !r.events.length && !(s.newConcepts || []).length;
+      if (!force && (reportMode === "events" && quiet || reportMode === "quarter" && (r.month + 1) % 3 !== 0 && quiet)) return;
+      pauseFor();
+      const keys = ["bread", "infl", "unemp", "gdp", "budget", "approval"];
+      const rel = k => { const E = explain(k, r.a, r.z); return Math.abs(E.to - E.from) / (Math.abs(E.from) + (k === "infl" || k === "unemp" ? 2 : 1e-9)); };
+      const order = keys.slice().sort((x, y) => rel(y) - rel(x));
+      const tile = k => { const E = explain(k, r.a, r.z); const g = k === "infl" ? inflGood(E.from, E.to) : Math.abs(E.to - E.from) < 1e-6 ? 0 : (E.to > E.from) === (E.good > 0) ? 1 : -1; return `<div class="${g > 0 ? "up" : g < 0 ? "down" : ""}"><small>${E.t.replace(/ \(.*/, "")}</small><b>${E.f(E.to)}</b><i>${L("było", "было")} ${E.f(E.from)}</i></div>`; };
+      const nc = (s.newConcepts || []).map(k => `<div class="nv-box"><b>💡 ${CON[k].t}</b><div class="nv-chain">${CON[k].chain.join(" → ")}</div><p>${CON[k].d}</p></div>`).join("");
+      s.newConcepts = [];
+      const evs = r.events.map(e => `<li>${X.ev[e.k].icon} <b>${X.ev[e.k].name}</b> — ${phaseName(e.k, e.ph)}</li>`).join("");
+      const risks = Object.entries(s.risks).filter(([, p]) => p >= 0.2).sort((a, b) => b[1] - a[1]).map(([k, p]) => `<span class="nv-fx">${X.ev[k].icon} ${X.ev[k].name}: <b>${Math.round(p * 100)}%</b></span>`).join("");
+      modal(`<div class="nv-whyh"><small>📅 ${L("Raport miesiąca", "Отчёт месяца")}</small><h2>${X.months[r.month][0].toUpperCase() + X.months[r.month].slice(1)}, ${X.year} ${r.year + 1}</h2></div>
+        <div class="nv-tiles rep">${keys.map(tile).join("")}</div>
+        <h3>🎛️ ${L("Twoje decyzje", "Твои решения")}</h3>
+        ${r.decisions.length ? `<ul class="nv-dlist">${r.decisions.map(d => decisionHtml(d, r.z)).join("")}</ul>` : `<p class="nv-muted">${L("W tym miesiącu nic nie zmieniałeś — gospodarka zmieniała się sama.", "В этом месяце ты ничего не менял — экономика менялась сама.")}</p>`}
+        ${evs ? `<h3>🌍 ${L("Wydarzenia", "События")}</h3><ul>${evs}</ul>` : ""}
+        <h3>🔍 ${L("Co się zmieniło i dlaczego", "Что изменилось и почему")}</h3>
+        ${order.map((k, i) => `<details class="nv-more" ${i < 2 ? "open" : ""}><summary>${explain(k, r.a, r.z).t}</summary>${explainHtml(k, r.a, r.z, true)}</details>`).join("")}
+        ${nc ? `<h3>📚 ${L("Nowe pojęcia — zobaczyłeś je w swojej gospodarce", "Новые понятия — ты увидел их в своей экономике")}</h3>${nc}` : ""}
+        ${risks ? `<h3>⚠️ ${L("Ryzyka na 3 miesiące", "Риски на 3 месяца")}</h3><div>${risks}</div>` : ""}
+        <label class="nv-rmode">${L("Pokazuj raport", "Показывать отчёт")}: <select id="nvrmode"><option value="month">${L("co miesiąc", "каждый месяц")}</option><option value="quarter">${L("co kwartał lub gdy coś się stało", "раз в квартал или если что-то случилось")}</option><option value="events">${L("tylko gdy coś się stało", "только если что-то случилось")}</option></select></label>`, "report", L("Kontynuuj ▶", "Продолжить ▶"));
+      const sel2 = $("#nvrmode"); if (sel2){ sel2.value = reportMode; sel2.onchange = () => { reportMode = sel2.value; try { localStorage.setItem("makro2.novaria.rep", reportMode); } catch {} }; }
+      host.querySelector('[data-tab="learn"]')?.classList.remove("dot");
+    }
+    const phaseName = (k, ph) => k === "boom" ? ({ warning: L("ożywienie", "оживление"), stress: L("boom", "бум"), crisis: L("szczyt — ryzyko przegrzania", "пик — риск перегрева"), recovery: L("wygasa", "затухает") })[ph] : X.phase[ph];
+    const EVINFO = {
+      drought: { chain: ["🌧️ " + L("opady ↓", "осадки ↓"), "🌱 " + L("uprawy ↓", "посевы ↓"), "🌾 " + L("prognoza zbiorów ↓", "прогноз урожая ↓"), "💰 " + L("zboże ↑ (gdy zapasy małe)", "зерно ↑ (если запасы малы)"), "🍞 " + L("chleb ↑", "хлеб ↑"), "👛 " + L("dochód realny ↓", "реальный доход ↓")], opts: [["⚡", L("Rezerwa zboża — działa od razu, ale zmniejsza bufor na przyszłość.", "Резерв зерна — сразу, но уменьшает буфер на будущее.")], ["⏳", L("Niższe cło — import w 1–2 mies.; mniej wpływów, rolnicy tracą.", "Ниже пошлина — импорт за 1–2 мес.; меньше доходов, фермеры теряют.")], ["🏗️", L("Nawadnianie — nie pomoże teraz, ale osłabi kolejne susze.", "Орошение — сейчас не поможет, но ослабит следующие засухи.")], ["🤔", L("Nic — jeśli silosy są pełne, cena może się nie ruszyć.", "Ничего — если силосы полны, цена может не сдвинуться.")]] },
+      energy: { chain: ["🛢️ " + L("energia na świecie ↑", "мировая энергия ↑"), "🏭 " + L("koszty firm ↑", "издержки фирм ↑"), "💰 " + L("ceny ↑", "цены ↑"), "📊 " + L("inflacja ↑", "инфляция ↑"), "👛 " + L("dochód realny ↓", "реальный доход ↓")], opts: [["🏦", L("Wyższa stopa — powstrzyma spiralę cen, ale nie obniży kosztów i zwiększy bezrobocie.", "Выше ставка — остановит спираль цен, но не снизит издержки и увеличит безработицу.")], ["🤝", L("Transfery dla biednych — chronią najsłabszych, kosztem budżetu.", "Трансферы бедным — защищают слабых ценой бюджета.")], ["🏗️", L("Elektrownia — długoterminowa ochrona przed kolejnymi szokami.", "Электростанция — долгосрочная защита от следующих шоков.")], ["🤔", L("Przeczekać — szok energetyczny zwykle mija po kilku miesiącach.", "Переждать — энергошок обычно проходит за несколько месяцев.")]] },
+      boom: { chain: ["🙂 " + L("nastroje ↑", "настроения ↑"), "🛍️ " + L("zakupy wszystkiego ↑", "покупки всего ↑"), "📈 PKB ↑", "👷 " + L("praca ↑", "работа ↑"), "📊 " + L("inflacja ↑ — jeśli popyt przerośnie możliwości", "инфляция ↑ — если спрос превысит возможности")], opts: [["😊", L("Korzystać — rosną dochody i wpływy do budżetu.", "Пользоваться — растут доходы и поступления в бюджет.")], ["🏦", L("Wyższa stopa, gdy inflacja ucieka powyżej 3,5% — schłodzi popyt.", "Выше ставка, если инфляция уходит выше 3,5% — охладит спрос.")], ["💰", L("Odłożyć nadwyżki budżetu na gorsze czasy.", "Отложить излишки бюджета на трудные времена.")]], note: L("Boom dotyczy całej gospodarki (sklepy, usługi, fabryki), nie tylko chleba — piekarnia może mieć wolne moce.", "Бум касается всей экономики (магазины, услуги, фабрики), а не только хлеба — у пекарни могут быть свободные мощности.") },
+      recession: { chain: ["🌍 " + L("zamówienia z zagranicy ↓", "заказы из-за рубежа ↓"), "📤 " + L("eksport ↓", "экспорт ↓"), "🏭 " + L("produkcja ↓", "производство ↓"), "👷 " + L("bezrobocie ↑", "безработица ↑"), "🛍️ " + L("zakupy ↓", "покупки ↓")], opts: [["🏛️", L("Wyższe wydatki — szybko wspierają popyt, rośnie dług.", "Выше расходы — быстро поддерживают спрос, растёт долг.")], ["💼", L("Niższe podatki — więcej pieniędzy w portfelach, mniej w budżecie.", "Ниже налоги — больше денег у людей, меньше в бюджете.")], ["🏦", L("Niższa stopa — tańszy kredyt, efekt po 1–2 mies.", "Ниже ставка — дешевле кредит, эффект через 1–2 мес.")], ["🤔", L("Czekać — recesja sama mija, ale ludzie tracą pracę.", "Ждать — рецессия проходит сама, но люди теряют работу.")]] },
+      credit: { chain: ["🏦 " + L("ryzyko w bankach ↑", "риск в банках ↑"), "💳 " + L("kredyt ↓", "кредит ↓"), "🏗️ " + L("inwestycje ↓", "инвестиции ↓"), "📈 PKB ↓"], opts: [["🏦", L("Niższa stopa — łagodzi, ale nie usuwa braku kredytu. Wysoka stopa pogłębia kryzys.", "Ниже ставка — смягчает, но не устраняет нехватку кредита. Высокая ставка углубляет кризис.")], ["🏗️", L("Inwestycje publiczne — zastępują część inwestycji firm.", "Госинвестиции — заменяют часть инвестиций фирм.")]] },
+      trade: { chain: ["🚫 " + L("porty ↓", "порты ↓"), "🚢 " + L("import i eksport ↓", "импорт и экспорт ↓"), "🌾 " + L("zboże z zagranicy niedostępne", "зерно из-за рубежа недоступно"), "📤 " + L("eksport ↓", "экспорт ↓")], opts: [["🌾", L("Rezerwa zastąpi import zboża.", "Резерв заменит импорт зерна.")], ["🏗️", L("Rozbudowa portu zwiększa odporność na zakłócenia.", "Расширение порта повышает устойчивость к сбоям.")]] },
+    };
+    function crisisModal(n){
+      const [ic, title, who, quote] = newsText(n, lang), P = NPC[who];
+      const k = n.k, E = k && EVINFO[k], ev = s.events.find(e => e.k === k), ph = ev ? S.phaseOf(ev) : null;
+      const ladder = k ? `<div class="nv-ladder">${(S.EVENTS[k].phases.map(x => x[1])).map(p => `<span class="${p === ph ? "on" : ""}">${phaseName(k, p)}</span>`).join("<em>→</em>")}</div>` : "";
+      pauseFor();
+      modal(`<div class="nv-whyh"><small>${k ? X.ev[k].icon + " " + X.ev[k].name : "🚨 " + L("Ostrzeżenie", "Предупреждение")}</small><h2>${ic} ${esc(title)}</h2></div>
+        ${quote ? `<p class="nv-quote"><i>${P.icon}</i> „${esc(quote)}” <small>— ${lang === "ru" ? P.ru : P.pl}</small></p>` : ""}${ladder}
+        ${E ? `<h3>🔗 ${L("Jak to się rozchodzi po gospodarce", "Как это расходится по экономике")}</h3><div class="nv-chain">${E.chain.join(" → ")}</div>${E.note ? `<p class="nv-muted">ℹ️ ${E.note}</p>` : ""}
+        <h3>🧭 ${L("Możliwe reakcje i ich koszty", "Возможные реакции и их цена")}</h3><ul class="nv-steps">${E.opts.map(([i2, t]) => `<li>${i2} ${t}</li>`).join("")}</ul>` : `<p>${L("Jeśli ten stan potrwa ok. 3 miesiące, rząd upadnie. Sprawdź „Dlaczego?” przy wskaźnikach.", "Если это продлится ~3 месяца, правительство падёт. Проверь «Почему?» у показателей.")}</p>`}
+        <p class="nv-muted">${L("Gra czeka. Decyzja należy do Ciebie — nie ma jednej właściwej odpowiedzi.", "Игра ждёт. Решение за тобой — единственно верного ответа нет.")}</p>`, "crisis", L("Wracam do gry ▶", "Вернуться в игру ▶"));
+      sound.ping();
     }
 
     // ---------- czas
     const MS = { 1: 1100, 4: 280, 16: 70 };
     function setSpeed(v){
       clearInterval(timer); timer = null;
-      if (v > 0 && !s.over){ speed = v; timer = setInterval(stepDay, MS[v]); }
+      if (v > 0 && !s.over){ speed = v; timer = setInterval(stepDay, MS[v]); resume = 0; }
       hud(); visual();
     }
     function stepDay(){
       if (s.over){ setSpeed(0); finish(); return; }
       const nNews = s.news.length;
       S.tick(s);
-      if (s.day % 30 === 0){ monthReport(); save(); }
-      if (s.news.length > nNews){ const n = s.news[s.news.length - 1]; if (/:crisis$|^warn:/.test(n.id)){ if (speed >= 4) setSpeed(0); const [ic, t] = newsText(n, lang); toast(`<b>${ic} ${esc(t)}</b>${speed >= 4 || !timer ? `<small>${L("Czas zatrzymany — sprawdź, co się dzieje.", "Время остановлено — посмотри, что происходит.")}</small>` : ""}`, 9000, "alert"); sound.ping(); } }
       learnHooks();
+      const fresh = s.news.slice(nNews);
       hud(); feed(); visual();
       if (s.day % 3 === 0){ labels(); refreshPanel(); if (sel) $("#nvcard").innerHTML = objCard(sel); }
-      if (why && s.day % 2 === 0){ const c = $("#nvmodal .nv-mcard"); if (c){ const o = c.querySelector("details")?.open; c.innerHTML = whyHtml(why) + `<button class="nv-btn" data-mclose>${L("Zamknij", "Закрыть")}</button>`; if (o) c.querySelector("details").open = true; } }
-      if (s.over) finish();
+      if (why && s.day % 2 === 0){ const c = $("#nvmodal .nv-mcard"); if (c && $(".nv-modal")?.dataset.kind === "why"){ const o = [...c.querySelectorAll("details")].map(d => d.open); c.innerHTML = whyHtml() + `<button class="nv-btn" data-mclose>${L("Zamknij", "Закрыть")}</button>`; } }
+      if (s.over){ finish(); return; }
+      const big = fresh.find(n => /:(start|crisis)$|^warn:/.test(n.id) && !(n.k === "boom" && /:start$/.test(n.id)));
+      if (big && !$(".nv-modal")) { crisisModal(big); return; }
+      if (s.day % 30 === 0){ save(); if (!$(".nv-modal")) monthReport(); }
     }
     function visual(){
       const d = D(), h = H();
@@ -745,21 +801,48 @@
       if (finish.done) return; finish.done = true;
       clearInterval(timer); timer = null; hud();
       try { localStorage.removeItem(LS_SAVE); } catch {}
-      const sc = S.score(s), a = sc.start, z = sc.end;
-      const stars = sc.total >= 75 ? 3 : sc.total >= 60 ? 2 : sc.total >= 45 ? 1 : 0;
+      const sc = S.score(s), a = sc.start, z = sc.end, M = s.monthly, n = Math.max(1, M.length);
+      const stars = s.lost ? 0 : sc.total >= 75 ? 3 : sc.total >= 60 ? 2 : sc.total >= 45 ? 1 : 0;
       try { const prev = JSON.parse(localStorage.getItem(LS) || "null"); if (prev == null || stars > prev) localStorage.setItem(LS, JSON.stringify(stars)); } catch {}
       track?.("game", "term-end", Math.round(sc.total));
-      const dif = (n, v) => `<div><small>${n}</small><b>${v > 0 ? "+" : ""}${X.n1(v)}%</b></div>`;
-      const names = Object.fromEntries(POL().map(p => [p.k, p.n]));
-      const key = s.decisions.filter(dd => dd.k !== "reserve" || Math.abs(dd.v) >= 200).sort((x, y) => (y.k === "build") - (x.k === "build")).slice(0, 5);
+      const when = r => `${X.months[r.month]}, ${X.year} ${r.year + 1}`;
+      const cnt = f => M.filter(f).length;
+      const maxBy = f => M.reduce((x, r) => f(r) > f(x) ? r : x, M[0]), minBy = f => M.reduce((x, r) => f(r) < f(x) ? r : x, M[0]);
+      const stats = M.length ? [
+        ["📊", L("Inflacja w przedziale 1,5–3,5%", "Инфляция в коридоре 1,5–3,5%"), `${cnt(r => r.infl >= 1.5 && r.infl <= 3.5)} / ${n} ${L("mies.", "мес.")}`],
+        ["👷", L("Bezrobocie ≤ 6%", "Безработица ≤ 6%"), `${cnt(r => r.unemp <= 6)} / ${n} ${L("mies.", "мес.")}`],
+        ["🧺", L("Miesiące z kolejkami po chleb (>2%)", "Месяцы с очередями за хлебом (>2%)"), `${cnt(r => r.short / Math.max(1, r.demand) > 0.02)}`],
+        ["🔥", L("Najwyższa inflacja", "Самая высокая инфляция"), `${X.pct(maxBy(r => r.infl).infl)} (${when(maxBy(r => r.infl))})`],
+        ["📉", L("Najwyższe bezrobocie", "Самая высокая безработица"), `${X.pct(maxBy(r => r.unemp).unemp)} (${when(maxBy(r => r.unemp))})`],
+        ["🗳️", L("Średnie poparcie / najniższe", "Средняя поддержка / минимальная"), `${Math.round(M.reduce((x, r) => x + r.approval, 0) / n)}% / ${Math.round(minBy(r => r.approval).approval)}% (${when(minBy(r => r.approval))})`],
+      ] : [];
+      // co budowało i niszczyło poparcie: średnie składniki celu poparcia
+      const apKeys = [["income", L("👛 dochody realne", "👛 реальные доходы")], ["jobs", L("👷 bezrobocie", "👷 безработица")], ["infl", L("📊 inflacja", "📊 инфляция")], ["queues", L("🧺 kolejki", "🧺 очереди")], ["tax", L("💼 podatki", "💼 налоги")], ["services", L("🏥 usługi i transfery", "🏥 услуги и трансферы")]];
+      const apAvg = apKeys.map(([k, lab]) => [lab, M.reduce((x, r) => x + (r.z.ap?.[k] || 0), 0) / n]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
+      const apMx = Math.max(...apAvg.map(x => Math.abs(x[1])), 0.1);
+      // decyzje i ich zmierzone skutki po 3 miesiącach
+      const names = Object.fromEntries(POL().map(p => [p.k, p]));
+      const after = d => M.find(r => r.mIndex >= Math.floor(d.day / 30) + 3)?.z || z;
+      const decs = s.decisions.filter(d => d.before).slice(-8).map(d => { const z3 = after(d), ks = (AFFECTS[d.k] || []).slice(0, 3);
+        return `<li>${S.date(d.day).year + 1}/${S.date(d.day).month + 1}: ${d.k === "build" ? "🏗️ " + PN[d.v] : names[d.k].ic + " " + names[d.k].n + " " + names[d.k].f(d.from) + " → " + names[d.k].f(d.v)}<div class="nv-fxs">${ks.map(k => { const f = VAL[k], b0 = f({ ...d.before, inc: { disp: d.before.disp } }), b1 = f(z3); if (b0 == null || b1 == null) return ""; const E = explain(k, z3, z3); return `<span class="nv-fx">${E.t}: ${E.f(b0)} → <b>${E.f(b1)}</b></span>`; }).join("")}</div></li>`; }).join("");
+      const seriesSvg = (f, col) => spark(M.map(f), col, 60);
+      const fall = s.lost && M.length > 6 ? `<h3>🧩 ${L("Co doprowadziło do upadku (ostatnie pół roku)", "Что привело к падению (последние полгода)")}</h3>${explainHtml({ hyper: "infl", debt: "budget", jobs: "unemp", food: "short", approval: "approval" }[s.lost], M[M.length - 7].z, z, true)}` : "";
       modal(`<h2>${s.lost ? "🏛️ " + L("Rząd upadł", "Правительство пало") : "🏁 " + L("Kadencja zakończona", "Срок завершён")} ${"★".repeat(stars)}${"☆".repeat(3 - stars)}</h2>
-        ${s.lost ? `<p>${{ hyper: L("Hiperinflacja zniszczyła zaufanie do pieniądza.", "Гиперинфляция разрушила доверие к деньгам."), debt: L("Państwo straciło dostęp do finansowania.", "Государство потеряло доступ к финансированию."), jobs: L("Masowe bezrobocie.", "Массовая безработица."), food: L("Kryzys żywnościowy.", "Продовольственный кризис."), approval: L("Społeczeństwo odebrało Ci zaufanie.", "Общество лишило тебя доверия.") }[s.lost]}</p>` : ""}
-        <b>${L("Co się zmieniło?", "Что изменилось?")}</b>
-        <div class="nv-tiles">${dif("PKB", (z.Y / a.Y - 1) * 100)}${dif(L("Dochód realny", "Реальный доход"), (z.realInc / a.realInc - 1) * 100)}<div><small>${L("Inflacja", "Инфляция")}</small><b>${X.pct(z.infl)}</b></div><div><small>${L("Bezrobocie", "Безработица")}</small><b>${X.pct(z.unemp)}</b></div><div><small>${L("Dług/PKB", "Долг/ВВП")}</small><b>${Math.round(z.debtRatio * 100)}%</b></div><div><small>${L("Poparcie", "Поддержка")}</small><b>${Math.round(z.approval)}%</b></div></div>
-        <b>${L("Ocena", "Оценка")}: ${Math.round(sc.total)}/100</b>
+        ${s.lost ? `<p>${{ hyper: L("Inflacja ponad 25% przez 3 miesiące zniszczyła zaufanie do pieniądza.", "Инфляция выше 25% три месяца разрушила доверие к деньгам."), debt: L("Dług przekroczył 160% PKB — państwo straciło dostęp do finansowania.", "Долг превысил 160% ВВП — государство потеряло доступ к финансированию."), jobs: L("Bezrobocie ponad 20% przez 3 miesiące.", "Безработица выше 20% три месяца."), food: L("Brak ponad 25% chleba przez 3 miesiące.", "Нехватка более 25% хлеба три месяца."), approval: L("Poparcie poniżej 12% przez 3 miesiące — społeczeństwo odebrało Ci zaufanie.", "Поддержка ниже 12% три месяца — общество лишило тебя доверия.") }[s.lost]}</p>` : ""}
+        <h3>📈 ${L("Co się zmieniło", "Что изменилось")}</h3>
+        <div class="nv-tiles rep">${[["PKB", (z.Y / a.Y - 1) * 100, "%"], [L("Dochód realny", "Реальный доход"), (z.realInc / a.realInc - 1) * 100, "%"]].map(([t, v]) => `<div class="${v >= 0 ? "up" : "down"}"><small>${t}</small><b>${v > 0 ? "+" : ""}${X.n1(v)}%</b></div>`).join("")}<div><small>${L("Inflacja", "Инфляция")}</small><b>${X.pct(z.infl)}</b><i>${L("start", "старт")} ${X.pct(a.infl)}</i></div><div><small>${L("Bezrobocie", "Безработица")}</small><b>${X.pct(z.unemp)}</b><i>${L("start", "старт")} ${X.pct(a.unemp)}</i></div><div><small>${L("Dług/PKB", "Долг/ВВП")}</small><b>${Math.round(z.debtRatio * 100)}%</b><i>${L("start", "старт")} ${Math.round(a.debtRatio * 100)}%</i></div><div><small>${L("Poparcie", "Поддержка")}</small><b>${Math.round(z.approval)}%</b><i>${L("start", "старт")} ${Math.round(a.approval)}%</i></div></div>
+        <h3>⏱️ ${L("Jak długo trzymałeś gospodarkę w dobrym stanie", "Сколько ты держал экономику в хорошем состоянии")}</h3>
+        <table class="nv-tbl">${stats.map(([i2, t, v]) => `<tr><td>${i2} ${t}</td><td>${v}</td></tr>`).join("")}</table>
+        <div class="nv-box"><b>${L("Inflacja / bezrobocie / poparcie w czasie", "Инфляция / безработица / поддержка во времени")}</b>${seriesSvg(r => r.infl, "#c23a1a")}${seriesSvg(r => r.unemp, "#2347c5")}${seriesSvg(r => r.approval, "#13804a")}</div>
+        <h3>🗳️ ${L("Dlaczego ludzie Cię popierali (lub nie)", "Почему люди тебя поддерживали (или нет)")}</h3>
+        ${apAvg.map(([lab, v]) => `<div class="nv-sbar dec"><span>${lab}</span><i class="${v >= 0 ? "g" : "b"}" style="width:${Math.abs(v) / apMx * 100}%"></i><b>${X.sgn(v)} ${L("pkt", "п.")}</b></div>`).join("")}
+        <p class="nv-muted">${L("Średni wpływ na poparcie przez całą kadencję (punkt wyjścia: 55).", "Среднее влияние на поддержку за весь срок (база: 55).")}</p>
+        ${fall}
+        <h3>🎛️ ${L("Twoje decyzje i ich skutki po 3 miesiącach", "Твои решения и их последствия через 3 месяца")}</h3>
+        ${decs ? `<ul class="nv-dlist">${decs}</ul>` : `<p class="nv-muted">${L("Prawie niczego nie zmieniano — gospodarka płynęła sama.", "Почти ничего не менялось — экономика шла сама.")}</p>`}
+        <h3>🌍 ${L("Przetrwane kryzysy", "Пережитые кризисы")}</h3><p>${s.crises.map(c => `✓ ${X.ev[c.k].icon} ${X.ev[c.k].name} (${X.year} ${S.date(c.start).year + 1})`).join(" · ") || L("brak", "нет")}</p>
+        <h3>🏅 ${L("Ocena", "Оценка")}: ${Math.round(sc.total)}/100</h3>
         ${Object.entries(sc.parts).map(([k, v]) => `<div class="nv-sbar"><span>${{ economy: L("Gospodarka", "Экономика"), stability: L("Stabilność", "Стабильность"), state: L("Państwo", "Государство"), society: L("Społeczeństwo", "Общество"), resilience: L("Odporność", "Устойчивость") }[k]}</span><i class="${v >= 60 ? "g" : "b"}" style="width:${v}%"></i><b>${Math.round(v)}</b></div>`).join("")}
-        <b>${L("Przetrwane kryzysy", "Пережитые кризисы")}</b><p>${s.crises.map(c => `✓ ${X.ev[c.k].icon} ${X.ev[c.k].name}`).join(" · ") || L("brak", "нет")}</p>
-        <b>${L("Ważne decyzje", "Важные решения")}</b><ul>${key.map(dd => { const dt = S.date(dd.day); return `<li>${X.months[dt.month]}, ${X.year} ${dt.year + 1}: ${dd.k === "build" ? "🏗️ " + PN[dd.v] : names[dd.k] + " → " + (POL().find(p => p.k === dd.k)?.f(dd.v) ?? dd.v)}</li>`; }).join("") || `<li>${L("Prawie niczego nie zmieniano.", "Почти ничего не менялось.")}</li>`}</ul>
         <button class="nv-btn" id="nvnew">${L("Nowa kadencja (inne kryzysy)", "Новый срок (другие кризисы)")}</button>`, "end");
     }
 
@@ -776,20 +859,22 @@
     // ---------- obsługa kliknięć
     host.addEventListener("click", e => {
       const t = e.target;
-      if (t.closest("[data-mclose]") || (t.closest(".nv-modal") && !t.closest(".nv-mcard"))){ const intro0 = $(".nv-modal")?.dataset.kind === "intro"; why = null; modal(""); if (intro0 && !timer) setSpeed(1); return; }
+      const dr = t.closest("[data-drill]"); if (dr){ whyStack.push(dr.dataset.drill); if (!why || $(".nv-modal")?.dataset.kind !== "why"){ why = true; whyStack = [dr.dataset.drill]; } modal(whyHtml(), "why"); return; }
+      const cr = t.closest("[data-crumb]"); if (cr){ whyStack = whyStack.slice(0, +cr.dataset.crumb + 1); modal(whyHtml(), "why"); return; }
+      if (t.closest("[data-mclose]") || (t.closest(".nv-modal") && !t.closest(".nv-mcard") && !/report|crisis|end/.test($(".nv-modal")?.dataset.kind || ""))){ const kind = $(".nv-modal")?.dataset.kind; why = null; modal(""); if (kind === "intro" && !timer) setSpeed(1); else if ((kind === "report" || kind === "crisis") && resume) setSpeed(resume); return; }
       if (t.closest("#nvnew")){ s = S.newGame(); finish.done = false; modal(""); hud(); feed(); visual(); labels(); setSpeed(1); return; }
       const sp = t.closest("[data-sp]"); if (sp){ setSpeed(+sp.dataset.sp); return; }
       const w = t.closest("[data-why]"); if (w){ openWhy(w.dataset.why); return; }
       const tb = t.closest("[data-tab]"); if (tb){ openTab(tb.dataset.tab); return; }
       const tg = t.closest("[data-tab-go]"); if (tg){ if (tab !== tg.dataset.tabGo) openTab(tg.dataset.tabGo); return; }
-      const ev = t.closest("[data-evk]"); if (ev){ openWhy({ drought: "grain", energy: "infl", boom: "infl", recession: "gdp", credit: "gdp", trade: "grain" }[ev.dataset.evk]); return; }
+      const ev = t.closest("[data-evk]"); if (ev){ const n = s.news.slice().reverse().find(x => x.k === ev.dataset.evk) || { id: ev.dataset.evk + ":start", k: ev.dataset.evk }; resume = timer ? speed : 0; crisisModal(n); return; }
       const ch = t.closest("[data-chart]"); if (ch){ chartKey = ch.dataset.chart; refreshPanel(); return; }
-      const bd = t.closest("[data-build]"); if (bd){ if (S.startProject(s, bd.dataset.build)){ learnHooks("build"); toast(`🏗️ ${L("Budowa ruszyła", "Стройка началась")}: ${PN[bd.dataset.build]}`, 4000); visual(); refreshPanel(); } return; }
+      const bd = t.closest("[data-build]"); if (bd){ if (S.startProject(s, bd.dataset.build)){ learnHooks("build"); visual(); refreshPanel(); } return; }
       if (t.closest("[data-close]")){ hideCard(); return; }
       const ob = t.closest("[data-obj]"); if (ob){ const r = ob.getBoundingClientRect(), st = $("#nvst").getBoundingClientRect(); showCard(ob.dataset.obj, r.left - st.left + r.width / 2, r.top - st.top); return; }
     });
     $("#nvsnd").onclick = () => { if (sound.enabled){ sound.off(); $("#nvsnd").textContent = "🔇"; } else { sound.on(); $("#nvsnd").textContent = "🔊"; } };
-    const onKey = e => { if (!host.isConnected){ window.removeEventListener("keydown", onKey); return; } if (e.target.closest?.("input, textarea")) return; if (e.code === "Space"){ e.preventDefault(); setSpeed(timer ? 0 : speed || 1); } if (e.key === "Escape"){ why = null; modal(""); hideCard(); } };
+    const onKey = e => { if (!host.isConnected){ window.removeEventListener("keydown", onKey); return; } if (e.target.closest?.("input, textarea")) return; if (e.code === "Space"){ e.preventDefault(); setSpeed(timer ? 0 : speed || 1); } if (e.key === "Escape"){ const kind = $(".nv-modal")?.dataset.kind; why = null; modal(""); hideCard(); if ((kind === "report" || kind === "crisis") && resume) setSpeed(resume); } };
     window.addEventListener("keydown", onKey);
 
     hud(); feed();

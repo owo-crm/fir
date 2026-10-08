@@ -29,6 +29,7 @@
   };
   // kiedy odblokowuje się narzędzie (miesiąc kampanii) — gra stopniowo się komplikuje
   const UNLOCK = { reserve: 0, cap: 0, farmSub: 0, tax: 2, spend: 2, transfers: 2, rate: 4, tariff: 6 };
+  const LAGS = { tax: 30, spend: 45, transfers: 20, farmSub: 30, tariff: 20 };   // dni do pełnego efektu
   const DEFAULT_POLICY = { reserve: 0, cap: 0, farmSub: 0, tax: 22, spend: 17.5, transfers: 25, rate: 4.5, tariff: 10 };
 
   // ------------------------------------------------------------ wydarzenia (losowe, ale z sygnałami)
@@ -59,7 +60,7 @@
   function newGame(seed = (Math.random() * 1e9) | 0){
     const s = {
       seed, day: 0, over: false, lost: null, warn: {},
-      p: { ...DEFAULT_POLICY },
+      p: { ...DEFAULT_POLICY }, pe: { ...DEFAULT_POLICY },
       pop: POP0, prodIdx: 1,
       w: { rain: 1, rainT: 1, crop: 1, energy: 1, worldDemand: 1, worldGrain: 1000, portCap: 1, conf: 1, credit: 1 },
       g: { stock: 7600, price: 1000, imp: 0, exp: 0, reserve: 2500, harvested: 0, farmInc: 1 },
@@ -92,6 +93,9 @@
 
     // --- wydarzenia (start na początku miesiąca)
     if (!warmup && !s.noEvents && D.day === 0) rollEvents(s, D);
+    // decyzje działają z opóźnieniem: ustawa → urzędy → ludzie i firmy
+    const pe = s.pe || (s.pe = { ...p });
+    for (const [k, lag] of Object.entries(LAGS)) pe[k] = Math.abs(pe[k] - p[k]) < 1e-6 ? p[k] : ema(pe[k], p[k], lag);
     let rainT = 1, energyT = 1, confT = 1, worldT = 1, creditT = 1, portT = 1;
     for (const ev of s.events){
       const k = eventIntensity(ev);
@@ -122,9 +126,9 @@
     if (D.month === 0 && D.day === 0){ w.crop = 1; g.harvested = 0; }
     if (D.month >= 3 && D.month <= 7){
       const effRain = w.rain + s.infra.irrigation * (1 - w.rain) * 0.65;
-      w.crop = clamp(w.crop + (Math.min(effRain, 1.15) - 1) * 0.012 + 0.0002 * (p.farmSub > 0 ? 1 : 0), 0.4, 1.2);
+      w.crop = clamp(w.crop + (Math.min(effRain, 1.15) - 1) * 0.012 + 0.0002 * (pe.farmSub > 0 ? 1 : 0), 0.4, 1.2);
     }
-    const potential = HARVEST0 * s.prodIdx * (1 + 0.12 * s.infra.irrigation) * (1 + Math.min(p.farmSub, 20) * 0.004);
+    const potential = HARVEST0 * s.prodIdx * (1 + 0.12 * s.infra.irrigation) * (1 + Math.min(pe.farmSub, 20) * 0.004);
     const harvestToday = potential * w.crop * HARVEST[D.month] / DAYS;
     g.harvested += harvestToday;
     const harvestForecast = potential * w.crop;          // prognoza tegorocznych zbiorów
@@ -138,12 +142,16 @@
     const supplyAhead = g.stock + remainingHarvest + g.reserve * 0.15;
     const ratio = Math.max(0, supplyAhead - use * 35) / (use * Math.max(30, daysToJuly));   // bufor ~1 mies.
     // oczekiwania: gorsza prognoza zbiorów podnosi cenę już przed żniwami
-    const expect = Math.pow(clamp(harvestForecast / (HARVEST0 * s.prodIdx), 0.4, 1.4), inHarvest ? -0.2 : -0.9);
+    const tightness = clamp((1.4 - ratio) / 0.8, 0, 1);              // pełne magazyny = oczekiwania prawie nie działają
+    const fRel = D.month >= 2 && D.month <= 8 ? harvestForecast / (HARVEST0 * s.prodIdx) : 1;   // po żniwach tegoroczna prognoza już nie ma znaczenia
+    const expect = Math.pow(clamp(fRel, 0.4, 1.4), (inHarvest ? -0.2 : -0.9) * tightness);
+    g.ratio = ratio; g.expect = expect; 
     const transport = 120 * (1 - 0.35 * s.infra.rail);
-    const parity = w.worldGrain * (1 + p.tariff / 100) + transport;  // cena zboża z importu
+    const parity = w.worldGrain * (1 + pe.tariff / 100) + transport;  // cena zboża z importu
     const floor = w.worldGrain - transport;                          // cena, przy której opłaca się eksport
     const pgTarget = clamp(1000 * expect * Math.pow(clamp(ratio / 1.15, 0.2, 3), -1.4), floor * 0.9, parity * 1.25);
     g.price = g.price + (pgTarget - g.price) * 0.03;
+    g.parity = parity; g.floor = floor; g.target = pgTarget; g.forecast = harvestForecast;
     const impT = g.price > parity ? clamp((g.price - parity) / parity * 6, 0, 1) * 400 * w.portCap : 0;
     const expT = g.price < floor ? clamp((floor - g.price) / floor * 6, 0, 1) * 400 * w.portCap : 0;
     g.imp = ema(g.imp, impT, 20); g.exp = ema(g.exp, expT, 20);
@@ -176,21 +184,27 @@
     b.price = clamp(b.price + (target - b.price) * DA, b.price * 0.985, b.price * 1.02);
     b.prod = prod; b.demand = demand; b.sales = sales; b.short = short; b.cap = cap; b.grainLimit = grainLimit;
     b.capped = p.cap > 0 && p.cap < b.price;
+    // co naprawdę ogranicza piekarnię
+    b.limit = grainLimit < cap && grainLimit <= demand * 1.02 ? "grain" : prod >= cap * 0.995 ? "cap" : costGrain > 1.15 ? "grainPrice" : costEnergy > 1.15 ? "energyPrice" : "demand";
 
     // --- makro: zagregowany popyt z opóźnieniami
     m.rateEff = ema(m.rateEff, p.rate, 45);              // stopa działa z opóźnieniem
     m.realRate = m.rateEff - m.inflE;
     const LF = s.pop * LF_SHARE;
     const Ypot = PROD0 * s.prodIdx * LF * 0.95 / 1e6 * (1 + 0.05 * s.infra.rail + 0.04 * s.infra.energyEff);
-    const income = 0.7 * m.Yinc, tax = p.tax / 100 * income;
-    const disp = income - tax + p.transfers + m.unemp / 100 * LF * 1800 / 1e6;
+    const income = 0.7 * m.Yinc, tax = pe.tax / 100 * income;
+    const disp = income - tax + pe.transfers + m.unemp / 100 * LF * 1800 / 1e6;
     const foodShare = 0.15, realDisp = disp / (m.cpi);
     const trend = s.prodIdx * s.pop / POP0;
-    const C = w.conf * (80 * trend + 0.78 * disp) * (1 - 0.012 * (m.rateEff - 4.5)) * (1 - 0.08 * (b.short / Math.max(1, demand)));
+    const cRate = 1 - 0.012 * (m.rateEff - 4.5), cShort = 1 - 0.08 * (b.short / Math.max(1, demand));
+    const C = w.conf * (86 * trend + 0.78 * disp) * cRate * cShort;
+    m.inc = { income, tax, transfers: pe.transfers, benefits: m.unemp / 100 * LF * 1800 / 1e6, disp, cRate, cShort, cBase: 86 * trend + 0.78 * disp };
     const credit = w.credit;
-    const I = 105 * trend * w.conf * credit * clamp(1 - 0.025 * (m.realRate - 2), 0.35, 1.4) * (1 + 0.15 * s.projects.length / 3);
+    const iRate = clamp(1 - 0.025 * (m.realRate - 2), 0.35, 1.4), iProj = 1 + 0.15 * s.projects.length / 3;
+    const I = 105 * trend * w.conf * credit * iRate * iProj;
+    m.iParts = { conf: w.conf, credit, iRate, iProj, trend };
     const projSpend = s.projects.reduce((a, pr) => a + PROJECTS[pr.k].cost / PROJECTS[pr.k].months, 0);
-    const G = p.spend / 100 * Ypot + projSpend;
+    const G = pe.spend / 100 * Ypot + projSpend;
     const X = 75 * trend * w.worldDemand * (1 + 0.25 * s.infra.port) * (1 - 0.15 * (energy - 1)) + g.exp * g.price / 1e6;
     const M = 0.14 * C + 0.1 * I + g.imp * g.price / 1e6 + 12 * (energy - 1);
     const AD = C + I + G + X - M;
@@ -208,25 +222,28 @@
     m.inflE = ema(m.inflE, 0.45 * m.core + 0.55 * 2.5 - 0.15 * (m.rateEff - 4.5), 120);
     const breadInfl = s.hist.length >= 360 ? (b.price / s.hist[s.hist.length - 360].bread - 1) * 100 : (b.price / 5 - 1) * 100 * 0.6;
     m.infl = 0.75 * m.core + 0.1 * energyPush + 0.15 * breadInfl;
+    { const tg = m.inflE + 0.45 * m.ygap + energyPush * 0.5, sc = Math.abs(tg) > 0.01 ? m.core / tg : 1;
+      m.pi = { expect: 0.75 * m.inflE * sc, demand: 0.75 * 0.45 * m.ygap * sc, energy: 0.75 * energyPush * 0.5 * sc + 0.1 * energyPush, food: 0.15 * breadInfl }; }
     m.pIdx *= 1 + m.core / 100 / 360;
     m.cpi *= 1 + m.infl / 100 / 360;
 
     // --- grupy gospodarstw: inflacja uderza różnie
-    m.groups = GROUPS.map(G => { const fi = (b.price / 5 - 1) * G.food, rinc = (income / 420) * (1 + (p.transfers - 25) / 100 * (G.k === "low" ? 1.5 : 0.2)) / (1 + fi) / (m.cpi / m.pIdx) ; return { k: G.k, realInc: rinc, food: G.food }; });
+    m.groups = GROUPS.map(G => { const fi = (b.price / 5 - 1) * G.food, rinc = (income / 420) * (1 + (pe.transfers - 25) / 100 * (G.k === "low" ? 1.5 : 0.2)) / (1 + fi) / (m.cpi / m.pIdx) ; return { k: G.k, realInc: rinc, food: G.food }; });
     if (!s.incRef) s.incRef = realDisp;
     m.realInc = ema(m.realInc, realDisp / s.incRef, 30);
 
     // --- budżet (mln zł / dzień)
-    const rev = { tax: tax / DAYS, vat: 0.18 * C / DAYS, tariff: g.imp * w.worldGrain * p.tariff / 100 / 1e6 / DAYS, reserve: rel * g.price / 1e6 };
+    const rev = { tax: tax / DAYS, vat: 0.18 * C / DAYS, tariff: g.imp * w.worldGrain * pe.tariff / 100 / 1e6 / DAYS, reserve: rel * g.price / 1e6 };
     const govRate = m.rateEff + Math.max(0, m.debtRatio - 0.6) * 8 + 0.8;
-    const spend = { services: p.spend / 100 * Ypot / DAYS, transfers: (p.transfers + m.unemp / 100 * LF * 1800 / 1e6) / DAYS, farm: p.farmSub / DAYS, projects: projSpend / DAYS, interest: m.debt * govRate / 100 / 360, reserve: buy * g.price / 1e6 };
+    const spend = { services: pe.spend / 100 * Ypot / DAYS, transfers: (pe.transfers + m.unemp / 100 * LF * 1800 / 1e6) / DAYS, farm: pe.farmSub / DAYS, projects: projSpend / DAYS, interest: m.debt * govRate / 100 / 360, reserve: buy * g.price / 1e6 };
     const net = Object.values(rev).reduce((a, x) => a + x, 0) - Object.values(spend).reduce((a, x) => a + x, 0);
     m.debt -= net; m.budgetDay = net; m.rev = rev; m.spendItems = spend; m.govRate = govRate;
     m.debtRatio = m.debt / (m.Y * 12);
-    g.farmInc = ema(g.farmInc, (harvestForecast * g.price / (HARVEST0 * 1000) + p.farmSub / 30) , 30);
+    g.farmInc = ema(g.farmInc, (harvestForecast * g.price / (HARVEST0 * 1000) + pe.farmSub / 30), 30);
 
     // --- poparcie społeczne
-    const apT = 55 + 40 * (m.realInc - 1) - 2.6 * (m.unemp - 5) - 1.8 * Math.max(0, m.infl - 3) - 1.2 * (100 * b.short / Math.max(1, demand)) - 0.6 * (p.tax - 22) + 4 * (p.spend - 17.5) + 0.1 * (p.transfers - 25);
+    const ap = { base: 55, income: 40 * (m.realInc - 1), jobs: -2.6 * (m.unemp - 5), infl: -1.8 * Math.max(0, Math.abs(m.infl - 2.5) - 0.5), queues: -1.2 * (100 * b.short / Math.max(1, demand)), tax: -0.6 * (pe.tax - 22), services: 4 * (pe.spend - 17.5) + 0.1 * (pe.transfers - 25) };
+    const apT = Object.values(ap).reduce((a, x) => a + x, 0); m.ap = ap;
     m.approval = clamp(ema(m.approval, apT, 30), 0, 100);
     m.conf = w.conf;
 
@@ -246,7 +263,7 @@
     if (warmup) return;
     // --- historia, zestawienie miesiąca
     const mt = s.mtd;
-    if (mt.price0 == null){ mt.price0 = b.price; mt.cpi0 = m.cpi; mt.debt0 = m.debt; mt.Y0 = m.Y; mt.unemp0 = m.unemp; mt.grain0 = g.price; }
+    if (mt.price0 == null){ mt.snap0 = s.hist.length ? s.hist[s.hist.length - 1] : snapshot(s); mt.price0 = b.price; mt.cpi0 = m.cpi; mt.debt0 = m.debt; mt.Y0 = m.Y; mt.unemp0 = m.unemp; mt.grain0 = g.price; }
     mt.n++; mt.Y += m.Y / DAYS; mt.bread += b.price; mt.short += short / DAYS; mt.demand += demand / DAYS; mt.sales += sales / DAYS; mt.budget += net; mt.harvest += harvestToday; mt.imp += g.imp / DAYS; mt.exp += g.exp / DAYS;
     s.hist.push(snapshot(s));
     if (s.hist.length > 800) s.hist.splice(0, s.hist.length - 800);
@@ -262,17 +279,24 @@
     return { day: s.day, Y: m.Y, infl: m.infl, core: m.core, unemp: m.unemp, budget: m.budgetDay * DAYS, debt: m.debt, debtRatio: m.debtRatio, approval: m.approval,
       bread: b.price, prod: b.prod, demand: b.demand, short: b.short, grain: g.price, stock: g.stock, reserve: g.reserve, imp: g.imp, exp: g.exp,
       rain: w.rain, crop: w.crop, energy: w.energy, conf: w.conf, C: m.C, I: m.I, G: m.G, NX: m.NX, rate: s.p.rate, realInc: m.realInc, cpi: m.cpi,
-      costGrain: b.cost?.grain, costLabor: b.cost?.labor, costEnergy: b.cost?.energy, scarcity: b.cost?.scarcity, harvestF: HARVEST0 * s.prodIdx * (1 + 0.12 * s.infra.irrigation) * w.crop };
+      costGrain: b.cost?.grain, costLabor: b.cost?.labor, costEnergy: b.cost?.energy, scarcity: b.cost?.scarcity, harvestF: HARVEST0 * s.prodIdx * (1 + 0.12 * s.infra.irrigation) * w.crop,
+      inc: m.inc ? { ...m.inc } : null, iParts: m.iParts ? { ...m.iParts } : null, pi: m.pi ? { ...m.pi } : null, ap: m.ap ? { ...m.ap } : null,
+      rev: m.rev ? Object.fromEntries(Object.entries(m.rev).map(([k, v]) => [k, v * DAYS])) : null, spend: m.spendItems ? Object.fromEntries(Object.entries(m.spendItems).map(([k, v]) => [k, v * DAYS])) : null,
+      employed: m.employed, LF: m.LF, prodIdx: s.prodIdx, rateEff: m.rateEff, realRate: m.realRate, credit: w.credit, ygap: m.ygap, limit: b.limit, cap: b.cap, sales: b.sales,
+      ratio: g.ratio, expect: g.expect, parity: g.parity, X: m.X, M: m.M, pe: s.pe ? { ...s.pe } : null };
   }
 
   function closeMonth(s){
     const mt = s.mtd, D = date(s.day - 1);
-    const rep = { mIndex: D.mIndex, month: D.month, year: D.year, Y: mt.Y, breadAvg: mt.bread / mt.n, breadStart: mt.price0, breadEnd: s.b.price, short: mt.short, demand: mt.demand, sales: mt.sales,
+    const z = snapshot(s), a0 = mt.snap0 || z;
+    const rep = { a: a0, z, decisions: s.decisions.filter(d => d.day >= s.day - DAYS && d.day < s.day), events: s.events.map(e => ({ k: e.k, ph: phaseOf(e) })), mIndex: D.mIndex, month: D.month, year: D.year, Y: mt.Y, breadAvg: mt.bread / mt.n, breadStart: mt.price0, breadEnd: s.b.price, short: mt.short, demand: mt.demand, sales: mt.sales,
       budget: mt.budget, debt: s.m.debt, debtStart: mt.debt0, harvest: mt.harvest, imp: mt.imp, exp: mt.exp, infl: s.m.infl, unemp: s.m.unemp, unempStart: mt.unemp0, approval: s.m.approval,
       grainStart: mt.grain0, grainEnd: s.g.price, YStart: mt.Y0, YEnd: s.m.Y };
     s.monthly.push(rep);
     s.mtd = blankMtd();
     s.risks = riskForecast(s);
+    if (s.risks.drought >= 0.35 && D.month >= 1 && D.month <= 4) pushNews(s, "forecastDrought", { v: s.risks.drought * 100 });
+    if (s.risks.energy >= 0.3) pushNews(s, "forecastEnergy", { v: s.risks.energy * 100 });
     s.lastReport = rep;
   }
 
@@ -312,7 +336,7 @@
     if (date(s.day).mIndex < P.unlock) return false;
     if (k !== "piekarnia" && ((k === "nawadnianie" && s.infra.irrigation >= 1) || (k === "elektrownia" && s.infra.energyEff) || (k === "kolej" && s.infra.rail) || (k === "port" && s.infra.port))) return false;
     s.projects.push({ k, days: 0 });
-    s.decisions.push({ day: s.day, k: "build", v: k });
+    s.decisions.push({ day: s.day, k: "build", v: k, before: s.hist.length ? pick(s.hist[s.hist.length - 1]) : null });
     pushNews(s, "start:" + k, { k });
     return true;
   }
@@ -320,8 +344,9 @@
     const old = s.p[k]; if (old === v) return;
     s.p[k] = v;
     const last = s.decisions[s.decisions.length - 1];
-    if (last && last.k === k && s.day - last.day < 5) last.v = v; else s.decisions.push({ day: s.day, k, from: old, v });
+    if (last && last.k === k && s.day - last.day < 5) last.v = v; else s.decisions.push({ day: s.day, k, from: old, v, before: s.hist.length ? pick(s.hist[s.hist.length - 1]) : null });
   }
+  const pick = h => ({ Y: h.Y, infl: h.infl, unemp: h.unemp, bread: h.bread, budget: h.budget, approval: h.approval, realInc: h.realInc, short: h.short, demand: h.demand, disp: h.inc?.disp, I: h.I, grain: h.grain, harvestF: h.harvestF });
   const unlocked = (s, k) => date(s.day).mIndex >= (UNLOCK[k] ?? 0);
 
   // ------------------------------------------------------------ wiadomości (generowane z danych)
@@ -331,28 +356,23 @@
     s.news.push({ id, day: s.day, ...data });
     if (s.news.length > 120) s.news.shift();
   }
+  // Wiadomości tylko o rzeczach ważnych: pogoda i prognozy, wydarzenia, progi, budowy. Zmiany codzienne widać w „Dlaczego?”.
   function checkNews(s, D){
     const H = s.hist, n = H.length; if (n < 8) return;
-    const now = H[n - 1], wk = H[n - 8], mo = H[Math.max(0, n - 31)];
-    if (now.grain / wk.grain > 1.05) pushNews(s, "grainUp", { v: (now.grain / wk.grain - 1) * 100 });
-    if (now.grain / wk.grain < 0.95) pushNews(s, "grainDown", { v: (1 - now.grain / wk.grain) * 100 });
-    if (s.b.grainLimit < s.b.cap && s.b.prod < s.b.demand * 0.97) pushNews(s, "bakeryLimit", {});
-    if (s.b.prod >= s.b.cap * 0.995 && s.b.demand > s.b.cap * 1.02) pushNews(s, "bakeryFull", {});
-    if (100 * s.b.short / s.b.demand > 3) pushNews(s, s.b.capped ? "queuesCap" : "queues", { v: 100 * s.b.short / s.b.demand });
-    if (now.unemp - mo.unemp > 0.7) pushNews(s, "jobsDown", { v: now.unemp });
-    if (mo.unemp - now.unemp > 0.7) pushNews(s, "jobsUp", { v: now.unemp });
+    const now = H[n - 1], mo = H[Math.max(0, n - 31)], sh = 100 * s.b.short / Math.max(1, s.b.demand);
+    if (sh > 5) pushNews(s, s.b.capped ? "queuesCap" : "queues", { v: sh });
+    if (now.unemp > 9 && mo.unemp <= 9) pushNews(s, "jobsDown", { v: now.unemp });
     if (now.infl > 5 && mo.infl <= 5) pushNews(s, "inflHigh", { v: now.infl });
-    if (s.w.rain < 0.82 && D.month >= 2 && D.month <= 7) pushNews(s, "rainLow", { v: s.w.rain });
+    if (now.infl < 0 && mo.infl >= 0) pushNews(s, "inflLow", { v: now.infl });
+    if (s.w.rain < 0.8 && D.month >= 2 && D.month <= 7) pushNews(s, "rainLow", { v: s.w.rain });
     if (D.month === 6 && D.day === 2) pushNews(s, "harvestStart", { v: now.harvestF });
     if (D.month === 9 && D.day === 1) pushNews(s, "harvestEnd", { v: s.g.harvested });
-    if (s.g.exp > 60) pushNews(s, "exports", { v: s.g.exp });
-    if (s.g.imp > 80) pushNews(s, "imports", { v: s.g.imp });
     if (s.m.debtRatio > 0.8) pushNews(s, "debt", { v: s.m.debtRatio * 100 });
-    if (now.C / mo.C < 0.97) pushNews(s, "consumersCut", {});
-    if (now.I / mo.I < 0.93) pushNews(s, "creditTight", {});
-    if (now.NX - mo.NX > 4) pushNews(s, "exportOrders", {});
-    for (const ev of s.events){ const ph = phaseOf(ev); if (ph !== ev.ph){ ev.ph = ph; pushNews(s, ev.k + ":" + ph, { k: ev.k }); } }
+    for (const ev of s.events){ const ph = phaseOf(ev); if (ph !== ev.ph){ ev.ph = ph;
+      if (ev.k === "boom" && ph === "crisis" && s.m.ygap < 1.5) continue;     // bez przegrzania nie ma „szczytu”
+      pushNews(s, ev.k + ":" + ph, { k: ev.k }); } }
   }
+
 
   // ------------------------------------------------------------ porażka (z ostrzeżeniami)
   function checkDefeat(s){
