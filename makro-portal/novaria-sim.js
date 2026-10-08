@@ -14,7 +14,8 @@
   const HARVEST = [0, 0, 0, 0, 0, 0, 0.30, 0.45, 0.25, 0, 0, 0]; // żniwa: lipiec–wrzesień
   const HARVEST0 = 14700;                                // t zboża w normalnym roku
   const BREAD_PC = 10;                                   // bochenków na osobę miesięcznie przy 5 zł
-  const BAKERY_CAP = 1300;                               // tys. bochenków / mies. na piekarnię
+  const BAKERY_CAP = 1300;
+  const PORT_CAP = 900;                                  // t zboża / mies., które przyjmie port                               // tys. bochenków / mies. na piekarnię
   const GROUPS = [                                       // gospodarstwa domowe
     { k: "low",  pop: 0.35, inc: 0.18, food: 0.28, mpc: 0.97 },
     { k: "mid",  pop: 0.45, inc: 0.47, food: 0.16, mpc: 0.85 },
@@ -152,9 +153,9 @@
     const pgTarget = clamp(1000 * expect * Math.pow(clamp(ratio / 1.15, 0.2, 3), -1.4), floor * 0.9, parity * 1.25);
     g.price = g.price + (pgTarget - g.price) * 0.03;
     g.parity = parity; g.floor = floor; g.target = pgTarget; g.forecast = harvestForecast;
-    const impT = g.price > parity ? clamp((g.price - parity) / parity * 6, 0, 1) * 400 * w.portCap : 0;
-    const expT = g.price < floor ? clamp((floor - g.price) / floor * 6, 0, 1) * 400 * w.portCap : 0;
-    g.imp = ema(g.imp, impT, 20); g.exp = ema(g.exp, expT, 20);
+    const impT = g.price > parity ? clamp((g.price - parity) / parity * 6, 0, 1) * PORT_CAP * w.portCap : 0;
+    const expT = g.price < floor ? clamp((floor - g.price) / floor * 6, 0, 1) * PORT_CAP * w.portCap : 0;
+    g.imp = ema(g.imp, impT, 12); g.exp = ema(g.exp, expT, 15); g.impCap = PORT_CAP * w.portCap; g.impT = impT;
 
     // rezerwa państwowa: + uwalnianie, − zakupy (t/mies.)
     let rel = 0, buy = 0;
@@ -194,7 +195,7 @@
     const Ypot = PROD0 * s.prodIdx * LF * 0.95 / 1e6 * (1 + 0.05 * s.infra.rail + 0.04 * s.infra.energyEff);
     const income = 0.7 * m.Yinc, tax = pe.tax / 100 * income;
     const disp = income - tax + pe.transfers + m.unemp / 100 * LF * 1800 / 1e6;
-    const foodShare = 0.15, realDisp = disp / (m.cpi);
+    const realDisp = disp * m.pIdx / m.cpi;                 // pensje rosną razem z ogólnym poziomem cen; dochód realny spada, gdy żywność i energia drożeją szybciej
     const trend = s.prodIdx * s.pop / POP0;
     const cRate = 1 - 0.012 * (m.rateEff - 4.5), cShort = 1 - 0.08 * (b.short / Math.max(1, demand));
     const C = w.conf * (86 * trend + 0.78 * disp) * cRate * cShort;
@@ -282,7 +283,7 @@
       costGrain: b.cost?.grain, costLabor: b.cost?.labor, costEnergy: b.cost?.energy, scarcity: b.cost?.scarcity, harvestF: HARVEST0 * s.prodIdx * (1 + 0.12 * s.infra.irrigation) * w.crop,
       inc: m.inc ? { ...m.inc } : null, iParts: m.iParts ? { ...m.iParts } : null, pi: m.pi ? { ...m.pi } : null, ap: m.ap ? { ...m.ap } : null,
       rev: m.rev ? Object.fromEntries(Object.entries(m.rev).map(([k, v]) => [k, v * DAYS])) : null, spend: m.spendItems ? Object.fromEntries(Object.entries(m.spendItems).map(([k, v]) => [k, v * DAYS])) : null,
-      employed: m.employed, LF: m.LF, prodIdx: s.prodIdx, rateEff: m.rateEff, realRate: m.realRate, credit: w.credit, ygap: m.ygap, limit: b.limit, cap: b.cap, sales: b.sales,
+      pIdx: m.pIdx, impCap: g.impCap, employed: m.employed, LF: m.LF, prodIdx: s.prodIdx, rateEff: m.rateEff, realRate: m.realRate, credit: w.credit, ygap: m.ygap, limit: b.limit, cap: b.cap, sales: b.sales,
       ratio: g.ratio, expect: g.expect, parity: g.parity, X: m.X, M: m.M, pe: s.pe ? { ...s.pe } : null };
   }
 
