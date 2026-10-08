@@ -1,6 +1,5 @@
-// Brainstorm: mapa szkoleniowa „Nieurodzaj” v4 — diorama 3D (Three.js), czas w tygodniach/dniach,
-// opóźnione efekty decyzji i panel „Dlaczego?”. Cel: pokazać łańcuch przyczyn oraz różnicę między
-// decyzją RACJONALNĄ (spełnia cele) a OPTYMALNĄ (największy dobrobyt spośród racjonalnych).
+// Brainstorm · NIEURODZAJ — strategia ekonomiczna w żywej dioramie 3D (kraj Novaria, kadencja 8 lat).
+// Model gospodarki: novaria-sim.js (window.NovariaSim). Tu: świat 3D, interfejs na mapie, wiadomości, „Dlaczego?”, nauka.
 (function () {
   "use strict";
   const THREE_URL = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
@@ -12,847 +11,802 @@
     document.head.appendChild(s);
   }));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const r1 = v => Math.round(v * 10) / 10;
-  const fmt = v => String(r1(v)).replace(".", ",");
-  const sign = v => (v > 0 ? "+" : "") + fmt(v);
-  const n0 = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  const sn0 = v => (v > 0 ? "+" : v < 0 ? "−" : "") + n0(Math.abs(v));
-  const zl = v => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",") + " zł";
+  const lerp = (a, b, t) => a + (b - a) * t;
 
-  // ================================================================ MODEL v4 (rozliczenie miesięczne)
-  // Jednostki: zboże w tonach (t), chleb w tys. bochenków; 1 t zboża ≈ 1 tys. bochenków.
-  const MONTHS = 12, DAYS = 30, BASE_P = 5, NORM = 1000;
-  const REF = { harvest: 900, imp: 100 };                  // normalny rok: 900 t z kraju + 100 t importu
-  const BLOCKADE = [2, 3, 4];                               // miesiące 3–5: blokada importu
-  const importCap = m => BLOCKADE.includes(m) ? 120 : 400;
-  const WEATHER = [1, 1, 0.9, 0.8, 0.9, 1, 1, 1, 1, 1.08, 1.04, 1];
-  const potential = m => m < 9 ? 700 + 25 * m : 1000;      // pola odbudowują się po suszy; nowe żniwa w 10. mies.
-  const BUILD = { piekarnia2: { cost: 12, months: 3, jobs: 20, site: 15 }, nawadnianie: { cost: 10, months: 4, jobs: 8, site: 10 } };
-  const GOALS = { price: 6.5, shortage: 2, farmInc: 75, budget: -10, unemp: 8 };
-  const ADJ = 0.4, MOVE = 0.15, MOVE_SHOCK = 0.25, IMP_ADJ = 0.5, LABOR = 1040;
-
-  function newState(){
-    return { m: 0, day: 0, done: false, stock: 500, budget: 10, subsidyBoost: 0, bakeries: 1, irrig: 0, projects: [],
-      price: 6, imp: 100, pop: 1, unempPrev: 6.5,
-      d: { tariff: 30, reserve: 0, subsidy: 0, cap: 0, rate: 5 }, hist: [], log: [] };
-  }
-  const weatherName = (w, L) => w >= 1.05 ? L("dobra pogoda", "хорошая погода") : w >= 1 ? L("normalna pogoda", "обычная погода") : w >= 0.85 ? L("słaba pogoda", "плохая погода") : L("susza", "засуха");
-
-  // d.reserve < 0 = kupuj do magazynu (t/mies.), > 0 = uwalniaj
-  function sim(st, d = st.d){
-    const m = Math.min(st.m, MONTHS - 1);
-    const k = st.irrig, w = WEATHER[m], wEff = 1 - (1 - w) * (1 - 0.6 * k);
-    const pot = potential(m) * (1 + 0.12 * k);
-    const harvest = pot * wEff + st.subsidyBoost;
-    const icap = importCap(m), impTarget = icap * clamp(1 - d.tariff / 40, 0, 1);
-    const imp = Math.min(icap, st.imp + IMP_ADJ * (impTarget - st.imp));
-    const rel = d.reserve > 0 ? Math.min(d.reserve, st.stock) : 0;
-    const buy = d.reserve < 0 ? -d.reserve : 0;
-    const grain = Math.max(1, harvest + imp + rel - buy);
-    const capacity = NORM * st.bakeries;
-    const production = Math.min(grain, capacity);
-    const bottleneck = grain > capacity ? "bakery" : "grain";
-    const rateF = 1 - 0.012 * (d.rate - 5), incF = clamp(1 - 0.008 * (st.unempPrev - 6), 0.85, 1.05);
-    const Dbase = NORM * st.pop * incF * rateF;               // popyt przy cenie 5 zł
-    const D = p => Dbase * Math.pow(BASE_P / p, 0.6);
-    const Peq = BASE_P * Math.pow(Dbase / production, 1 / 0.6);
-    const shock = m === BLOCKADE[0] || w <= 0.8;
-    const mv = shock ? MOVE_SHOCK : MOVE;
-    const Pfree = clamp(st.price + ADJ * (Peq - st.price), st.price * (1 - mv), st.price * (1 + mv));
-    let P = Pfree, capped = false;
-    if (d.cap && d.cap < Pfree){ P = d.cap; capped = true; }
-    const demand = D(P), sales = Math.min(demand, production);
-    const short = Math.max(0, demand - production), surplus = Math.max(0, production - demand);
-    const shortage = 100 * short / demand;
-    const gf = (P / BASE_P) * Math.pow(Math.min(1, capacity / grain), 1.5);
-    const grainPrice = 1000 * gf;                             // zł za tonę (normalnie 1000 zł/t)
-    const farmSales = 100 * harvest / REF.harvest * gf;
-    const farmInc = farmSales + 2 * d.subsidy;               // % normalnego dochodu rolników
-    const power = clamp(100 * BASE_P / P - shortage * 1.5, 0, 150);
-    const building = st.projects.reduce((s, p) => s + BUILD[p.type].site, 0);
-    const jobs = { base: 905, farm: 0.06 * harvest, bakery: 20 * st.bakeries * (0.6 + 0.4 * production / capacity), irrig: BUILD.nawadnianie.jobs * k, build: building, rate: -8 * (d.rate - 5) };
-    const employed = Object.values(jobs).reduce((s, v) => s + v, 0);
-    const unemp = clamp(100 * (1 - employed / LABOR), 3, 30);
-    const taxes = employed * 0.004, tariffRev = imp / 10 * d.tariff * 0.006;
-    const spendFixed = 3.0, benefits = unemp * 0.08, reserveCost = rel * 0.008 + buy * 0.015;
-    const buildCost = st.projects.reduce((s, pr) => s + BUILD[pr.type].cost / BUILD[pr.type].months, 0);
-    const net = taxes + tariffRev - spendFixed - d.subsidy - benefits - reserveCost - buildCost;
-    const budgetAfter = st.budget + net;
-    const dP = 100 * (P - st.price) / st.price;
-    const parts = { power: clamp(power, 0, 100), jobs: clamp(100 - (unemp - 5) * 10, 0, 100), farm: clamp(farmInc, 0, 100), fiscal: clamp(60 + budgetAfter * 2, 0, 100), stable: clamp(100 - 6 * Math.abs(dP) - 3 * shortage, 0, 100) };
-    const W = 0.4 * parts.power + 0.2 * parts.jobs + 0.2 * parts.farm + 0.1 * parts.fiscal + 0.1 * parts.stable;
-    const inflation = 2.5 + dP * 0.8 - (d.rate - 5) * 0.7;
-    const ok = { price: P <= GOALS.price, shortage: shortage <= GOALS.shortage, farmInc: farmInc >= GOALS.farmInc, budget: budgetAfter >= GOALS.budget, unemp: unemp <= GOALS.unemp };
-    return { m, w, k, pot, harvest, imp, impTarget, icap, rel, buy, grain, capacity, production, bottleneck, Dbase, incF, rateF, Peq, Pfree, P, p: P, prevP: st.price, dP, capped, demand, sales, short, surplus, shortage,
-      grainPrice, farmSales, farmInc, power, jobs, employed, unemp, taxes, tariffRev, spendFixed, benefits, reserveCost, buildCost, subsidy: d.subsidy, net, budgetAfter, parts, W, inflation, ok,
-      rational: Object.values(ok).every(Boolean), demandAt: D, stockAfter: st.stock - rel + buy };
-  }
-
-  // Jeden miesiąc do przodu (czysta funkcja — używana też w prognozach i przez doradcę)
-  function step(st, d = st.d){
-    const r = sim(st, d);
-    const n = { ...st, d: { ...d }, projects: st.projects.map(p => ({ ...p })) };
-    n.stock = r.stockAfter; n.budget = r.budgetAfter; n.price = r.P; n.imp = r.imp; n.unempPrev = r.unemp;
-    n.pop = st.pop * 1.003 * (st.m === 6 ? 1.03 : 1);
-    n.subsidyBoost = Math.min(150, st.subsidyBoost + d.subsidy * 2.5);
-    const finished = [];
-    n.projects.forEach(p => p.left--);
-    const ir = n.projects.find(p => p.type === "nawadnianie");
-    if (ir){ const M = BUILD.nawadnianie.months, e = M - ir.left; n.irrig = ir.left <= 0 ? 1 : clamp((e - 1) / (M - 1), 0, 1); }
-    n.projects = n.projects.filter(p => { if (p.left <= 0){ finished.push(p.type); if (p.type === "piekarnia2") n.bakeries = 2; if (p.type === "nawadnianie") n.irrig = 1; return false; } return true; });
-    n.m = st.m + 1; n.day = 0; n.done = n.m >= MONTHS;
-    if (n.d.reserve > n.stock) n.d.reserve = Math.floor(n.stock / 10) * 10;
-    return { n, r, finished };
-  }
-  // dNext: decyzje w kolejnych miesiącach (domyślnie te same) — pozwala doradcy planować zapas pod blokadę
-  function horizon(st, d, len = 4, dNext = d){
-    let s = st; const rs = [];
-    for (let i = 0; i < len && s.m < MONTHS; i++){ const x = step(s, i ? { ...dNext, reserve: Math.min(dNext.reserve, Math.floor(s.stock)) } : d); rs.push(x.r); s = x.n; }
-    return { rs, end: s };
-  }
-
-  // Optimum = największy dobrobyt (średnio w tym i 3 kolejnych miesiącach) SPOŚRÓD decyzji racjonalnych.
-  function bestPolicy(st){
-    let best = null;
-    for (const tariff of [0, 10, 20, 30, 40]) for (const reserve of [-100, -50, 0, 50, 100, 150, 200, 250]) for (const subsidy of [0, 2, 4]) for (const rate of [4, 5, 6]) for (const later of [0, 100, 200]){
-      if (reserve > st.stock) continue;
-      const d = { tariff, reserve, subsidy, cap: 0, rate };
-      const { rs, end } = horizon(st, d, 4, { ...d, reserve: later }), r = rs[0];
-      const left = Math.max(0, MONTHS - st.m - rs.length);
-      const endBudget = end.budget + rs[rs.length - 1].net * left;
-      const level = r.rational ? (endBudget >= GOALS.budget ? 0 : 1) : 2;
-      const viol = Object.values(r.ok).filter(v => !v).length;
-      const Wh = rs.reduce((s, x) => s + x.W, 0) / rs.length;
-      const c = { d, r, rs, level, viol, Wh, endBudget };
-      if (!best || c.level < best.level || (c.level === best.level && (c.level === 2 ? (c.viol < best.viol || (c.viol === best.viol && c.Wh > best.Wh)) : c.Wh > best.Wh))) best = c;
-    }
-    return best;
-  }
-  const inProgress = (st, t) => st.projects.some(p => p.type === t);
-  const startBuild = (st, type) => st.projects.push({ type, left: BUILD[type].months });
-  function advance(st){
-    const best = bestPolicy(st);
-    const { n, r, finished } = step(st);
-    const hist = st.hist, log = st.log;
-    Object.assign(st, n, { hist, log });
-    hist.push({ m: r.m, d: { ...n.d }, r, bestW: best.r.W, best: best.d });
-    return { r, finished };
-  }
-  function grade(st){
-    const H = st.hist, W = H.reduce((s, h) => s + h.r.W, 0) / H.length, bestW = H.reduce((s, h) => s + h.bestW, 0) / H.length;
-    const rationalShare = H.filter(h => h.r.rational).length / H.length;
-    const eff = clamp(100 - Math.max(0, bestW - W) * 4, 0, 100);
-    const stars = (rationalShare >= 0.75 ? 1 : 0) + (eff >= 90 ? 1 : 0) + (eff >= 97 && rationalShare === 1 ? 1 : 0);
-    return { W, bestW, rationalShare, eff, stars };
-  }
-
-  // ================================================================ PRZYCZYNY („Dlaczego?”)
-  // Wkład czynników w odchylenie ceny równowagi od normalnych 5 zł (w t / tys. bochenków; + = presja w górę).
-  function causes(st, r, L){
-    const out = [];
-    const add = (k, v, txt) => { if (Math.abs(v) >= 8) out.push({ k, v, txt }); };
-    if (r.bottleneck === "grain"){
-      const dh = REF.harvest - r.harvest;
-      add("harvest", dh, dh > 0 ? L(`Zbiory ${n0(r.harvest)} t — o ${n0(dh)} t mniej niż w normalnym roku (${weatherName(r.w, L)}, pola po suszy).`, `Урожай ${n0(r.harvest)} т — на ${n0(dh)} т меньше обычного (${weatherName(r.w, L)}, поля после засухи).`)
-                             : L(`Zbiory ${n0(r.harvest)} t — o ${n0(-dh)} t więcej niż zwykle (${weatherName(r.w, L)}).`, `Урожай ${n0(r.harvest)} т — на ${n0(-dh)} т больше обычного (${weatherName(r.w, L)}).`));
-      const di = REF.imp - r.imp, why = BLOCKADE.includes(r.m) ? L("trwa blokada importu", "идёт блокада импорта") : L(`cło ${st.d.tariff}%`, `пошлина ${st.d.tariff}%`);
-      add("import", di, di > 0 ? L(`Import ${n0(r.imp)} t zamiast zwykłych ${REF.imp} t (${why}).`, `Импорт ${n0(r.imp)} т вместо обычных ${REF.imp} т (${why}).`)
-                             : L(`Import ${n0(r.imp)} t — o ${n0(-di)} t więcej niż zwykle (${why}).`, `Импорт ${n0(r.imp)} т — на ${n0(-di)} т больше обычного (${why}).`));
-      add("reserve", r.buy - r.rel, r.rel > 0 ? L(`Rezerwa dodaje na rynek ${n0(r.rel)} t zboża.`, `Резерв добавляет на рынок ${n0(r.rel)} т зерна.`) : L(`Zakupy do rezerwy zabierają z rynku ${n0(r.buy)} t.`, `Закупки в резерв забирают с рынка ${n0(r.buy)} т.`));
-    } else {
-      add("bakery", r.Dbase - r.capacity, r.Dbase > r.capacity ? L(`Piekarnie mogą upiec najwyżej ${n0(r.capacity)} tys. bochenków, a przy 5 zł ludzie chcą ${n0(r.Dbase)} tys.`, `Пекарни могут испечь максимум ${n0(r.capacity)} тыс. буханок, а при 5 zł люди хотят ${n0(r.Dbase)} тыс.`)
-                                                    : L(`Piekarnie pieką ${n0(r.production)} tys. — więcej, niż ludzie chcą kupić po 5 zł (${n0(r.Dbase)} tys.).`, `Пекарни пекут ${n0(r.production)} тыс. — больше, чем люди хотят купить по 5 zł (${n0(r.Dbase)} тыс.).`));
-    }
-    const popV = NORM * (st.pop - 1), incV = NORM * st.pop * (r.incF - 1), rateV = r.Dbase - NORM * st.pop * r.incF;
-    add("pop", popV, L(`Mieszkańców przybyło: popyt +${fmt(100 * (st.pop - 1))}% względem początku roku.`, `Жителей стало больше: спрос +${fmt(100 * (st.pop - 1))}% к началу года.`));
-    add("income", incV, incV < 0 ? L(`Bezrobocie ${fmt(st.unempPrev)}% obniża dochody, więc ludzie kupują mniej (${fmt(100 * (r.incF - 1))}%).`, `Безработица ${fmt(st.unempPrev)}% снижает доходы, люди покупают меньше (${fmt(100 * (r.incF - 1))}%).`)
-                                 : L(`Rosnące dochody zwiększają popyt (+${fmt(100 * (r.incF - 1))}%).`, `Растущие доходы увеличивают спрос (+${fmt(100 * (r.incF - 1))}%).`));
-    add("rate", rateV, rateV < 0 ? L(`Stopa NBP ${fmt(st.d.rate)}% schładza popyt (${fmt(100 * (r.rateF - 1))}%).`, `Ставка NBP ${fmt(st.d.rate)}% охлаждает спрос (${fmt(100 * (r.rateF - 1))}%).`)
-                                 : L(`Niska stopa NBP ${fmt(st.d.rate)}% pobudza popyt (+${fmt(100 * (r.rateF - 1))}%).`, `Низкая ставка NBP ${fmt(st.d.rate)}% разгоняет спрос (+${fmt(100 * (r.rateF - 1))}%).`));
-    const up = r.Peq >= BASE_P;
-    const list = out.filter(c => up ? c.v > 0 : c.v < 0).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
-    const tot = list.reduce((s, c) => s + Math.abs(c.v), 0) || 1;
-    list.forEach(c => { c.share = Math.abs(c.v) / tot; c.col = c.share >= 0.4 ? "r" : c.share >= 0.2 ? "o" : "y"; });
-    const against = out.filter(c => up ? c.v < 0 : c.v > 0);
-    return { up, list, against, main: list[0] || null };
-  }
-
-  function texts(lang){
-    const L = mk(lang);
-    return { L,
-      title: L("Nieurodzaj · mapa szkoleniowa", "Неурожай · учебная карта"),
-      brief: L("Susza zniszczyła zbiory: rolnicy mają tylko ok. 700 t zboża miesięcznie zamiast normalnych 900 t, a pełne żniwa wrócą w 10. miesiącu. Chleb już podrożał do 6 zł. W miesiącach 3–5 import będzie zablokowany, a w 4. miesiącu prognozowana jest kolejna susza. Decyzje nie działają od razu: importerzy, ceny i budowy potrzebują czasu.",
-               "Засуха уничтожила урожай: у фермеров лишь около 700 т зерна в месяц вместо обычных 900 т, полный урожай вернётся на 10-й месяц. Хлеб уже подорожал до 6 zł. В месяцы 3–5 импорт заблокирован, а на 4-й месяц прогнозируют новую засуху. Решения действуют не сразу: импортёрам, ценам и стройкам нужно время."),
-      rationalDef: L("<b>Decyzja racjonalna</b> spełnia wszystkie cele (zielone wskaźniki). <b>Decyzja optymalna</b> to ta spośród racjonalnych, która daje największy <b>dobrobyt</b> — wspólny wynik konsumentów, pracowników, rolników, budżetu i stabilności rynku. Każda optymalna decyzja jest racjonalna, ale nie każda racjonalna jest optymalna.",
-                     "<b>Рациональное решение</b> выполняет все цели (зелёные показатели). <b>Оптимальное решение</b> — то из рациональных, что даёт максимальное <b>благосостояние</b>: общий результат потребителей, работников, фермеров, бюджета и стабильности рынка. Любое оптимальное решение рационально, но не любое рациональное оптимально."),
-      goalList: [
-        L(`Chleb ≤ ${fmt(GOALS.price)} zł (normalnie 5 zł)`, `Хлеб ≤ ${fmt(GOALS.price)} zł (обычно 5 zł)`),
-        L(`Niedobór chleba ≤ ${GOALS.shortage}% popytu`, `Дефицит хлеба ≤ ${GOALS.shortage}% спроса`),
-        L(`Dochód rolników ≥ ${GOALS.farmInc}% normalnego`, `Доход фермеров ≥ ${GOALS.farmInc}% обычного`),
-        L(`Bezrobocie ≤ ${GOALS.unemp}%`, `Безработица ≤ ${GOALS.unemp}%`),
-        L(`Budżet ≥ ${GOALS.budget} mln zł`, `Бюджет ≥ ${GOALS.budget} млн zł`),
-      ],
-      day: L("Dzień", "День"), week: L("Tydzień", "Неделя"), month: L("Miesiąc", "Месяц"), play: L("Start", "Пуск"), pause: L("Pauza", "Пауза"),
-      advisor: L("Doradca", "Советник"), economy: L("Gospodarka", "Экономика"), why: L("Dlaczego?", "Почему?"),
-      bread: L("Chleb", "Хлеб"), shelves: L("Niedobór", "Дефицит"), farmInc: L("Dochód rolników", "Доход фермеров"), unemp: L("Bezrobocie", "Безработица"), budget: L("Budżet", "Бюджет"), welfare: L("Dobrobyt", "Благосостояние"),
-      none: L("brak", "нет"), close: L("Dalej", "Дальше"), restart: L("Zagraj jeszcze raz", "Сыграть ещё раз"),
-      loading: L("Ładowanie świata…", "Загрузка мира…"), noGL: L("Twoja przeglądarka nie obsługuje 3D. Wybierz budynek z listy:", "Браузер не поддерживает 3D. Выбери здание из списка:"),
-      forecast: L("Skutki zmiany", "Последствия изменения"), noChange: L("Przesuń suwak, a zobaczysz, co zmieni się teraz, za 1–2 miesiące i później.", "Подвинь ползунок — увидишь, что изменится сейчас, через 1–2 месяца и позже."),
-      thisMonth: L("prognoza na ten miesiąc", "прогноз на этот месяц"), t: L(" t", " т"), tys: L(" tys.", " тыс."), mln: L(" mln", " млн"),
-      stages: [L("Decyzje wchodzą w życie", "Решения вступают в силу"), L("Rynek reaguje", "Рынок реагирует"), L("Producenci dostosowują produkcję", "Производители подстраивают выпуск"), L("Cena się dostosowuje", "Цена подстраивается")],
-    };
-  }
+  // ================================================================ TEKSTY
   const mk = lang => (pl, ru) => lang === "ru" ? ru : pl;
-
-  function buildings(lang){
+  function T(lang){
     const L = mk(lang);
-    return {
-      rzad: { name: L("Rząd", "Правительство"),
-        role: L("Prowadzi [[polityka-fiskalna|politykę fiskalną]]: cła, dopłaty i ceny urzędowe. Budowy zlecasz w budynkach Piekarnia i Farma.", "Ведёт [[polityka-fiskalna|фискальную политику]]: пошлины, дотации и регулируемые цены. Стройки заказываются в Пекарне и на Ферме."),
-        controls: [
-          { k: "tariff", min: 0, max: 40, step: 5, unit: "%", label: L("Cło na import zboża", "Пошлина на импорт зерна") },
-          { k: "subsidy", min: 0, max: 8, step: 1, unit: L(" mln/mies.", " млн/мес."), label: L("Dopłaty dla rolników", "Дотации фермерам") },
-          { k: "cap", min: 0, max: 8, step: 0.5, unit: " zł", label: L("Cena maksymalna chleba (0 = brak)", "Максимальная цена хлеба (0 = нет)") },
-        ] },
-      rezerwy: { name: L("Rezerwy", "Госрезерв"),
-        role: L("Państwowy magazyn zboża — bufor na wstrząsy podaży. **Uwalnianie** od razu dodaje zboże na rynek, ale zmniejsza bezpieczeństwo na przyszłość. **Zakupy** kosztują i zabierają zboże z rynku teraz, ale chronią przed kolejnym kryzysem.", "Государственный склад зерна — буфер против шоков предложения. **Выпуск** сразу добавляет зерно на рынок, но снижает безопасность в будущем. **Закупки** стоят денег и забирают зерно с рынка сейчас, но защищают от следующего кризиса."),
-        controls: [{ k: "reserve", min: -100, max: 250, step: 10, unit: L(" t", " т"), label: L("Kupuj (−) / uwalniaj (+) co miesiąc", "Покупать (−) / выпускать (+) каждый месяц") }] },
-      nbp: { name: "NBP",
-        role: L("Narodowy Bank Polski ustala [[stopa-referencyjna|stopę referencyjną]]. Wyższa stopa: droższy kredyt, mniejszy popyt i presja cenowa, ale firmy mniej zatrudniają.", "Национальный банк Польши устанавливает [[stopa-referencyjna|референсную ставку]]. Выше ставка: дороже кредит, меньше спрос и давление на цены, но фирмы меньше нанимают."),
-        controls: [{ k: "rate", min: 2, max: 9, step: 0.5, unit: "%", label: L("Stopa referencyjna", "Референсная ставка") }] },
-      farma: { name: L("Farma", "Ферма"), role: L("Krajowa [[podaz|podaż]] zboża. Zbiory = potencjał pól × pogoda. Nawadnianie podnosi potencjał i zmniejsza straty przy suszy — zwiększa odporność gospodarki.", "Внутреннее [[podaz|предложение]] зерна. Урожай = потенциал полей × погода. Орошение повышает потенциал и уменьшает потери в засуху — повышает устойчивость экономики."), build: "nawadnianie" },
-      piekarnia: { name: L("Piekarnia", "Пекарня"), role: L("Zamienia zboże w chleb: 1 t zboża ≈ 1 tys. bochenków. Upiecze tyle, ile pozwala **mniejsza** z dwóch rzeczy: dostępne zboże albo moc pieców.", "Превращает зерно в хлеб: 1 т зерна ≈ 1 тыс. буханок. Испечёт столько, сколько позволяет **меньшее** из двух: доступное зерно или мощность печей."), build: "piekarnia2" },
-      sklep: { name: L("Sklep", "Магазин"), role: L("Tu [[popyt|popyt]] mieszkańców spotyka się z podażą chleba. **Popyt** — ile ludzie chcą kupić, **podaż** — ile chleba jest, **sprzedaż** — ile naprawdę kupili.", "Здесь [[popyt|спрос]] жителей встречается с предложением хлеба. **Спрос** — сколько люди хотят купить, **предложение** — сколько хлеба есть, **продажи** — сколько реально купили.") },
-      granica: { name: L("Import", "Импорт"), role: L("Ciężarówki z zagranicznym zbożem. Importerzy reagują na cło z opóźnieniem: co miesiąc pokonują połowę drogi do nowego poziomu. W miesiącach 3–5 granica jest zablokowana (max 120 t).", "Грузовики с иностранным зерном. Импортёры реагируют на пошлину с задержкой: каждый месяц проходят половину пути к новому уровню. В месяцы 3–5 граница заблокирована (макс. 120 т).") },
-    };
-  }
-  function buildInfo(lang){
-    const L = mk(lang);
-    return {
-      piekarnia2: { name: L("Druga piekarnia", "Вторая пекарня"), what: L(`Zapłać teraz ${BUILD.piekarnia2.cost} mln zł (w ${BUILD.piekarnia2.months} ratach), a za ${BUILD.piekarnia2.months} mies. moc wzrośnie o 1 000 tys. bochenków. W czasie budowy ${BUILD.piekarnia2.site * 10} osób dostanie pracę, potem ${BUILD.piekarnia2.jobs * 10} stałych miejsc. Pomoże tylko wtedy, gdy wąskim gardłem jest moc, a nie zboże.`, `Плати сейчас ${BUILD.piekarnia2.cost} млн zł (${BUILD.piekarnia2.months} платежа), а через ${BUILD.piekarnia2.months} мес. мощность вырастет на 1 000 тыс. буханок. Во время стройки ${BUILD.piekarnia2.site * 10} человек получат работу, потом ${BUILD.piekarnia2.jobs * 10} постоянных мест. Поможет, только если узкое место — мощность, а не зерно.`) },
-      nawadnianie: { name: L("Nawadnianie pól", "Орошение полей"), what: L(`Koszt ${BUILD.nawadnianie.cost} mln zł, budowa ${BUILD.nawadnianie.months} mies.; efekt rośnie stopniowo. Po ukończeniu: potencjał pól +12% i o 60% mniejsze straty przy suszy (np. susza 4. miesiąca: zamiast −20% tylko −8%).`, `Стоит ${BUILD.nawadnianie.cost} млн zł, строится ${BUILD.nawadnianie.months} мес.; эффект растёт постепенно. После завершения: потенциал полей +12% и на 60% меньше потерь в засуху (например, засуха 4-го месяца: вместо −20% лишь −8%).`) },
+    const n1 = v => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+    const n0 = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const zl = v => v.toFixed(2).replace(".", ",") + " zł";
+    const pct = v => n1(v) + "%";
+    const sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "±") + n1(Math.abs(v));
+    return { L, n1, n0, zl, pct, sgn,
+      months: lang === "ru" ? ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"] : ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"],
+      year: L("Rok", "Год"), day: L("dzień", "день"),
+      tabs: { economy: L("Gospodarka", "Экономика"), budget: L("Budżet", "Бюджет"), markets: L("Rynki", "Рынки"), policy: L("Polityka", "Политика"), build: L("Inwestycje", "Инвестиции"), learn: L("Wiedza", "Знания"), news: L("Wiadomości", "Новости") },
+      kpi: { gdp: L("PKB", "ВВП"), infl: L("Inflacja", "Инфляция"), jobs: L("Zatrudnienie", "Занятость"), budget: L("Budżet", "Бюджет"), approval: L("Poparcie", "Поддержка"), bread: L("Chleb", "Хлеб") },
+      why: L("Dlaczego?", "Почему?"), mainCause: L("Główna przyczyna", "Главная причина"),
+      ev: {
+        drought: { icon: "🌵", name: L("Susza", "Засуха") }, energy: { icon: "⚡", name: L("Szok energetyczny", "Энергетический шок") },
+        boom: { icon: "🎉", name: L("Boom konsumpcyjny", "Потребительский бум") }, recession: { icon: "📉", name: L("Recesja", "Рецессия") },
+        credit: { icon: "🏦", name: L("Kryzys kredytowy", "Кредитный кризис") }, trade: { icon: "🚫", name: L("Zakłócenia handlu", "Сбой торговли") },
+      },
+      phase: { warning: L("sygnały", "сигналы"), stress: L("napięcie", "напряжение"), crisis: L("kryzys", "кризис"), recovery: L("wychodzenie", "восстановление") },
     };
   }
 
-  // Podpowiedzi nad budynkami — tylko fakty, bez gotowych odpowiedzi
-  function hints(st, lang){
-    const L = mk(lang), r = sim(st), out = {};
-    if (st.done) return out;
-    if (BLOCKADE.includes(st.m)) out.granica = L("Blokada: import max 120 t", "Блокада: импорт макс. 120 т");
-    else if (Math.abs(r.impTarget - r.imp) > 20) out.granica = L(`Import dochodzi do ${n0(r.impTarget)} t`, `Импорт идёт к ${n0(r.impTarget)} т`);
-    if (st.m < BLOCKADE[0]) out.rezerwy = L(`Blokada za ${BLOCKADE[0] - st.m} mies. · zapas ${n0(st.stock)} t`, `Блокада через ${BLOCKADE[0] - st.m} мес. · запас ${n0(st.stock)} т`);
-    else if (BLOCKADE.includes(st.m) && st.stock > 0) out.rezerwy = L(`Kryzys · w magazynie ${n0(st.stock)} t`, `Кризис · на складе ${n0(st.stock)} т`);
-    if (r.bottleneck === "bakery" && r.Dbase > r.capacity * 0.98) out.piekarnia = L("Piekarnia na pełnej mocy", "Пекарня на полной мощности");
-    if (WEATHER[st.m] < 1) out.farma = L(`${weatherName(WEATHER[st.m], L)}: ${n0(r.harvest)} t`, `${weatherName(WEATHER[st.m], L)}: ${n0(r.harvest)} т`);
-    else if (r.farmInc < GOALS.farmInc) out.farma = L(`Dochód rolników ${Math.round(r.farmInc)}%`, `Доход фермеров ${Math.round(r.farmInc)}%`);
-    if (r.short > 5) out.sklep = L(`Brakuje ${n0(r.short)} tys. bochenków`, `Не хватает ${n0(r.short)} тыс. буханок`);
-    const endB = r.budgetAfter + r.net * (MONTHS - st.m - 1);
-    if (endB < GOALS.budget) out.rzad = L(`Przy tym saldzie: ${fmt(endB)} mln na koniec roku`, `При таком сальдо: ${fmt(endB)} млн к концу года`);
-    if (r.unemp > GOALS.unemp) out.nbp = L(`Bezrobocie ${fmt(r.unemp)}%`, `Безработица ${fmt(r.unemp)}%`);
-    return out;
+  // Bohaterowie: dają punkt widzenia, nie gotowe odpowiedzi
+  const NPC = {
+    farmer: { icon: "👨‍🌾", pl: "Jan, rolnik", ru: "Ян, фермер" },
+    baker: { icon: "👩‍🍳", pl: "Ewa, piekarnia „Kłos”", ru: "Эва, пекарня «Колос»" },
+    minister: { icon: "🧑‍💼", pl: "Tomasz, minister finansów", ru: "Томаш, министр финансов" },
+    nbp: { icon: "🏦", pl: "Anna, prezes NBP", ru: "Анна, глава NBP" },
+    worker: { icon: "👷", pl: "Marek, robotnik", ru: "Марек, рабочий" },
+    journalist: { icon: "📰", pl: "Ola, „Novaria Daily”", ru: "Ола, «Novaria Daily»" },
+  };
+  const PROJ_NAMES = lang => { const L = mk(lang); return { piekarnia: L("piekarnia", "пекарня"), nawadnianie: L("nawadnianie pól", "орошение полей"), elektrownia: L("elektrownia", "электростанция"), kolej: L("kolej towarowa", "грузовая железная дорога"), port: L("rozbudowa portu", "расширение порта") }; };
+  function newsText(n, lang){
+    const L = mk(lang), v = n.v != null ? Math.round(n.v * 10) / 10 : 0, k = n.k;
+    const E = T(lang).ev[k] || {};
+    const map = {
+      grainUp: ["📈", L(`Ceny zboża rosną (+${v}% w tydzień)`, `Зерно дорожает (+${v}% за неделю)`), "baker", L("Mąka drożeje. Zobaczymy, ile wytrzymają klienci.", "Мука дорожает. Посмотрим, сколько выдержат покупатели.")],
+      grainDown: ["📉", L(`Zboże tanieje (−${v}%)`, `Зерно дешевеет (−${v}%)`), "farmer", L("Za tonę dostajemy coraz mniej.", "За тонну получаем всё меньше.")],
+      bakeryLimit: ["🏭", L("Piekarnie ograniczają produkcję", "Пекарни сокращают выпуск"), "baker", L("Mamy wolne piece, ale brakuje zboża.", "Печи свободны, но не хватает зерна.")],
+      bakeryFull: ["🔥", L("Piekarnie pracują na pełnych obrotach", "Пекарни работают на пределе"), "baker", L("Piece chodzą całą dobę, a kolejka i tak jest.", "Печи работают круглосуточно, а очередь всё равно есть.")],
+      queues: ["🧺", L(`Kolejki po chleb (brakuje ${v}%)`, `Очереди за хлебом (не хватает ${v}%)`), "journalist", L("Półki pustoszeją przed południem.", "Полки пустеют до полудня.")],
+      queuesCap: ["🧺", L("Tani chleb, puste półki", "Дешёвый хлеб, пустые полки"), "journalist", L("Cena jest niska — tylko chleba nie ma.", "Цена низкая — только хлеба нет.")],
+      jobsDown: ["👷", L(`Firmy zwalniają (bezrobocie ${v}%)`, `Фирмы увольняют (безработица ${v}%)`), "worker", L("U nas skrócili zmiany.", "У нас сократили смены.")],
+      jobsUp: ["🤝", L(`Firmy szukają pracowników (bezrobocie ${v}%)`, `Фирмы ищут работников (безработица ${v}%)`), "worker", L("Pierwszy raz od dawna mam wybór.", "Впервые за долгое время есть выбор.")],
+      inflHigh: ["🛒", L(`Inflacja przekroczyła 5% (${v}%)`, `Инфляция превысила 5% (${v}%)`), "nbp", L("Ceny rosną szybciej, niż byśmy chcieli.", "Цены растут быстрее, чем хотелось бы.")],
+      rainLow: ["🌤️", L("Opady poniżej normy", "Осадки ниже нормы"), "farmer", L("Ziemia jest sucha. Boimy się o zbiory.", "Земля сухая. Боимся за урожай.")],
+      harvestStart: ["🌾", L(`Początek żniw: prognoza ${Math.round(v)} t`, `Начало жатвы: прогноз ${Math.round(v)} т`), "farmer", L("Kombajny wyjechały w pole.", "Комбайны вышли в поле.")],
+      harvestEnd: ["🏁", L(`Koniec żniw: zebrano ${Math.round(v)} t`, `Конец жатвы: собрано ${Math.round(v)} т`), "farmer", L("Silosy pełne — teraz musi wystarczyć do lata.", "Силосы полны — теперь должно хватить до лета.")],
+      exports: ["🚢", L("Nadwyżki zboża płyną na eksport", "Излишки зерна уходят на экспорт"), "farmer", L("Za granicą płacą lepiej.", "За границей платят лучше.")],
+      imports: ["⚓", L("Statki z importowanym zbożem w porcie", "В порту суда с импортным зерном"), "baker", L("Bez importu stanęłyby linie.", "Без импорта встали бы линии.")],
+      debt: ["💸", L("Dług przekroczył 80% PKB", "Долг превысил 80% ВВП"), "minister", L("Odsetki zjadają coraz większą część budżetu.", "Проценты съедают всё большую часть бюджета.")],
+      consumersCut: ["🛍️", L("Konsumenci odkładają zakupy", "Потребители откладывают покупки"), "journalist", L("Sklepy mówią o słabszym ruchu.", "Магазины говорят о слабом потоке.")],
+      creditTight: ["🏦", L("Banki zaostrzają kredyty", "Банки ужесточают кредиты"), "nbp", L("Firmy rzadziej dostają finansowanie.", "Фирмы реже получают финансирование.")],
+      exportOrders: ["📦", L("Eksporterzy: rekordowe zamówienia", "Экспортёры: рекордные заказы"), "worker", L("W fabryce dokładają zmianę.", "На фабрике добавляют смену.")],
+      "warn:hyper": ["🚨", L("Ostrzeżenie: inflacja wymyka się spod kontroli", "Предупреждение: инфляция выходит из-под контроля"), "nbp", L("Jeśli to potrwa, ludzie przestaną ufać złotemu.", "Если это продлится, люди перестанут доверять злотому.")],
+      "warn:debt": ["🚨", L("Ostrzeżenie: rynki boją się długu", "Предупреждение: рынки боятся долга"), "minister", L("Kolejne obligacje sprzedamy coraz drożej.", "Следующие облигации продадим всё дороже.")],
+      "warn:jobs": ["🚨", L("Ostrzeżenie: masowe bezrobocie", "Предупреждение: массовая безработица"), "worker", L("Pół mojej ulicy szuka pracy.", "Половина моей улицы ищет работу.")],
+      "warn:food": ["🚨", L("Ostrzeżenie: kryzys żywnościowy", "Предупреждение: продовольственный кризис"), "journalist", L("Ludzie stoją w kolejkach od świtu.", "Люди стоят в очередях с рассвета.")],
+      "warn:approval": ["🚨", L("Ostrzeżenie: protesty na ulicach", "Предупреждение: протесты на улицах"), "journalist", L("Rząd traci zaufanie obywateli.", "Правительство теряет доверие граждан.")],
+      "drought:start": ["🌤️", L("Meteorolodzy: sucha wiosna", "Метеорологи: сухая весна"), "farmer", L("Jeśli nie popada, zbiory będą słabe.", "Если не будет дождей, урожай будет слабым.")],
+      "drought:stress": ["🌾", L("Prognoza zbiorów się pogarsza", "Прогноз урожая ухудшается"), "farmer", L("Zboże rośnie niskie.", "Зерно растёт низким.")],
+      "drought:crisis": ["🌵", L("Susza uderza w uprawy", "Засуха бьёт по посевам"), "farmer", L("Bez wody nic tu nie urośnie.", "Без воды здесь ничего не вырастет.")],
+      "drought:recovery": ["🌧️", L("Wracają deszcze", "Возвращаются дожди"), "farmer", L("Wreszcie spadł deszcz.", "Наконец-то пошёл дождь.")],
+      "energy:start": ["🛢️", L("Ceny ropy na świecie rosną", "Мировые цены на нефть растут"), "minister", L("To może podnieść koszty wszystkich firm.", "Это может поднять издержки всех фирм.")],
+      "energy:stress": ["⚡", L("Rachunki za prąd w górę", "Счета за электричество растут"), "baker", L("Piec elektryczny kosztuje nas fortunę.", "Электропечь обходится в целое состояние.")],
+      "energy:crisis": ["⚡", L("Szok energetyczny: firmy podnoszą ceny", "Энергошок: фирмы поднимают цены"), "nbp", L("Wyższa stopa nie doda energii — ale może zatrzymać spiralę cen.", "Высокая ставка не добавит энергии — но может остановить спираль цен.")],
+      "energy:recovery": ["🔋", L("Ceny energii spadają", "Цены на энергию падают"), "minister", L("Najgorsze chyba za nami.", "Худшее, кажется, позади.")],
+      "boom:start": ["🙂", L("Nastroje konsumentów najlepsze od lat", "Настроения потребителей лучшие за годы"), "journalist", L("Galerie pełne w dzień powszedni.", "Торговые центры полны в будни.")],
+      "boom:stress": ["🛍️", L("Sklepy: rekordowa sprzedaż", "Магазины: рекордные продажи"), "worker", L("Szef szuka ludzi na gwałt.", "Шеф срочно ищет людей.")],
+      "boom:crisis": ["🔥", L("Gospodarka się przegrzewa?", "Экономика перегревается?"), "nbp", L("Popyt rośnie szybciej niż możliwości firm.", "Спрос растёт быстрее возможностей фирм.")],
+      "boom:recovery": ["😐", L("Euforia słabnie", "Эйфория ослабевает"), "journalist", L("Klienci znów liczą każdy grosz.", "Покупатели снова считают каждый грош.")],
+      "recession:start": ["🌍", L("Zamówienia z zagranicy maleją", "Заказы из-за рубежа падают"), "worker", L("Mniej kontenerów, mniej pracy.", "Меньше контейнеров — меньше работы.")],
+      "recession:stress": ["📉", L("Firmy wstrzymują inwestycje", "Фирмы замораживают инвестиции"), "minister", L("Wpływy z podatków spadają.", "Налоговые поступления падают.")],
+      "recession:crisis": ["📉", L("Recesja: sprzedaż i produkcja w dół", "Рецессия: продажи и производство падают"), "worker", L("Mówią o zwolnieniach.", "Говорят об увольнениях.")],
+      "recession:recovery": ["🌱", L("Pierwsze oznaki ożywienia", "Первые признаки оживления"), "journalist", L("Zamówień znów przybywa.", "Заказов снова прибавляется.")],
+      "credit:start": ["🏦", L("Banki ostrożniejsze z kredytami", "Банки осторожнее с кредитами"), "nbp", L("Ryzyko w sektorze bankowym rośnie.", "Риск в банковском секторе растёт.")],
+      "credit:stress": ["💳", L("Trudniej o kredyt", "Кредит получить труднее"), "worker", L("Odmówili nam kredytu na mieszkanie.", "Нам отказали в ипотеке.")],
+      "credit:crisis": ["🏦", L("Kryzys kredytowy: inwestycje stają", "Кредитный кризис: инвестиции встают"), "minister", L("Firmy nie mają czym finansować budów.", "Фирмам нечем финансировать стройки.")],
+      "credit:recovery": ["🏦", L("Banki znów pożyczają", "Банки снова кредитуют"), "nbp", L("Rynek kredytowy się stabilizuje.", "Кредитный рынок стабилизируется.")],
+      "trade:start": ["🚫", L("Zakłócenia w transporcie morskim", "Сбои в морских перевозках"), "baker", L("Dostawy z portu się spóźniają.", "Поставки из порта опаздывают.")],
+      "trade:crisis": ["🚫", L("Porty sąsiadów zamknięte", "Порты соседей закрыты"), "minister", L("Import i eksport mocno ograniczone.", "Импорт и экспорт сильно ограничены.")],
+      "trade:recovery": ["⚓", L("Handel wraca do normy", "Торговля возвращается к норме"), "baker", L("Statki znów przypływają.", "Суда снова приходят.")],
+      "built:piekarnia": ["🥖", L("Nowa piekarnia otwarta", "Открыта новая пекарня"), "baker", L("Więcej pieców — o ile będzie z czego piec.", "Больше печей — если будет из чего печь.")],
+      "built:nawadnianie": ["💧", L("Kanały nawadniające gotowe", "Ирригационные каналы готовы"), "farmer", L("Susza nie będzie już tak straszna.", "Засуха уже не так страшна.")],
+      "built:elektrownia": ["⚡", L("Nowa elektrownia działa", "Новая электростанция работает"), "minister", L("Mniej zależymy od cen energii na świecie.", "Меньше зависим от мировых цен на энергию.")],
+      "built:kolej": ["🚆", L("Nowa linia kolejowa", "Новая железная дорога"), "worker", L("Towary jadą taniej i szybciej.", "Товары едут дешевле и быстрее.")],
+      "built:port": ["🚢", L("Rozbudowany port przyjmuje większe statki", "Расширенный порт принимает большие суда"), "worker", L("Więcej handlu — więcej pracy na nabrzeżu.", "Больше торговли — больше работы на причале.")],
+    };
+    if (/^start:/.test(n.id)) return ["🏗️", L(`Rusza budowa: ${PROJ_NAMES(lang)[k]}`, `Начинается стройка: ${PROJ_NAMES(lang)[k]}`), "worker", L("Na budowie jest praca.", "На стройке есть работа.")];
+    return map[n.id] || [E.icon || "📰", E.name || n.id, "journalist", ""];
   }
 
-  // ================================================================ SCENA 3D
-  const PAL = { grass: 0x8fd16a, soil: 0x8a5a3b, soilDark: 0x6b4429, road: 0xe9dcc0, water: 0x5cc4f2, wall: 0xfff6e6, roofRed: 0xe2574c, roofBlue: 0x4a7bd8, roofGreen: 0x4bb377, gold: 0xf5c542, wood: 0xb07a4a, wheat: 0xf2cf4a, wheatDry: 0xc9a66b, stone: 0xd9d4cc, truck: 0x3d8fe0, people: 0xff9d5c, tree: 0x3fa35a, trunk: 0x8a5a3b, white: 0xffffff, dark: 0x4a4a55, flagR: 0xdc143c, scaffold: 0xf0a030, pipe: 0x7fb8e0, smoke: 0xeeeeee, skin: 0xf7d1b0 };
-  function makeScene(THREE, canvas){
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Pojęcia: najpierw doświadczenie, potem krótko, na końcu nazwa
+  function concepts(lang){
+    const L = mk(lang);
+    return {
+      scarcity: { t: L("Rzadkość", "Редкость"), chain: ["🌾 " + L("mało zboża", "мало зерна"), "🍞 " + L("mało chleba", "мало хлеба"), "⚖️ " + L("trzeba wybierać", "приходится выбирать")], d: L("Zasobów jest mniej, niż ludzie chcą. Każda decyzja to wybór, kto dostanie mniej.", "Ресурсов меньше, чем хотят люди. Каждое решение — выбор, кому достанется меньше.") },
+      shortage: { t: L("Niedobór", "Дефицит"), chain: ["🛒 " + L("popyt", "спрос") + " > 🏭 " + L("podaż", "предложение"), "🧺 " + L("kolejki", "очереди")], d: L("Przy danej cenie ludzie chcą kupić więcej, niż jest towaru.", "При данной цене люди хотят купить больше, чем есть товара.") },
+      ceiling: { t: L("Cena maksymalna", "Потолок цены"), chain: ["📜 " + L("cena w dół", "цена вниз"), "🛒 " + L("chętnych więcej", "желающих больше"), "🏭 " + L("chleba tyle samo", "хлеба столько же"), "🧺 " + L("niedobór", "дефицит")], d: L("Cena poniżej równowagi nie dodaje towaru — tworzy kolejki.", "Цена ниже равновесной не добавляет товара — создаёт очереди.") },
+      equilibrium: { t: L("Równowaga rynkowa", "Рыночное равновесие"), chain: ["⚠️ " + L("niedobór", "дефицит"), "💰 " + L("cena rośnie", "цена растёт"), "🛒 " + L("popyt spada", "спрос падает"), "⚖️ " + L("popyt = podaż", "спрос = предложение")], d: L("Cena dąży tam, gdzie ilość chciana = ilość dostępna. Robi to stopniowo.", "Цена стремится туда, где желаемое = доступному. Постепенно.") },
+      elasticity: { t: L("Elastyczność cenowa popytu", "Ценовая эластичность спроса"), chain: ["💰 " + L("chleb +10%", "хлеб +10%"), "🛒 " + L("popyt −6%", "спрос −6%")], d: L("Chleb to dobro podstawowe: przy podwyżce kupujemy tylko trochę mniej.", "Хлеб — базовый товар: при подорожании покупаем лишь немного меньше.") },
+      supplyShock: { t: L("Szok podażowy", "Шок предложения"), chain: ["🌵 " + L("susza", "засуха"), "🌾 " + L("zbiory ↓", "урожай ↓"), "💰 " + L("ceny ↑", "цены ↑")], d: L("Nagle spada ilość, jaką gospodarka może wytworzyć.", "Внезапно падает то, что экономика может произвести.") },
+      costPush: { t: L("Inflacja kosztowa", "Инфляция издержек"), chain: ["⚡ " + L("energia ↑", "энергия ↑"), "🏭 " + L("koszty firm ↑", "издержки фирм ↑"), "💰 " + L("ceny ↑", "цены ↑"), "👛 " + L("dochód realny ↓", "реальный доход ↓")], d: L("Ceny rosną, bo produkcja drożeje — nie dlatego, że ludzie więcej kupują.", "Цены растут, потому что производство дорожает, а не потому, что больше покупают.") },
+      demandPull: { t: L("Inflacja popytowa", "Инфляция спроса"), chain: ["🙂 " + L("nastroje ↑", "настроения ↑"), "🛍️ " + L("konsumpcja ↑", "потребление ↑"), "📈 AD ↑", "💰 " + L("ceny ↑", "цены ↑")], d: L("Popyt rośnie szybciej niż możliwości produkcji.", "Спрос растёт быстрее производственных возможностей.") },
+      cycle: { t: L("Cykl koniunkturalny", "Экономический цикл"), chain: ["📈 " + L("ożywienie", "оживление"), "🔥 " + L("szczyt", "пик"), "📉 " + L("recesja", "рецессия"), "🌱 " + L("odbicie", "восстановление")], d: L("Gospodarka nie rośnie równo: przyspiesza i zwalnia.", "Экономика растёт неравномерно: ускоряется и замедляется.") },
+      fiscal: { t: L("Polityka fiskalna", "Фискальная политика"), chain: ["🏛️ " + L("wydatki ↑ / podatki ↓", "расходы ↑ / налоги ↓"), "📈 AD ↑", "👷 " + L("zatrudnienie ↑", "занятость ↑"), "💸 " + L("dług ↑", "долг ↑")], d: L("Rząd wpływa na popyt przez wydatki i podatki.", "Правительство влияет на спрос через расходы и налоги.") },
+      multiplier: { t: L("Mnożnik wydatków", "Мультипликатор расходов"), chain: ["🏗️ " + L("budowa", "стройка"), "👷 " + L("pensje", "зарплаты"), "🛍️ " + L("zakupy", "покупки"), "🏪 " + L("dochody innych", "доходы других")], d: L("Wydany złoty krąży: czyjś wydatek to czyjś dochód.", "Потраченный злотый ходит по кругу: чей-то расход — чей-то доход.") },
+      monetary: { t: L("Polityka pieniężna", "Денежная политика"), chain: ["🏦 " + L("stopa ↑", "ставка ↑"), "💳 " + L("kredyt drożeje", "кредит дорожает"), "🏗️ " + L("inwestycje ↓", "инвестиции ↓"), "📊 " + L("inflacja ↓ (z opóźnieniem)", "инфляция ↓ (с задержкой)")], d: L("NBP zmienia koszt pieniądza. Działa wolno — miesiącami.", "NBP меняет стоимость денег. Действует медленно — месяцами.") },
+      opportunity: { t: L("Koszt alternatywny", "Альтернативные издержки"), chain: ["💰 " + L("mln na budowę", "млн на стройку"), "🚫 " + L("nie ma ich na szkoły, rezerwy, niższe podatki", "их нет на школы, резервы, снижение налогов")], d: L("Prawdziwy koszt wyboru to najlepsza rzecz, z której rezygnujesz.", "Настоящая цена выбора — лучшее, от чего отказываешься.") },
+      trade: { t: L("Handel zagraniczny", "Внешняя торговля"), chain: ["🌍 " + L("cena światowa", "мировая цена"), "🚢 " + L("import / eksport", "импорт / экспорт"), "⚖️ " + L("ceny w kraju", "цены в стране")], d: L("Gdy w kraju drożej niż za granicą — opłaca się import; gdy taniej — eksport.", "Когда в стране дороже, чем за рубежом, выгоден импорт; когда дешевле — экспорт.") },
+      debt: { t: L("Dług publiczny", "Государственный долг"), chain: ["➖ " + L("deficyt", "дефицит"), "🧾 " + L("pożyczki", "заимствования"), "💸 " + L("odsetki ↑", "проценты ↑")], d: L("Dzisiejszy deficyt to jutrzejsze odsetki.", "Сегодняшний дефицит — завтрашние проценты.") },
+    };
+  }
+
+  // ================================================================ ŚWIAT 3D
+  const C3 = { grass: 0x86c95f, soil: 0x8a5a3b, dark: 0x4a4a55, road: 0xd9ccb0, water: 0x4fb3e8, wall: 0xfff4e2, red: 0xe2574c, blue: 0x4a7bd8, green: 0x3fae6e, gold: 0xf2c53d, wood: 0xb07a4a, stone: 0xd6d1c8, wheat: 0xf0c94a, white: 0xffffff, glass: 0x9fd3ff, orange: 0xf08a3c, purple: 0x8a6bd1, teal: 0x2eb8a6, steel: 0x9aa4b2, skin: 0xf3cba5 };
+  function makeWorld(THREE, canvas){
+    const R = new THREE.WebGLRenderer({ canvas, antialias: true });
+    R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = new THREE.Scene();
-    const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
-    cam.position.set(22, 22.5, 22); cam.lookAt(0, -1.2, 0);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
-    const sun = new THREE.DirectionalLight(0xfff1dd, 0.75);
-    sun.position.set(12, 22, 6); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
-    Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16 }); scene.add(sun);
-    const mats = {}, mat = c => mats[c] || (mats[c] = new THREE.MeshLambertMaterial({ color: c }));
-    const box = (w, h, d, c, x, y, z, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.set(x, y + h / 2, z); m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
-    const cyl = (rt, rb, h, c, x, y, z, seg = 10, parent = scene) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat(c)); m.position.set(x, y + h / 2, z); m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
-    const roof = (w, d, h, c, x, y, z, parent = scene) => { const g = new THREE.CylinderGeometry(0.0001, 1, 1, 4, 1); g.rotateY(Math.PI / 4); const m = new THREE.Mesh(g, mat(c)); m.scale.set(w * 0.72, h, d * 0.72); m.position.set(x, y + h / 2, z); m.castShadow = true; parent.add(m); return m; };
-    const tree = (x, z, s = 1) => { cyl(0.12 * s, 0.15 * s, 0.5 * s, PAL.trunk, x, 1, z, 6); const t = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 * s, 0), mat(PAL.tree)); t.position.set(x, 1 + 0.9 * s, z); t.castShadow = true; scene.add(t); };
+    scene.fog = new THREE.Fog(0xbfe3ff, 70, 130);
+    const cam = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 300);
+    cam.position.set(34, 32, 34); cam.lookAt(0, -1, 0);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x7a8a99, 0.7); scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xfff0d8, 0.85); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 120 }); scene.add(sun); scene.add(sun.target);
+    const mats = {}, M = (c, o = {}) => { const k = c + JSON.stringify(o); return mats[k] || (mats[k] = new THREE.MeshLambertMaterial({ color: c, ...o })); };
+    const box = (w, h, d, c, x, y, z, P = scene, o) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === "object" ? c : M(c, o)); m.position.set(x, y + h / 2, z); m.castShadow = m.receiveShadow = true; P.add(m); return m; };
+    const cyl = (rt, rb, h, c, x, y, z, P = scene, seg = 12) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), typeof c === "object" ? c : M(c)); m.position.set(x, y + h / 2, z); m.castShadow = m.receiveShadow = true; P.add(m); return m; };
+    const roof = (w, d, h, c, x, y, z, P = scene) => { const g = new THREE.CylinderGeometry(0.001, 1, 1, 4, 1); g.rotateY(Math.PI / 4); const m = new THREE.Mesh(g, M(c)); m.scale.set(w * 0.72, h, d * 0.72); m.position.set(x, y + h / 2, z); m.castShadow = true; P.add(m); return m; };
+    const gable = (w, d, h, c, x, y, z, P = scene) => { const s = new THREE.Shape(); s.moveTo(-w / 2, 0); s.lineTo(0, h); s.lineTo(w / 2, 0); const g = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); const m = new THREE.Mesh(g, M(c)); m.position.set(x, y, z); m.castShadow = true; P.add(m); return m; };
 
-    box(18, 1, 18, PAL.grass, 0, 0, 0); box(18, 2.2, 18, PAL.soil, 0, -2.2, 0); box(17.6, 1, 17.6, PAL.soilDark, 0, -3.2, 0);
-    box(18, 0.06, 1.6, PAL.road, 0, 1, 1.2); box(1.6, 0.06, 7.4, PAL.road, -1.2, 1, -3.7);
-    box(1.8, 0.05, 18, PAL.water, 7.9, 1, 0); box(2.4, 0.3, 1.8, PAL.wood, 7.9, 1, 1.2);
-    const groups = {};
-    const group = (id, x, z) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.userData.id = id; scene.add(g); groups[id] = g; return g; };
-    { const g = group("rzad", -5.6, -5.2);
-      box(4, 0.3, 3, PAL.stone, 0, 1, 0, g); box(3.6, 1.8, 2.4, PAL.wall, 0, 1.3, -0.1, g);
-      for (let i = -1.5; i <= 1.5; i += 1) cyl(0.14, 0.14, 1.8, PAL.white, i, 1.3, 1.25, 8, g);
-      box(3.9, 0.3, 2.9, PAL.stone, 0, 3.1, 0, g); roof(4, 3, 0.9, PAL.roofBlue, 0, 3.4, 0, g);
-      cyl(0.04, 0.04, 1.6, PAL.dark, 1.6, 4.1, -0.9, 6, g); box(0.8, 0.25, 0.04, PAL.white, 2.0, 5.3, -0.9, g); box(0.8, 0.25, 0.04, PAL.flagR, 2.0, 5.05, -0.9, g); }
-    { const g = group("nbp", -1.3, -5.6);
-      box(3, 2.4, 2.6, PAL.stone, 0, 1, 0, g); box(3.3, 0.3, 2.9, PAL.white, 0, 3.4, 0, g);
-      for (let i = -1; i <= 1; i += 1) cyl(0.13, 0.13, 2.2, PAL.white, i, 1, 1.4, 8, g);
-      const coin = cyl(0.8, 0.8, 0.22, PAL.gold, 0, 4.1, 0, 20, g); coin.rotation.x = Math.PI / 2; coin.position.y = 4.6; g.userData.coin = coin; }
-    { const g = group("rezerwy", 4.4, -5.2);
-      const tops = [];
-      [[-0.8, 0], [0.8, 0], [0, -1.1]].forEach(([x, z]) => { cyl(0.75, 0.75, 3, 0xe6e9ef, x, 1, z, 14, g); tops.push(cyl(0.01, 0.78, 0.7, PAL.roofGreen, x, 4, z, 14, g)); });
-      g.userData.tops = tops; }
-    { const g = group("farma", -5.4, 4.8);
-      box(2.4, 1.8, 2, PAL.roofRed, 1.8, 1, 0.2, g); roof(2.4, 2.1, 1, PAL.wall, 1.8, 2.8, 0.2, g); box(0.8, 1.1, 0.05, PAL.white, 1.8, 1, 1.22, g);
-      const fields = [];
-      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) fields.push(box(1.05, 0.25, 1.05, PAL.wheat, -1.6 + i * 1.15, 1, -1.0 + j * 1.15, g));
-      g.userData.fields = fields; }
-    { const g = group("piekarnia", 0.6, 4.6);
-      box(2.6, 1.9, 2.2, PAL.wall, 0, 1, 0, g); roof(2.7, 2.4, 1, PAL.roofRed, 0, 2.9, 0, g);
-      box(0.4, 1.4, 0.4, PAL.stone, 0.8, 3, -0.5, g); box(1.4, 0.5, 0.08, PAL.wood, 0, 2.1, 1.12, g);
-      const bread = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), mat(0xd9984a)); bread.scale.set(1.4, 0.8, 1); bread.position.set(0, 2.35, 1.2); g.add(bread); }
-    { const g = group("sklep", 4.2, 4.6);
-      box(2.2, 1.6, 2, PAL.wall, 0, 1, 0, g); box(2.4, 0.15, 0.9, PAL.roofGreen, 0, 2.5, 1.2, g);
-      box(2.3, 0.2, 2.1, PAL.roofGreen, 0, 2.6, 0, g); box(0.7, 1, 0.05, PAL.dark, 0, 1, 1.02, g); }
-    { const g = group("granica", 0, 0);
-      cyl(0.08, 0.08, 1.4, PAL.dark, 6.5, 1, -0.1, 6, g); g.userData.bar = box(2.2, 0.14, 0.14, PAL.flagR, 5.4, 2.1, -0.1, g); box(1, 1, 1, PAL.stone, 6.4, 1, -1, g); }
-    const lots = {
-      piekarnia2: { x: 4.6, z: -1.9, chimney: [5.3, 4.4, -2.4], build(g){ box(2.4, 1.8, 2, PAL.wall, 0, 1, 0, g); roof(2.5, 2.2, 0.9, PAL.roofBlue, 0, 2.8, 0, g); box(0.4, 1.3, 0.4, PAL.stone, 0.7, 2.8, -0.5, g); } },
-      nawadnianie: { x: -2.3, z: 7.2, build(g){ box(2.2, 0.08, 1.4, PAL.water, 0, 1, 0, g); cyl(0.12, 0.12, 0.8, PAL.pipe, 1.2, 1, 0, 6, g); box(3.2, 0.12, 0.12, PAL.pipe, -1.0, 1.7, -1.2, g); cyl(0.25, 0.25, 0.3, PAL.dark, 1.2, 1.8, 0, 8, g); } },
-    };
-    const lotMarks = {};
-    Object.entries(lots).forEach(([id, l]) => { lotMarks[id] = box(2.4, 0.04, 2, 0xd8c79a, l.x, 1, l.z); });
-    [[-7.4, -0.9], [-4.6, -1.2], [2.0, -1.6]].forEach(([x, z], i) => { box(1.2, 1, 1.1, PAL.wall, x, 1, z); roof(1.3, 1.2, 0.6, [PAL.roofRed, PAL.roofBlue, PAL.roofGreen][i], x, 2, z); });
-    [[-7.8, 7.6], [6.8, 7.2], [-8, -7.8], [1.2, -7.9], [6.4, 3.4], [-2.8, -2.6]].forEach(([x, z]) => tree(x, z, 0.95));
+    // --- teren
+    const W = 30, Dp = 22;
+    const grassMat = new THREE.MeshLambertMaterial({ color: C3.grass });
+    box(W, 1, Dp, grassMat, 0, 0, 0); box(W, 2.6, Dp, C3.soil, 0, -2.6, 0); box(W - 0.4, 1.2, Dp - 0.4, 0x6b4429, 0, -3.8, 0);
+    const water = new THREE.MeshLambertMaterial({ color: C3.water, transparent: true, opacity: 0.92 });
+    box(4.2, 0.08, Dp, water, 12.9, 0.96, 0);
+    box(W - 4.2, 0.05, 1.5, C3.road, -2.1, 1, 0.2); box(1.5, 0.05, 9.6, C3.road, 1.6, 1, -5.6); box(1.5, 0.05, 6.4, C3.road, -6.5, 1, 4.4);
+    for (let x = -14.5; x < 10.8; x += 0.7) box(0.16, 0.06, 1.1, C3.wood, x, 1, 8.6);
+    box(25.4, 0.08, 0.1, C3.steel, -1.85, 1.05, 8.25); box(25.4, 0.08, 0.1, C3.steel, -1.85, 1.05, 8.95);
+    const lamps = [];
+    const lamp = (x, z) => { cyl(0.05, 0.05, 1.3, C3.dark, x, 1, z); const b = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshLambertMaterial({ color: 0xfff1b0, emissive: 0x000000 })); b.position.set(x, 2.35, z); scene.add(b); lamps.push(b); };
+    [[-12, 1.2], [-6, 1.2], [0, 1.2], [6, 1.2], [2.6, -3], [2.6, -7]].forEach(([x, z]) => lamp(x, z));
+    const trees = [];
+    const tree = (x, z, s = 1, pine) => { cyl(0.1 * s, 0.14 * s, 0.6 * s, C3.wood, x, 1, z, scene, 6); const g = pine ? new THREE.ConeGeometry(0.6 * s, 1.5 * s, 7) : new THREE.IcosahedronGeometry(0.6 * s, 0); const t = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x3fa35a })); t.position.set(x, 1 + (pine ? 1.3 : 1.05) * s, z); t.castShadow = true; scene.add(t); trees.push(t); };
+    [[-14, -10], [-13, 9.8], [-8.5, -9.6], [9.8, 9.5], [8, -10], [-3.5, 9.9], [4.5, 10], [-14.2, -2.5], [10.4, 3.8], [-4.4, -4.2], [5.2, -1.6]].forEach(([x, z], i) => tree(x, z, 0.9 + (i % 3) * 0.12, i % 2));
 
-    // obiekty ruchome — animowane tylko, gdy płynie czas
-    const mkTruck = () => { const t = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 0.6), mat(PAL.truck)); b.position.set(0, 0.55, 0); b.castShadow = true; t.add(b); const c = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.6), mat(PAL.white)); c.position.set(-0.75, 0.5, 0); t.add(c); const gr = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.25, 0.5), mat(PAL.wheat)); gr.position.set(0.05, 0.95, 0); t.add(gr); return t; };
-    const mkPerson = c => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.7, 8), mat(c)); b.position.y = 0.35; b.castShadow = true; g.add(b); const h = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), mat(PAL.skin)); h.position.y = 0.85; g.add(h); return g; };
-    const trucks = [], queue = [], walkers = [], smoke = [];
-    for (let i = 0; i < 6; i++){ const t = mkTruck(); t.visible = false; scene.add(t); trucks.push({ o: t, phase: i / 6 }); }
-    for (let i = 0; i < 7; i++){ const p = mkPerson(PAL.people); p.visible = false; p.position.set(3.0 + i * 0.45, 1, 6.6); scene.add(p); queue.push(p); }
-    [[0xff9d5c, -6, 0.04], [0x6fa8ff, 2, -0.03], [0xb07ae0, -2, 0.025]].forEach(([c, x, v], i) => { const p = mkPerson(c); p.position.set(x, 1, 2.0 + i * 0.3); scene.add(p); walkers.push({ o: p, v }); });
-    const smokeSrc = [[1.4, 4.5, 4.1]];
-    for (let i = 0; i < 10; i++){ const s = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshLambertMaterial({ color: PAL.smoke, transparent: true, opacity: 0.7 })); s.visible = false; scene.add(s); smoke.push({ o: s, t: i / 10 }); }
+    const groups = {}, anchor = {};
+    const group = (id, x, z, ay = 3.5) => { const g = new THREE.Group(); g.position.set(x, 0, z); g.userData.id = id; scene.add(g); groups[id] = g; anchor[id] = [x, ay, z]; return g; };
 
+    // --- rolnictwo (zachód)
+    const fields = [];
+    { const g = group("farma", -10.5, -3.5, 3);
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++){
+        box(2.2, 0.12, 2.2, 0x7a5232, -2.6 + i * 2.5, 1, -2.6 + j * 2.5, g);
+        const crop = box(2.0, 0.5, 2.0, new THREE.MeshLambertMaterial({ color: C3.wheat }), -2.6 + i * 2.5, 1.12, -2.6 + j * 2.5, g);
+        fields.push({ crop });
+      }
+      box(1.8, 1.4, 1.4, C3.red, 3.2, 1, 3.4, g); gable(1.9, 1.5, 0.9, C3.wall, 3.2, 2.4, 3.4, g); }
+    const silos = [];
+    { const g = group("silosy", -10.5, 4.2, 4.2);
+      [[-1.6, 0], [0, 0], [1.6, 0]].forEach(([x, z]) => { cyl(0.7, 0.7, 3.2, 0xe4e7ec, x, 1, z, g, 16); cyl(0.01, 0.75, 0.6, C3.steel, x, 4.2, z, g, 16);
+        const fill = cyl(0.72, 0.72, 1, new THREE.MeshLambertMaterial({ color: C3.gold }), x, 1, z, g, 16); silos.push(fill); });
+      box(5, 0.15, 1.6, C3.stone, 0, 1, 1.5, g); }
+    const lots = {};
+    lots.nawadnianie = { x: -10.5, z: -9.4, w: 7, d: 1.6, build(g){ box(7, 0.06, 0.7, water, 0, 1, 0, g); [-3, 0, 3].forEach(x => { cyl(0.1, 0.1, 0.9, C3.steel, x, 1, 0.6, g, 6); box(0.1, 0.1, 2.2, C3.steel, x, 1.9, -0.4, g); }); } };
+
+    // --- piekarnie (północ)
+    const bakerySmoke = [];
+    const bakerySlots = [[-3.8, -6.2], [-0.6, -9.2], [-4.4, -9.4]];
+    const makeBakery = (i) => { const [x, z] = bakerySlots[i]; const g = group(i === 0 ? "piekarnia" : "piekarnia" + (i + 1), x, z, 3.6);
+      box(2.6, 1.8, 2.2, C3.wall, 0, 1, 0, g); gable(2.8, 2.4, 1.1, i ? C3.blue : C3.red, 0, 2.8, 0, g); box(0.45, 1.6, 0.45, C3.stone, 0.8, 2.9, -0.5, g);
+      box(1.6, 0.45, 0.06, C3.wood, 0, 2.0, 1.12, g); const loaf = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), M(0xd9984a)); loaf.scale.set(1.5, 0.75, 1); loaf.position.set(0, 2.25, 1.2); g.add(loaf);
+      g.userData.win = box(0.7, 0.6, 0.05, new THREE.MeshLambertMaterial({ color: C3.glass, emissive: 0x000000 }), -0.7, 1.4, 1.11, g);
+      bakerySmoke.push([x + 0.8, 4.6, z - 0.5]); return g; };
+    makeBakery(0);
+
+    // --- miasto (centrum)
+    const houses = [];
+    [[-1.6, 3], [0.2, 3.4], [-3.4, 3.6], [4.6, 3.4], [6.4, 3.2], [-5.2, 6.4], [-3, 6.2], [4, 6.4], [6.4, 6.2], [-0.6, 6.1], [8.2, 4.6], [1.8, 6.4]].forEach(([x, z], i) => { const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+      const h = 1 + (i % 3) * 0.35, c = [C3.red, C3.blue, C3.green, C3.orange, C3.purple, C3.teal][i % 6];
+      box(1.3, h, 1.2, C3.wall, 0, 1, 0, g); gable(1.4, 1.3, 0.7, c, 0, 1 + h, 0, g);
+      const win = box(0.35, 0.3, 0.04, new THREE.MeshLambertMaterial({ color: 0x8aa7c4, emissive: 0x000000 }), 0.25, 1 + h * 0.55, 0.62, g); houses.push({ win, on: (i * 0.37) % 1 }); });
+    { const g = group("sklep", 2.6, 3.0, 3);
+      box(2.4, 1.4, 1.8, C3.wall, 0, 1, 0, g); box(2.6, 0.15, 0.9, C3.green, 0, 2.2, 1.2, g); box(2.5, 0.2, 1.9, C3.green, 0, 2.4, 0, g);
+      box(1.6, 0.8, 0.05, new THREE.MeshLambertMaterial({ color: C3.glass }), 0, 1.25, 0.91, g); }
+    { const g = group("rzad", -6.2, -2.8, 5.4);
+      box(4, 0.3, 2.8, C3.stone, 0, 1, 0, g); box(3.6, 1.9, 2.2, C3.wall, 0, 1.3, -0.1, g);
+      for (let i = -1.5; i <= 1.5; i += 0.75) cyl(0.11, 0.11, 1.9, C3.white, i, 1.3, 1.15, g, 8);
+      box(3.9, 0.3, 2.6, C3.stone, 0, 3.2, 0, g); roof(4, 2.8, 1, C3.blue, 0, 3.5, 0, g);
+      cyl(0.04, 0.04, 1.8, C3.dark, 1.7, 4.4, -0.8, g, 6); g.userData.flag = box(0.9, 0.5, 0.04, C3.red, 2.15, 5.6, -0.8, g); }
+    { const g = group("nbp", -1.6, -2.6, 4.6);
+      box(2.8, 2.4, 2.2, C3.stone, 0, 1, 0, g); box(3.1, 0.3, 2.5, C3.white, 0, 3.4, 0, g);
+      for (let i = -1; i <= 1; i++) cyl(0.12, 0.12, 2.2, C3.white, i, 1, 1.2, g, 8);
+      const coin = cyl(0.65, 0.65, 0.16, C3.gold, 0, 4.2, 0, g, 24); coin.rotation.x = Math.PI / 2; coin.position.y = 4.5; g.userData.coin = coin; }
+    { const g = group("bank", 5.6, -2.8, 4.4);
+      box(2.2, 2.8, 2, C3.glass, 0, 1, 0, g); box(2.3, 0.2, 2.1, C3.steel, 0, 3.8, 0, g);
+      for (let y = 1.4; y < 3.6; y += 0.55) box(2.24, 0.06, 2.04, C3.steel, 0, y, 0, g); }
+
+    // --- przemysł (północny wschód)
+    const factorySmoke = [];
+    { const g = group("fabryka", 6.8, -7.4, 4.6);
+      box(4.2, 2, 3, 0xc9ccd3, 0, 1, 0, g); for (let i = 0; i < 3; i++) gable(1.4, 3, 0.6, C3.steel, -1.4 + i * 1.4, 3, 0, g);
+      cyl(0.3, 0.38, 3.2, C3.red, 1.6, 1, -1, g, 10); factorySmoke.push([8.4, 4.4, -8.4]); }
+    lots.elektrownia = { x: 2.0, z: -9.4, w: 3.4, d: 2.6, build(g){ cyl(1.0, 1.25, 3, 0xd9dde4, -0.6, 1, 0, g, 18); box(1.6, 1.6, 1.6, C3.stone, 1.0, 1, 0.4, g); box(0.1, 3, 0.1, C3.steel, 1.6, 2.6, -0.6, g); } };
+    lots.piekarnia = { x: bakerySlots[1][0], z: bakerySlots[1][1], w: 2.8, d: 2.4 };
+    lots.kolej = { x: -7.6, z: 7.1, w: 3.6, d: 1.4, build(g){ box(3.6, 0.3, 1.4, C3.stone, 0, 1, 0, g); box(3.2, 1.2, 0.12, C3.wall, 0, 1.3, -0.6, g); box(3.6, 0.14, 1.4, C3.red, 0, 2.5, 0, g); } };
+    lots.port = { x: 10.4, z: -4.2, w: 1.6, d: 4, build(g){ box(1.6, 0.4, 4, C3.stone, 0, 0.8, 0, g); cyl(0.12, 0.12, 3, C3.orange, 0, 1.2, -1.2, g, 6); box(0.14, 0.14, 2.6, C3.orange, 0.9, 4.1, -1.2, g); } };
+
+    // --- port (wschód)
+    { const g = group("port", 10.4, 2.4, 3.2);
+      box(1.6, 0.4, 5, C3.stone, 0, 0.8, 0, g); cyl(0.12, 0.12, 2.6, C3.orange, 0, 1.2, -1.4, g, 6); box(0.14, 0.14, 2.4, C3.orange, 0.9, 3.7, -1.4, g);
+      [C3.red, C3.blue, C3.green].forEach((c, i) => box(0.9, 0.5, 0.45, c, -0.1, 1.2, 0.6 + i * 0.6, g)); }
+    const ship = new THREE.Group(); { box(3.2, 0.7, 1.1, C3.dark, 0, 0, 0, ship); box(0.9, 0.7, 0.9, C3.white, -1, 0.7, 0, ship); [C3.red, C3.gold].forEach((c, i) => box(0.8, 0.4, 0.8, c, 0.3 + i * 0.9, 0.7, 0, ship)); ship.position.set(13, 0.85, 6); ship.rotation.y = Math.PI / 2; scene.add(ship); }
+
+    // --- budowy
+    const lotMarks = {}, built = {}, scaff = {};
+    Object.entries(lots).forEach(([k, l]) => { lotMarks[k] = box(l.w, 0.04, l.d, 0xd9c99a, l.x, 1, l.z); });
+
+    // --- ruch
+    const carColors = [C3.red, C3.blue, C3.gold, C3.green, C3.white, C3.purple];
+    const mkCar = (c, truck) => { const t = new THREE.Group(); box(truck ? 1.2 : 0.8, truck ? 0.6 : 0.36, 0.5, truck ? C3.blue : c, 0, 0.12, 0, t); box(truck ? 0.38 : 0.42, 0.3, 0.46, truck ? C3.white : 0xdfeaf5, truck ? -0.75 : 0, truck ? 0.12 : 0.48, 0, t); if (truck) t.userData.load = box(1.0, 0.25, 0.42, C3.wheat, 0.08, 0.72, 0, t); t.visible = false; scene.add(t); return t; };
+    const cars = Array.from({ length: 14 }, (_, i) => ({ o: mkCar(carColors[i % 6]), ph: i / 14, lane: i % 2 }));
+    const trucks = Array.from({ length: 6 }, (_, i) => ({ o: mkCar(0, true), ph: i / 6 }));
+    const train = new THREE.Group(); { box(1.6, 0.9, 0.8, C3.red, 0, 0.1, 0, train); for (let i = 1; i <= 4; i++) box(1.5, 0.7, 0.75, i % 2 ? C3.steel : C3.gold, -i * 1.7, 0.1, 0, train); train.position.set(-16, 1.05, 8.6); scene.add(train); }
+    const mkPerson = c => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 0.55, 8), M(c)); b.position.y = 0.28; b.castShadow = true; g.add(b); const h = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), M(C3.skin)); h.position.y = 0.7; g.add(h); scene.add(g); return g; };
+    const queue = Array.from({ length: 9 }, (_, i) => { const p = mkPerson([C3.orange, C3.blue, C3.purple][i % 3]); p.position.set(3.6 + (i % 5) * 0.42, 1, 4.4 + Math.floor(i / 5) * 0.5); p.visible = false; return p; });
+    const walkers = Array.from({ length: 10 }, (_, i) => ({ o: mkPerson([C3.orange, C3.blue, C3.purple, C3.green, C3.red][i % 5]), x: -10 + i * 2, v: (i % 2 ? 1 : -1) * (0.03 + i * 0.002), z: 1.0 + (i % 2) * 0.5 }));
+    const workers = Array.from({ length: 6 }, () => { const p = mkPerson(C3.gold); p.visible = false; return p; });
+
+    // --- dym i opady
+    const smoke = Array.from({ length: 26 }, (_, i) => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshLambertMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.6 })); s.visible = false; scene.add(s); return { o: s, t: i / 26 }; });
+    const RN = 700, rp = new Float32Array(RN * 3);
+    for (let i = 0; i < RN; i++){ rp[i * 3] = (Math.random() - 0.5) * W; rp[i * 3 + 1] = Math.random() * 14 + 1; rp[i * 3 + 2] = (Math.random() - 0.5) * Dp; }
+    const rainGeo = new THREE.BufferGeometry(); rainGeo.setAttribute("position", new THREE.BufferAttribute(rp, 3));
+    const rainMat = new THREE.PointsMaterial({ color: 0xa8c8ff, size: 0.09, transparent: true, opacity: 0.75 }), snowMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.16, transparent: true, opacity: 0.9 });
+    const rain = new THREE.Points(rainGeo, rainMat); rain.visible = false; scene.add(rain);
+
+    // --- wybór obiektów
     const ray = new THREE.Raycaster(), v2 = new THREE.Vector2();
     const pick = (cx, cy) => { const r = canvas.getBoundingClientRect(); v2.set((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1); ray.setFromCamera(v2, cam); const hit = ray.intersectObjects(Object.values(groups), true)[0]; let o = hit?.object; while (o && !o.userData.id) o = o.parent; return o?.userData.id || null; };
-    const hlCache = new Map(), hl = base => { if (!hlCache.has(base)){ const m = base.clone(); m.emissive = new THREE.Color(0x3366aa); m.emissiveIntensity = 0.35; hlCache.set(base, m); } return hlCache.get(base); };
-    let current = null;
-    const highlight = id => { current = id; Object.entries(groups).forEach(([k, g]) => g.traverse(m => { if (!m.isMesh) return; if (!m.userData.m0) m.userData.m0 = m.material; m.material = k === id ? hl(m.userData.m0) : m.userData.m0; })); };
+    let selected = null;
+    const hl = new Map();
+    const highlight = id => { selected = id; Object.entries(groups).forEach(([k, g]) => g.traverse(m => { if (!m.isMesh) return; if (!m.userData.m0) m.userData.m0 = m.material; if (k === id){ if (!hl.has(m.userData.m0)){ const c = m.userData.m0.clone(); c.emissive = new THREE.Color(0x2a4a8a); c.emissiveIntensity = 0.45; hl.set(m.userData.m0, c); } m.material = hl.get(m.userData.m0); } else m.material = m.userData.m0; })); };
 
+    // --- stan wizualny (z gospodarki)
+    let V = { prod: 1, trade: 0.3, act: 1, short: 0, stock: 0.6, crop: 1, month: 0, dayIn: 0, rain: 1, energy: 1, building: [], built: [], bakeries: 1, running: false, speed: 1, workers: 0.94 };
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const built = {}, scaff = {};
-    let view = { load: 1 }, running = false, raf = 0;
-    function popIn(g){
-      if (reduce){ g.scale.set(1, 1, 1); render(); return; }
-      const t0 = performance.now();
-      const step = t => { const k = Math.min(1, (t - t0) / 500), e = 1 - Math.pow(1 - k, 3) * (1 - 1.7 * k * (1 - k)); g.scale.set(1, Math.max(0.01, e), 1); render(); if (k < 1) requestAnimationFrame(step); };
-      requestAnimationFrame(step);
-    }
+    const season = m => [0.0, 0.05, 0.25, 0.55, 0.8, 1, 1, 0.95, 0.75, 0.5, 0.25, 0.05][m];
+    const cGrass = new THREE.Color(), cTmp = new THREE.Color(), sky = new THREE.Color();
     function apply(v){
-      view = v;
-      const f = groups.farma.userData.fields, n = Math.round(clamp(v.harvest / 100, 0, 1) * f.length);
-      f.forEach((m, i) => { m.userData.m0 = mat(i < n ? PAL.wheat : PAL.wheatDry); m.material = m.userData.m0; m.scale.y = i < n ? 1.6 : 0.5; });
-      groups.rezerwy.userData.tops.forEach((t, i) => { t.userData.m0 = mat(v.stock > i * 18 ? PAL.roofGreen : 0xc9c9c9); t.material = t.userData.m0; });
-      groups.granica.userData.bar.rotation.z = v.blockade ? 0 : 0.9;
-      trucks.forEach((t, i) => { t.o.visible = i < Math.round(v.imports / 8); });
-      queue.forEach((p, i) => { p.visible = i < Math.round(clamp(v.shortage / 3, 0, 7)); });
-      Object.entries(lots).forEach(([id, l]) => {
-        if (v.underConstruction.includes(id) && !scaff[id]){
-          const g = new THREE.Group(); g.position.set(l.x, 0, l.z);
-          for (const [x, z] of [[-1, -0.8], [1, -0.8], [-1, 0.8], [1, 0.8]]){ const p = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.8, 0.1), mat(PAL.scaffold)); p.position.set(x, 1.9, z); g.add(p); }
-          const beam = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 1.8), mat(PAL.scaffold)); beam.position.set(0, 2.8, 0); g.add(beam);
-          const crane = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 2.6), mat(PAL.scaffold)); crane.position.set(0.9, 3.6, 0); g.add(crane); g.userData.crane = crane;
-          scene.add(g); scaff[id] = g;
-        }
-        if (!v.underConstruction.includes(id) && scaff[id]){ scene.remove(scaff[id]); delete scaff[id]; }
-        if (v.built.includes(id) && !built[id]){ const g = group(id, l.x, l.z); l.build(g); g.scale.set(1, 0.01, 1); built[id] = g; scene.remove(lotMarks[id]); popIn(g); if (l.chimney) smokeSrc.push(l.chimney); }
+      V = { ...V, ...v };
+      const gr = season(V.month), dry = clamp(1 - V.rain, 0, 0.6) * (V.month >= 3 && V.month <= 8 ? 1 : 0.3);
+      cGrass.setRGB(lerp(0.70, 0.47, gr), lerp(0.74, 0.78, gr), lerp(0.62, 0.33, gr));
+      const winter = V.month === 11 || V.month <= 1;
+      if (winter) cGrass.lerp(cTmp.set(0xf2f5fa), V.month === 0 ? 0.75 : 0.45);
+      cGrass.lerp(cTmp.set(0xc9b86a), dry * 1.1); grassMat.color.copy(cGrass);
+      trees.forEach((t, i) => { t.material.color.set(V.month >= 9 && V.month <= 10 && i % 2 === 0 ? 0xd98b2b : winter ? (i % 2 ? 0x2f7a4a : 0x9a8f80) : 0x3fa35a); if (winter) t.material.color.lerp(cTmp.set(0xffffff), 0.35); });
+      const m = V.month, hgt = m < 3 ? 0.08 : m < 6 ? 0.3 + (m - 3) * 0.25 : m < 9 ? 1 : 0.06;
+      const col = m < 3 || m > 8 ? (winter ? 0xf0f2f6 : 0x8a6a45) : m < 6 ? 0x6cc04a : 0xf0c94a;
+      const cut = m >= 6 && m <= 8 ? Math.floor(((m - 6) + V.dayIn) / 3 * 9) : 0;
+      fields.forEach((f, i) => { const harvested = i < cut; f.crop.scale.y = harvested ? 0.12 : clamp(hgt * (0.55 + 0.45 * V.crop), 0.06, 1.3); f.crop.material.color.set(harvested ? 0xc8a46a : col); if (m >= 3 && m <= 8 && !harvested) f.crop.material.color.lerp(cTmp.set(0xb59a5a), clamp(1 - V.crop, 0, 0.6)); });
+      silos.forEach((s, i) => { const f = clamp(V.stock * 3 - i, 0, 1); s.scale.y = Math.max(0.01, f * 3.2); s.visible = f > 0.01; });
+      queue.forEach((p, i) => p.visible = i < Math.round(clamp(V.short * 0.9, 0, 9)));
+      Object.entries(lots).forEach(([k, l]) => {
+        const isB = V.building.includes(k);
+        if (isB && !scaff[k]){ const g = new THREE.Group(); g.position.set(l.x, 0, l.z); for (const [x, z] of [[-1, -0.8], [1, -0.8], [-1, 0.8], [1, 0.8]]){ const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.2, 0.09), M(0xf0a030)); p.position.set(x * l.w * 0.4, 2.1, z * l.d * 0.4); g.add(p); }
+          const cr = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3), M(0xf0a030)); cr.position.set(0, 4, 0); g.add(cr); g.userData.crane = cr; const mast = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3, 0.14), M(0xf0a030)); mast.position.set(0, 2.5, 0); g.add(mast); scene.add(g); scaff[k] = g; }
+        if (!isB && scaff[k]){ scene.remove(scaff[k]); delete scaff[k]; }
       });
-      if (current) highlight(current);
-      place(0); render();
+      if (V.bakeries > 1 && !built.piekarnia2){ built.piekarnia2 = makeBakery(1); scene.remove(lotMarks.piekarnia); popIn(built.piekarnia2); }
+      if (V.bakeries > 2 && !built.piekarnia3){ built.piekarnia3 = makeBakery(2); popIn(built.piekarnia3); }
+      ["nawadnianie", "elektrownia", "kolej", "port"].forEach(k => { if (V.built.includes(k) && !built[k]){ const l = lots[k], g = group(k === "port" ? "port2" : k, l.x, l.z, 3); l.build(g); scene.remove(lotMarks[k]); built[k] = g; popIn(g); if (k === "elektrownia") factorySmoke.push([1.4, 4.2, -9.4]); } });
+      if (selected) highlight(selected);
     }
-    function place(t){
-      trucks.forEach((tr, i) => {
-        if (!tr.o.visible) return;
-        if (!running || reduce){ tr.o.position.set(8.9, 1, -5.6 + i * 1.3); tr.o.rotation.y = Math.PI / 2; return; }
-        const k = (tr.phase + t * 0.00008) % 1;
-        if (k < 0.3){ tr.o.position.set(8.9, 1, -6 + (k / 0.3) * 7.2); tr.o.rotation.y = -Math.PI / 2; }
-        else { tr.o.position.set(8.9 - ((k - 0.3) / 0.7) * 7.6, 1.06, 1.2 + (i % 2 ? 0.35 : -0.35)); tr.o.rotation.y = 0; }
-      });
-      walkers.forEach((w, i) => { if (running && !reduce){ w.o.position.x += w.v; if (w.o.position.x > 7 || w.o.position.x < -8.5) w.v *= -1; w.o.position.y = 1 + Math.abs(Math.sin(t * 0.01 + i)) * 0.06; } });
-      queue.forEach((p, i) => { if (p.visible) p.position.y = 1 + (running && !reduce ? Math.abs(Math.sin(t * 0.006 + i)) * 0.05 : 0); });
-      smoke.forEach((s, i) => {
-        const src = smokeSrc[i % smokeSrc.length];
-        if (!running || reduce || i >= Math.round(10 * clamp(view.load, 0.2, 1))){ s.o.visible = false; return; }
-        s.t = (s.t + 0.004) % 1; s.o.visible = true;
-        s.o.position.set(src[0] + Math.sin(i + s.t * 3) * 0.2, src[1] + s.t * 2.4, src[2]);
-        s.o.scale.setScalar(0.6 + s.t * 1.2); s.o.material.opacity = 0.65 * (1 - s.t);
-      });
-      Object.values(scaff).forEach(g => { if (running && !reduce) g.userData.crane.rotation.y = t * 0.0006; });
-      if (running && !reduce) groups.nbp.userData.coin.rotation.z = t * 0.0015;
+    function popIn(g){ if (reduce) return; const t0 = performance.now(); g.scale.set(1, 0.01, 1); const step = t => { const k = Math.min(1, (t - t0) / 600), e = 1 - Math.pow(1 - k, 3); g.scale.set(1, Math.max(0.01, e), 1); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+
+    // --- animacja: świat żyje zawsze, szybciej gdy płynie czas
+    let last = 0, t = 0, tod = 0.35, raf = 0, alive = true;
+    function frame(now){
+      if (!alive) return;
+      raf = requestAnimationFrame(frame);
+      if (now - (frame.lt || 0) < 33) return;
+      const dt = Math.min(0.1, (now - (frame.lt || now)) / 1000); frame.lt = now;
+      const go = V.running && !reduce, sp = go ? Math.min(3, 0.6 + V.speed * 0.25) : 0.2;
+      t += dt * sp;
+      // dzień i noc: pełny cykl ok. 80 s przy ▶; przy ⏭ i pauzie powoli wraca do dnia
+      if (go && V.speed < 16) tod = (tod + dt / 80) % 1; else tod = lerp(tod, tod > 0.75 ? 1.35 : 0.35, 0.01) % 1;
+      const daylight = clamp(Math.sin(tod * Math.PI) * 1.5 - 0.2, 0, 1), ang = (tod - 0.25) * Math.PI;
+      sun.position.set(-Math.cos(tod * Math.PI) * 30, 6 + 26 * daylight, 14); sun.intensity = 0.12 + 0.82 * daylight; void ang;
+      hemi.intensity = 0.32 + 0.42 * daylight;
+      sky.setRGB(lerp(0.10, 0.74, daylight), lerp(0.13, 0.88, daylight), lerp(0.28, 1, daylight));
+      if (daylight > 0.05 && daylight < 0.45) sky.lerp(cTmp.set(0xf6a96b), 0.35 * (1 - Math.abs(daylight - 0.25) * 4));
+      if (V.rain > 1.12) sky.lerp(cTmp.set(0x9aa6b4), 0.4);
+      scene.background = sky; scene.fog.color.copy(sky);
+      const night = 1 - daylight, lit = night > 0.45;
+      lamps.forEach(l => l.material.emissive.setRGB(night, night * 0.85, night * 0.4));
+      houses.forEach(h => { const on = lit && h.on < 0.25 + 0.7 * V.workers; h.win.material.emissive.setRGB(on ? 0.95 : 0, on ? 0.75 : 0, on ? 0.35 : 0); });
+      Object.keys(groups).filter(k => k.startsWith("piekarnia")).forEach(k => { const w = groups[k].userData.win; if (w) w.material.emissive.setRGB(0.9 * clamp(V.prod, 0, 1) * (0.25 + night), 0.5 * clamp(V.prod, 0, 1) * (0.25 + night), 0.08); });
+      const nCars = Math.round(clamp(V.act, 0.5, 1.3) * 12 - 3);
+      cars.forEach((c, i) => { c.o.visible = i < nCars; if (!c.o.visible) return; const k = (c.ph + t * 0.035 * (c.lane ? 1 : 0.9)) % 1; const x = c.lane ? lerp(-14.5, 11, k) : lerp(11, -14.5, k); c.o.position.set(x, 1.02, c.lane ? 0.55 : -0.15); c.o.rotation.y = c.lane ? 0 : Math.PI; });
+      const nTr = Math.round(clamp(V.prod, 0, 1.2) * 5);
+      trucks.forEach((c, i) => { c.o.visible = i < nTr; if (!c.o.visible) return; const k = (c.ph + t * 0.025) % 1; let x, z, ry;
+        if (k < 0.35){ x = -6.5; z = lerp(2.8, 0.5, k / 0.35); ry = Math.PI / 2; } else if (k < 0.7){ x = lerp(-6.5, 1.6, (k - 0.35) / 0.35); z = 0.55; ry = 0; } else { x = 1.6; z = lerp(0.2, -5.2, (k - 0.7) / 0.3); ry = Math.PI / 2; }
+        c.o.position.set(x, 1.02, z); c.o.rotation.y = ry; c.o.userData.load.visible = V.stock > 0.03; });
+      train.position.x = -16 + ((t * 1.6 * (0.5 + V.act * 0.6 + (V.built.includes("kolej") ? 0.5 : 0))) % 34);
+      ship.position.z = 7 - ((t * 0.6 * (0.3 + V.trade)) % 16);
+      walkers.forEach((w, i) => { w.x += w.v * (go ? 1 : 0.3); if (w.x > 9 || w.x < -14) w.v *= -1; w.o.position.set(w.x, 1 + Math.abs(Math.sin(t * 6 + i)) * 0.05, w.z); w.o.rotation.y = w.v > 0 ? Math.PI / 2 : -Math.PI / 2; w.o.visible = i < Math.round(3 + 7 * V.workers) && !(lit && i > 3); });
+      queue.forEach((p, i) => { if (p.visible) p.position.y = 1 + Math.abs(Math.sin(t * 4 + i)) * 0.04; });
+      const sk = Object.keys(scaff);
+      workers.forEach((p, i) => { const k = sk[i % Math.max(1, sk.length)]; p.visible = !!k && i < sk.length * 3; if (p.visible){ const l = lots[k]; p.position.set(l.x + Math.sin(t * 1.5 + i) * 0.9, 1, l.z + l.d / 2 + 0.4 + (i % 2) * 0.2); } });
+      const srcs = [...bakerySmoke.map(s => [s, V.prod]), ...factorySmoke.map(s => [s, V.act])];
+      smoke.forEach((s, i) => { const [src, lvl] = srcs[i % srcs.length]; if (i >= 26 * clamp(lvl, 0.15, 1.1)){ s.o.visible = false; return; } s.t = (s.t + dt * 0.25 * (go ? 1 : 0.4)) % 1; s.o.visible = true; s.o.position.set(src[0] + Math.sin(i + s.t * 3) * 0.25, src[1] + s.t * 2.8, src[2]); s.o.scale.setScalar(0.5 + s.t * 1.4); s.o.material.opacity = 0.55 * (1 - s.t); s.o.material.color.setScalar(V.energy > 1.3 ? 0.62 : 0.93); });
+      const winter = V.month === 11 || V.month <= 1, wet = V.rain > 1.1 || (winter && V.rain > 1.02);
+      rain.visible = wet && !reduce; rain.material = winter ? snowMat : rainMat;
+      if (rain.visible){ const a = rain.geometry.attributes.position; for (let i = 0; i < RN; i++){ let y = a.array[i * 3 + 1] - (winter ? 0.05 : 0.35); if (y < 1) y = 15; a.array[i * 3 + 1] = y; } a.needsUpdate = true; }
+      Object.values(scaff).forEach(g => g.userData.crane.rotation.y = t * 0.4);
+      groups.nbp.userData.coin.rotation.z = t * 0.8;
+      groups.rzad.userData.flag.rotation.y = Math.sin(t * 3) * 0.15;
+      R.render(scene, cam);
     }
-    function loop(t){ if (!running) return; place(t); render(); raf = requestAnimationFrame(loop); }
-    function setRunning(v){ running = v; cancelAnimationFrame(raf); if (v && !reduce) raf = requestAnimationFrame(loop); else { place(0); render(); } }
+    raf = requestAnimationFrame(frame);
     let w = 0, h = 0;
     function resize(){
-      const r = canvas.parentElement.getBoundingClientRect(); w = r.width; h = r.height;
-      renderer.setSize(w, h, false);
-      const aspect = w / h, s = aspect < 1 ? 11.6 / aspect : (aspect > 1.6 ? 9.0 : 10.4 / Math.sqrt(aspect / 1.2));
-      cam.left = -s * aspect; cam.right = s * aspect; cam.top = s; cam.bottom = -s; cam.updateProjectionMatrix(); render();
+      const r = canvas.parentElement.getBoundingClientRect(); w = r.width; h = r.height; R.setSize(w, h, false);
+      const aspect = w / h, s = aspect < 1 ? 12.5 / aspect : aspect > 1.7 ? 11.2 : 12.6 / Math.sqrt(aspect / 1.25);
+      cam.left = -s * aspect; cam.right = s * aspect; cam.top = s; cam.bottom = -s; cam.updateProjectionMatrix();
     }
-    function render(){ renderer.render(scene, cam); }
-    const anchors = { rzad: [-5.6, 6.2, -5.2], nbp: [-1.3, 5.8, -5.6], rezerwy: [4.4, 5.4, -5.2], farma: [-5.4, 4.2, 4.8], piekarnia: [0.6, 4.6, 4.6], sklep: [4.2, 3.6, 4.6], granica: [8.8, 3, -3.2], piekarnia2: [4.6, 4.4, -1.9], nawadnianie: [-2.3, 2.8, 7.2] };
-    const screenPos = id => { const p = new THREE.Vector3(...anchors[id]).project(cam); return { x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h }; };
-    return { resize, render, apply, pick, highlight, screenPos, setRunning, dispose(){ running = false; cancelAnimationFrame(raf); renderer.dispose(); } };
+    const screenPos = id => { const a = anchor[id] || [0, 0, 0], p = new THREE.Vector3(...a).project(cam); return { x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h }; };
+    return { resize, apply, pick, highlight, screenPos, ids: () => Object.keys(groups), dispose(){ alive = false; cancelAnimationFrame(raf); R.dispose(); } };
+  }
+
+  // ================================================================ DŹWIĘK (generowany, domyślnie wyłączony)
+  function makeSound(){
+    let ctx = null, nodes = null;
+    return {
+      on(){ if (ctx) return; const A = window.AudioContext || window.webkitAudioContext; if (!A) return; ctx = new A();
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+        const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 500;
+        const gain = ctx.createGain(); gain.gain.value = 0.05;
+        const hum = ctx.createOscillator(); hum.frequency.value = 55; const hg = ctx.createGain(); hg.gain.value = 0.012;
+        src.connect(lp).connect(gain).connect(ctx.destination); hum.connect(hg).connect(ctx.destination); src.start(); hum.start(); nodes = { lp, gain, hg }; },
+      off(){ if (ctx){ ctx.close(); ctx = null; nodes = null; } },
+      set(v){ if (!nodes) return; nodes.lp.frequency.value = 300 + 900 * clamp(v.rain - 0.8, 0, 0.6) + 200 * v.act; nodes.gain.gain.value = 0.03 + 0.04 * clamp(v.rain - 0.9, 0, 0.5); nodes.hg.gain.value = 0.006 + 0.012 * clamp(v.act, 0, 1.3) + (v.alarm ? 0.02 : 0); },
+      ping(){ if (!ctx) return; const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.06, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4); o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.4); },
+      get enabled(){ return !!ctx; },
+    };
   }
 
   // ================================================================ UI
   function mount(_el, ctx){
-    const { lang, inline, esc, track } = ctx;
-    const T = texts(lang), B = buildings(lang), BI = buildInfo(lang), L = T.L;
-    let st = newState(), sel = null, world = null, timer = null, speed = 1, forecastBase = null, tutorial = null;
-    const LS = "makro2.game1", LS_TUT = "makro2.game1.tut";
-    const tt = v => n0(v) + T.t, ty = v => n0(v) + T.tys, pc = v => Math.round(v) + "%";
+    const S = window.NovariaSim;
+    const { lang, esc, track } = ctx;
+    const X = T(lang), L = X.L, CON = concepts(lang), PN = PROJ_NAMES(lang);
+    const LS = "makro2.game1", LS_TUT = "makro2.game1.tut", LS_SAVE = "makro2.novaria";
+    let s = null, world = null, timer = null, speed = 1, tab = null, sel = null, why = null, previewT = 0;
+    const sound = makeSound(), prevVals = {};
+    try { const sv = JSON.parse(localStorage.getItem(LS_SAVE) || "null"); if (sv && sv.v === 1 && sv.s && !sv.s.over) s = sv.s; } catch {}
+    if (!s) s = S.newGame();
 
     document.querySelector(".gfull")?.remove();
-    const host = document.createElement("div"); host.className = "gfull"; document.body.appendChild(host); document.body.classList.add("gaming");
-    host.innerHTML = `<div class="gtop">
-        <div class="grow">
-          <a class="gbtn" href="#start" aria-label="${L("Wyjdź", "Выйти")}">✕</a>
-          <b class="gtitle">${T.title}</b>
-          <div class="gclock"><span id="gdate"></span><i><b id="gbar"></b></i><small id="gstage"></small></div>
-          <div class="gctrls">
-            <button class="gbtn primary" id="gplay"></button>
-            <button class="gbtn" id="gspeed">×1</button>
-            <button class="gbtn" id="gadv">${T.advisor}</button>
-            <button class="gbtn" id="ghelp" aria-label="${L("Pomoc", "Помощь")}">?</button>
-          </div>
+    const host = document.createElement("div"); host.className = "gfull nv"; document.body.appendChild(host); document.body.classList.add("gaming");
+    host.innerHTML = `
+      <div class="nv-stage" id="nvst"><canvas id="nvcv" aria-label="Novaria"></canvas><div class="nv-labels" id="nvlab"></div><div class="nv-load" id="nvload">${L("Budowanie Novarii…", "Строим Новарию…")}</div></div>
+      <div class="nv-tl">
+        <a class="nv-b" href="#start" aria-label="${L("Wyjdź", "Выйти")}">✕</a>
+        <div class="nv-date"><b>NOVARIA</b><span id="nvdate"></span><i class="nv-dbar"><b id="nvdbar"></b></i></div>
+        <div class="nv-speed" role="group" aria-label="${L("Tempo", "Темп")}">
+          <button class="nv-b" data-sp="0" aria-label="${L("Pauza", "Пауза")}">⏸</button><button class="nv-b" data-sp="1" aria-label="×1">▶</button><button class="nv-b" data-sp="4" aria-label="×4">⏩</button><button class="nv-b" data-sp="16" aria-label="×16">⏭</button>
         </div>
-        <div class="gstats" id="gstats"></div>
+        <button class="nv-b" id="nvsnd" aria-label="${L("Dźwięk", "Звук")}">🔇</button>
       </div>
-      <div class="gbody">
-        <div class="gstage" id="gscene"><canvas id="gcv" aria-label="${T.title}"></canvas><div class="glabels" id="glabels"></div><div class="gfx" id="gfx"></div><div class="gload" id="gload">${T.loading}</div></div>
-        <aside class="gpanel" id="gpanel"></aside>
-        <div id="gmodal"></div>
-        <div id="gtut"></div>
-      </div>`;
-    const $ = s => host.querySelector(s);
-    const view = () => { const r = sim(st); return {
-      harvest: r.harvest / 10, imports: r.imp / 10, shortage: r.shortage, load: r.production / r.capacity, stock: st.stock / 10, blockade: BLOCKADE.includes(st.m),
-      underConstruction: st.projects.map(p => p.type),
-      built: [...(st.bakeries > 1 ? ["piekarnia2"] : []), ...(st.irrig >= 1 ? ["nawadnianie"] : [])] }; };
+      <div class="nv-kpis" id="nvkpi"></div>
+      <div class="nv-feed" id="nvfeed"></div>
+      <nav class="nv-tabs" id="nvtabs">${Object.entries(X.tabs).map(([k, v]) => `<button data-tab="${k}">${v}</button>`).join("")}</nav>
+      <aside class="nv-panel" id="nvpanel" hidden></aside>
+      <div class="nv-card" id="nvcard" hidden></div>
+      <div class="nv-toasts" id="nvtoasts"></div>
+      <div id="nvmodal"></div>`;
+    const $ = q => host.querySelector(q);
+    const H = () => s.hist[s.hist.length - 1] || S.snapshot(s);
+    const ago = n => s.hist[Math.max(0, s.hist.length - 1 - n)] || H();
+    const D = () => S.date(s.day);
+    const save = () => { try { localStorage.setItem(LS_SAVE, JSON.stringify({ v: 1, s: { ...s, _rng: null } })); } catch {} };
 
-    // ---------- wspólne klocki
-    const arrow = (v, goodUp) => v > 0.5 ? `<i class="ga ${goodUp ? "g" : "b"}">↑</i>` : v < -0.5 ? `<i class="ga ${goodUp ? "b" : "g"}">↓</i>` : `<i class="ga n">→</i>`;
-    const tbl = rows => `<table class="gtbl">${rows.filter(Boolean).map(([a, b, cls]) => `<tr${cls ? ` class="${cls}"` : ""}><td>${a}</td><td>${b}</td></tr>`).join("")}</table>`;
-    const whyBtn = k => `<button class="gwhy" data-why="${k}">${T.why}</button>`;
-    // pasek: części (np. zbiory + import + rezerwa) na wspólnej skali
-    const bar = (label, parts, max, note) => `<div class="gbar"><div class="gbl"><span>${label}</span><b>${note}</b></div><div class="gbt">${parts.filter(p => p.v > 0).map(p => `<i class="${p.c}" style="width:${clamp(100 * p.v / max, 0, 100)}%" title="${esc(p.t)}"></i>`).join("")}</div></div>`;
-    function flow(r){
-      const max = Math.max(r.grain + r.buy, r.capacity, r.demand, r.Dbase) * 1.02;
-      return `<div class="gflow">
-        ${bar(L("Zboże", "Зерно"), [{ v: r.harvest, c: "h", t: "zbiory" }, { v: r.imp, c: "i", t: "import" }, { v: r.rel, c: "r", t: "rezerwa" }], max, tt(r.grain))}
-        ${bar(L("Moc piekarni", "Мощность пекарен"), [{ v: r.capacity, c: "c", t: "moc" }], max, ty(r.capacity))}
-        ${bar(L("Chleb upieczony", "Испечено хлеба"), [{ v: r.production, c: "p", t: "produkcja" }], max, ty(r.production))}
-        ${bar(L("Popyt", "Спрос"), [{ v: r.demand, c: "d", t: "popyt" }], max, ty(r.demand))}
-        ${bar(L("Sprzedaż", "Продажи"), [{ v: r.sales, c: "s", t: "sprzedaż" }, { v: r.short, c: "x", t: "niedobór" }], max, ty(r.sales))}
-        <p class="gleg"><i class="h"></i>${L("zbiory", "урожай")} <i class="i"></i>${L("import", "импорт")} <i class="r"></i>${L("rezerwa", "резерв")} <i class="x"></i>${L("niedobór", "дефицит")}</p></div>`;
-    }
-    // mini-wykres liniowy na 12 miesięcy
-    function chart(series, mark){
-      const W = 300, H = 110, pad = 22, all = series.flatMap(s => s.v.filter(v => v != null)), max = Math.max(...all) * 1.08, min = Math.min(...all) * 0.9;
-      const X = i => pad + i * (W - pad - 6) / (MONTHS - 1), Y = v => H - 16 - (v - min) / (max - min) * (H - 26);
-      const lines = series.map(s => `<polyline fill="none" stroke="${s.c}" stroke-width="2.4" ${s.dash ? 'stroke-dasharray="5 4"' : ""} points="${s.v.map((v, i) => v == null ? "" : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}"/>`).join("");
-      const now = `<line x1="${X(Math.min(st.m, 11))}" x2="${X(Math.min(st.m, 11))}" y1="6" y2="${H - 16}" stroke="#94a3b8" stroke-dasharray="2 3"/>`;
-      const mk = mark != null ? `<circle cx="${X(mark)}" cy="10" r="4" fill="#c23a1a"/>` : "";
-      const blk = `<rect x="${X(2)}" y="6" width="${X(4) - X(2)}" height="${H - 22}" fill="#c23a1a" opacity=".07"/>`;
-      const ticks = [0, 3, 6, 9, 11].map(i => `<text x="${X(i)}" y="${H - 3}" font-size="9" text-anchor="middle" fill="#5a6676">${i + 1}</text>`).join("");
-      return `<svg class="gchart" viewBox="0 0 ${W} ${H}" role="img">${blk}${now}${lines}${mk}${ticks}</svg><p class="gleg">${series.map(s => `<i style="background:${s.c}"></i>${s.n}`).join(" ")}</p>`;
-    }
-    // prognoza na resztę roku przy obecnych decyzjach
-    const projection = () => { const out = []; let s = st; for (let m = st.m; m < MONTHS; m++){ const x = step(s); out[m] = x.r; s = x.n; } return out; };
-
-    // ---------- „Dlaczego?” — łańcuch przyczyn z liczbami tego miesiąca
-    function chainHtml(r){
-      const rows = [
-        [L(`Pogoda: ${weatherName(r.w, L)}`, `Погода: ${weatherName(r.w, L)}`), r.w < 1 ? -1 : r.w > 1 ? 1 : 0, true],
-        [L(`Zbiory ${tt(r.harvest)} (normalnie ${REF.harvest} t)`, `Урожай ${tt(r.harvest)} (обычно ${REF.harvest} т)`), r.harvest - REF.harvest, true],
-        [L(`Import ${tt(r.imp)}${BLOCKADE.includes(r.m) ? " (blokada)" : ""}, rezerwa ${sn0(r.rel - r.buy)} t`, `Импорт ${tt(r.imp)}${BLOCKADE.includes(r.m) ? " (блокада)" : ""}, резерв ${sn0(r.rel - r.buy)} т`), r.imp + r.rel - r.buy - REF.imp, true],
-        [L(`Dostępne zboże ${tt(r.grain)}`, `Доступное зерно ${tt(r.grain)}`), r.grain - NORM, true],
-        [L(`Produkcja chleba ${ty(r.production)} (ogranicza: ${r.bottleneck === "grain" ? "zboże" : "moc piekarni"})`, `Выпуск хлеба ${ty(r.production)} (ограничивает: ${r.bottleneck === "grain" ? "зерно" : "мощность пекарен"})`), r.production - NORM, true],
-        [r.short > 1 ? L(`Popyt ${ty(r.demand)} > podaż → niedobór ${ty(r.short)}`, `Спрос ${ty(r.demand)} > предложения → дефицит ${ty(r.short)}`) : L(`Popyt ${ty(r.demand)}, chleba wystarcza${r.surplus > 1 ? ` (nadwyżka ${ty(r.surplus)})` : ""}`, `Спрос ${ty(r.demand)}, хлеба хватает${r.surplus > 1 ? ` (излишек ${ty(r.surplus)})` : ""}`), r.Peq - r.P, false],
-        [L(`Cena równowagi ${zl(r.Peq)} → cena faktyczna ${zl(r.P)}${r.capped ? " (cena maksymalna)" : ""}`, `Равновесная цена ${zl(r.Peq)} → фактическая ${zl(r.P)}${r.capped ? " (потолок)" : ""}`), r.P - r.prevP, false],
-        [L(`Sprzedaż (konsumpcja) ${ty(r.sales)}`, `Продажи (потребление) ${ty(r.sales)}`), r.sales - NORM, true],
+    // ---------- KPI: stan dziś + trend 30 dni
+    const kpiDef = () => {
+      const h = H(), a = ago(30), sh = 100 * h.short / Math.max(1, h.demand);
+      return [
+        { k: "gdp", v: X.n0(h.Y) + L(" mln", " млн"), d: (h.Y / a.Y - 1) * 100, good: 1, sub: L("na miesiąc", "в месяц") },
+        { k: "infl", v: X.pct(h.infl), d: h.infl - a.infl, good: -1, sub: L("rok do roku", "год к году"), bad: h.infl > 6 || h.infl < -1 },
+        { k: "jobs", v: X.pct(100 - h.unemp), d: a.unemp - h.unemp, good: 1, sub: L("bezrobocie ", "безработица ") + X.pct(h.unemp), bad: h.unemp > 9 },
+        { k: "budget", v: X.sgn(h.budget) + L(" mln", " млн"), d: h.budget - a.budget, good: 1, sub: L("dług ", "долг ") + Math.round(h.debtRatio * 100) + L("% PKB", "% ВВП"), bad: h.debtRatio > 0.9 },
+        { k: "bread", v: X.zl(h.bread), d: (h.bread / a.bread - 1) * 100, good: -1, sub: sh > 1 ? L("brakuje ", "не хватает ") + X.pct(sh) : L("półki pełne", "полки полны"), bad: sh > 2 },
+        { k: "approval", v: Math.round(h.approval) + "%", d: h.approval - a.approval, good: 1, sub: L("społeczeństwo", "общество"), bad: h.approval < 30 },
       ];
-      return `<ol class="gchain">${rows.map(([t, v, goodUp]) => `<li>${arrow(v, goodUp)}<span>${t}</span></li>`).join("")}</ol>`;
-    }
-    function priceWhy(r){
-      const c = causes(st, r, L), col = { r: "🔴", o: "🟠", y: "🟡" };
-      const head = r.capped ? L(`Cena jest ograniczona prawnie do ${zl(r.P)}, ale chleba nie przybyło. <b>Problemem nie jest już cena — problemem jest niedobór</b>: ${ty(r.short)} bochenków dla chętnych zabraknie.`, `Цена ограничена законом до ${zl(r.P)}, но хлеба не стало больше. <b>Проблема уже не цена, а дефицит</b>: ${ty(r.short)} буханок не достанется желающим.`)
-        : c.main ? L(`<b>Główna przyczyna:</b> ${c.main.txt}`, `<b>Главная причина:</b> ${c.main.txt}`) : L("Rynek jest blisko normy.", "Рынок близок к норме.");
-      const lag = Math.abs(r.Peq - r.Pfree) > 0.08 ? `<p class="gsmall">${L(`Cena nie skacze od razu do równowagi (${zl(r.Peq)}): sklepy i piekarnie zmieniają ją stopniowo, ok. 40% różnicy na miesiąc. ${r.Peq > r.P ? "Dopóki cena jest niższa od równowagi, chętnych jest więcej niż chleba." : "Cena będzie dalej spadać."}`, `Цена не прыгает сразу к равновесию (${zl(r.Peq)}): магазины и пекарни меняют её постепенно, примерно на 40% разницы в месяц. ${r.Peq > r.P ? "Пока цена ниже равновесной, желающих больше, чем хлеба." : "Цена будет снижаться дальше."}`)}</p>` : "";
-      const acts = actions(r, c);
-      return `<p>${head}</p>
-        ${c.list.length ? `<b>${c.up ? L("Co podnosi cenę", "Что поднимает цену") : L("Co obniża cenę", "Что снижает цену")}</b><ul class="gcause">${c.list.slice(0, 4).map(x => `<li>${col[x.col]} ${x.txt}</li>`).join("")}</ul>` : ""}
-        ${c.against.length ? `<p class="gsmall">${L("Działa w drugą stronę: ", "Действует в обратную сторону: ")}${c.against.map(x => x.txt).join(" ")}</p>` : ""}
-        <b>${L("Łańcuch", "Цепочка")}</b>${chainHtml(r)}${lag}
-        ${acts.length ? `<b>${L("Co możesz zrobić", "Что можно сделать")}</b><ul class="gcause">${acts.map(a => `<li>${a}</li>`).join("")}</ul>` : ""}`;
-    }
-    function actions(r, c){
-      const k = c.main?.k, out = [], blk = BLOCKADE.includes(st.m);
-      if (r.capped) out.push(L("Zniesienie ceny maksymalnej przywróci równowagę: cena wzrośnie, ale kolejki znikną.", "Отмена потолка вернёт равновесие: цена вырастет, но очереди исчезнут."));
-      if (!c.up){ out.push(L("Niska cena cieszy konsumentów, ale obniża dochód rolników. Dobry moment, by dokupić zapas do rezerwy albo podnieść cło.", "Низкая цена радует потребителей, но снижает доход фермеров. Хороший момент пополнить резерв или поднять пошлину.")); return out; }
-      if (["harvest", "import", "reserve"].includes(k)){
-        if (st.stock > 0) out.push(L(`<b>Rezerwa</b> — efekt od razu (w magazynie ${tt(st.stock)}), ale mniej zostanie na przyszłe kryzysy.`, `<b>Резерв</b> — эффект сразу (на складе ${tt(st.stock)}), но меньше останется на будущие кризисы.`));
-        out.push(blk ? L("<b>Import</b> — w blokadzie najwyżej 120 t, nawet przy zerowym cle.", "<b>Импорт</b> — в блокаду максимум 120 т даже при нулевой пошлине.") : L("<b>Niższe cło</b> — efekt w 1–2 mies. (importerzy reagują stopniowo); mniej wpływów i niższy dochód rolników.", "<b>Ниже пошлина</b> — эффект через 1–2 мес. (импортёры реагируют постепенно); меньше доходов и ниже доход фермеров."));
-        if (st.irrig < 1 && !inProgress(st, "nawadnianie")) out.push(L("<b>Nawadnianie</b> — efekt długoterminowy, zmniejsza straty przy kolejnych suszach.", "<b>Орошение</b> — долгосрочный эффект, уменьшает потери в следующие засухи."));
-        out.push(L("<b>Druga piekarnia</b> — teraz nie pomoże: brakuje zboża, a nie mocy.", "<b>Вторая пекарня</b> — сейчас не поможет: не хватает зерна, а не мощности."));
-      } else if (k === "bakery"){
-        out.push(L("<b>Druga piekarnia</b> — +1 000 tys. bochenków mocy po 3 mies. budowy.", "<b>Вторая пекарня</b> — +1 000 тыс. буханок мощности через 3 мес. стройки."));
-        out.push(L("<b>Więcej zboża (import, rezerwa)</b> nie pomoże: piece i tak pracują na 100%.", "<b>Больше зерна (импорт, резерв)</b> не поможет: печи и так работают на 100%."));
-        out.push(L("<b>Wyższa stopa NBP</b> — szybko ograniczy popyt, ale zwiększy bezrobocie.", "<b>Выше ставка NBP</b> — быстро снизит спрос, но увеличит безработицу."));
-      } else if (k){
-        out.push(L("<b>Wyższa stopa NBP</b> ogranicza popyt (szybko), kosztem zatrudnienia.", "<b>Выше ставка NBP</b> сдерживает спрос (быстро) ценой занятости."));
-        out.push(L("<b>Większa podaż</b> (rezerwa, import) zaspokoi rosnący popyt.", "<b>Больше предложения</b> (резерв, импорт) покроет растущий спрос."));
-      }
-      return out;
-    }
-    function whyHtml(k){
-      const r = sim(st), G = r.ok;
-      if (k === "bread") return `<h2>${L("Cena chleba", "Цена хлеба")}: ${zl(r.P)} ${r.dP ? `<small>(${sign(r.dP)}%)</small>` : ""}</h2>${priceWhy(r)}`;
-      if (k === "shelves") return `<h2>${L("Niedobór chleba", "Дефицит хлеба")}: ${ty(r.short)} (${fmt(r.shortage)}%)</h2>
-        ${tbl([[L("Popyt — ile ludzie chcą kupić", "Спрос — сколько хотят купить"), ty(r.demand)], [L("Dostępny chleb — podaż", "Доступный хлеб — предложение"), ty(r.production)], [L("Sprzedaż — ile kupili", "Продажи — сколько купили"), ty(r.sales)], [L("Niedobór", "Дефицит"), ty(r.short), "sum"]])}
-        <p>${r.capped ? L("⚠️ Chleb jest tani, ale nie ma go dla wszystkich: cena maksymalna zwiększa liczbę chętnych, a nie liczbę bochenków.", "⚠️ Хлеб дешёвый, но его не хватает всем: потолок цены увеличивает число желающих, а не число буханок.")
-          : r.short > 1 ? L(`Cena (${zl(r.P)}) jeszcze nie dogoniła równowagi (${zl(r.Peq)}): przy niższej cenie chętnych jest więcej niż chleba.`, `Цена (${zl(r.P)}) ещё не догнала равновесную (${zl(r.Peq)}): при более низкой цене желающих больше, чем хлеба.`)
-          : L("Chleba wystarcza dla wszystkich chętnych przy obecnej cenie.", "Хлеба хватает всем желающим по текущей цене.")}</p><b>${L("Łańcuch", "Цепочка")}</b>${chainHtml(r)}`;
-      if (k === "farmInc") return `<h2>${T.farmInc}: ${pc(r.farmInc)}</h2>
-        ${tbl([[L("Zbiory", "Урожай"), `${tt(r.harvest)} (${pc(100 * r.harvest / REF.harvest)} ${L("normy", "нормы")})`], [L("Cena zboża", "Цена зерна"), `${n0(r.grainPrice)} zł/t (${L("normalnie", "обычно")} 1 000)`], [L("Ze sprzedaży zboża", "От продажи зерна"), pc(r.farmSales)], [L("Z dopłat", "От дотаций"), "+" + pc(2 * r.subsidy)], [T.farmInc, pc(r.farmInc), "sum"]])}
-        <p>${L("Dochód = ile zboża sprzedadzą × po jakiej cenie + dopłaty.", "Доход = сколько зерна продадут × по какой цене + дотации.")} ${r.bottleneck === "bakery" ? L(`Zboża jest więcej (${tt(r.grain)}), niż piekarnie przerobią (${ty(r.capacity)}), więc cena zboża spada.`, `Зерна больше (${tt(r.grain)}), чем пекарни переработают (${ty(r.capacity)}), поэтому цена зерна падает.`) : L("Drogi chleb podnosi cenę zboża, ale przy małych zbiorach rolnicy mają mało do sprzedania.", "Дорогой хлеб поднимает цену зерна, но при малом урожае фермерам мало что продавать.")} ${L("Tani import podnosi podaż i obniża cenę zboża krajowego.", "Дешёвый импорт увеличивает предложение и снижает цену местного зерна.")}</p>`;
-      if (k === "unemp"){ const j = r.jobs; return `<h2>${T.unemp}: ${fmt(r.unemp)}%</h2>
-        ${tbl([[L("Pracujący", "Работающих"), n0(r.employed * 10) + L(" osób", " чел.")], [L("Rolnictwo (zależy od zbiorów)", "Сельское хозяйство (зависит от урожая)"), n0(j.farm * 10)], [L("Piekarnie (zależy od produkcji)", "Пекарни (зависит от выпуска)"), n0(j.bakery * 10)], [L("Budowy", "Стройки"), n0(j.build * 10)], [L("Wpływ stopy NBP", "Влияние ставки NBP"), sn0(j.rate * 10)], [L("Siła robocza", "Рабочая сила"), n0(LABOR * 10)]])}
-        <p>${L("Mniej zboża → mniej chleba → piekarnie i farmy potrzebują mniej pracowników → bezrobocie ↑ → niższe dochody → mniejszy popyt.", "Меньше зерна → меньше хлеба → пекарням и фермам нужно меньше работников → безработица ↑ → ниже доходы → меньше спрос.")} ${r.jobs.build ? L("Budowa daje pracę teraz: wydatek państwa → dochody pracowników → ich zakupy → dochody innych firm (to efekt mnożnika).", "Стройка даёт работу сейчас: расход государства → доходы работников → их покупки → доходы других фирм (это эффект мультипликатора).") : ""}</p>`; }
-      if (k === "budget") return `<h2>${T.budget}: ${fmt(r.budgetAfter)} ${L("mln zł", "млн zł")}</h2>${budgetTbl(r)}
-        <p>${r.buildCost > 0 ? L("Budżet pogarsza się głównie przez inwestycję, ale inwestycja zwiększy przyszłą moc produkcyjną.", "Бюджет ухудшается в основном из-за инвестиции, но она увеличит будущую производственную мощность.") : r.subsidy > 0 ? L("Dopłaty są dużym wydatkiem: warto, gdy dochód rolników jest blisko granicy.", "Дотации — крупный расход: оправданы, когда доход фермеров на грани.") : L("Więcej pracujących = więcej podatków i mniej zasiłków.", "Больше работающих = больше налогов и меньше пособий.")}</p>`;
-      const P = r.parts;
-      return `<h2>${T.welfare}: ${Math.round(r.W)}</h2>
-        ${tbl([[L("Siła nabywcza konsumentów × 40%", "Покупательная сила × 40%"), Math.round(P.power)], [L("Praca × 20%", "Работа × 20%"), Math.round(P.jobs)], [L("Dochód rolników × 20%", "Доход фермеров × 20%"), Math.round(P.farm)], [L("Budżet × 10%", "Бюджет × 10%"), Math.round(P.fiscal)], [L("Stabilność rynku × 10%", "Стабильность рынка × 10%"), Math.round(P.stable)], [T.welfare, Math.round(r.W), "sum"]])}
-        <p>${L("Każdy składnik ma skalę 0–100. Stabilność spada, gdy cena gwałtownie się zmienia albo brakuje chleba. Cele (racjonalność) to osobny test — dobrobyt mówi, jak <b>dobrze</b> je spełniasz.", "Каждая часть по шкале 0–100. Стабильность падает при резких скачках цены или дефиците. Цели (рациональность) — отдельная проверка; благосостояние показывает, насколько <b>хорошо</b> ты их выполняешь.")}</p>`;
-    }
-    const budgetTbl = r => tbl([[L("Podatki od pracujących", "Налоги работающих"), "+" + fmt(r.taxes)], [L("Cło", "Пошлина"), "+" + fmt(r.tariffRev)], [L("Usługi publiczne", "Госуслуги"), "−" + fmt(r.spendFixed)], [L("Zasiłki dla bezrobotnych", "Пособия по безработице"), "−" + fmt(r.benefits)], r.subsidy ? [L("Dopłaty", "Дотации"), "−" + fmt(r.subsidy)] : null, r.reserveCost ? [L("Rezerwy", "Резерв"), "−" + fmt(r.reserveCost)] : null, r.buildCost ? [L("Inwestycje", "Инвестиции"), "−" + fmt(r.buildCost)] : null, [L("Saldo miesiąca", "Сальдо месяца"), sign(r.net), "sum"]]);
-    function why(k){ pause(); modal(whyHtml(k)); track?.("game", "why", k); }
-
+    };
     function hud(){
-      const r = sim(st);
-      const chip = (k, val, bad, extra = "") => `<button class="gstat ${bad ? "bad" : ""}" data-why="${k}"><span>${T[k]} ⓘ</span><b>${val}${extra}</b></button>`;
-      $("#gstats").innerHTML = [
-        chip("bread", zl(r.P), !r.ok.price, Math.abs(r.dP) >= 1 ? ` <small>${r.dP > 0 ? "↑" : "↓"}${Math.round(Math.abs(r.dP))}%</small>` : ""),
-        chip("shelves", r.short > 1 ? ty(r.short) : T.none, !r.ok.shortage),
-        chip("farmInc", pc(r.farmInc), !r.ok.farmInc),
-        chip("unemp", fmt(r.unemp) + "%", !r.ok.unemp),
-        chip("budget", fmt(r.budgetAfter) + T.mln, !r.ok.budget),
-        chip("welfare", Math.round(r.W), false),
-      ].join("");
-      const wk = Math.min(4, Math.floor(st.day / 7.5) + 1);
-      $("#gdate").textContent = st.done ? L("Koniec roku", "Конец года") : `${T.month} ${st.m + 1}/${MONTHS} · ${T.week} ${wk}/4 · ${T.day} ${st.day + 1}${BLOCKADE.includes(st.m) ? L(" · blokada", " · блокада") : ""}`;
-      $("#gstage").textContent = st.done ? "" : timer ? T.stages[wk - 1] : L("Pauza — zmień decyzje", "Пауза — меняй решения");
-      $("#gbar").style.width = (st.done ? 100 : (st.day / DAYS) * 100) + "%";
-      $("#gplay").textContent = timer ? "⏸ " + T.pause : "▶ " + T.play;
-      $("#gplay").disabled = st.done;
-      $("#gspeed").textContent = "×" + speed;
+      const d = D();
+      $("#nvdate").textContent = `${X.year} ${d.year + 1}/8 · ${X.months[d.month]} · ${X.day} ${d.day + 1}`;
+      $("#nvdbar").style.width = (100 * s.day / S.TOTAL) + "%";
+      host.querySelectorAll("[data-sp]").forEach(b => b.classList.toggle("on", +b.dataset.sp === (timer ? speed : 0)));
+      $("#nvkpi").innerHTML = kpiDef().map(k => { const tr = Math.abs(k.d) < 0.05 ? "→" : k.d > 0 ? "↑" : "↓", good = tr === "→" ? "n" : (k.d > 0) === (k.good > 0) ? "g" : "b";
+        return `<button class="nv-kpi ${k.bad ? "bad" : ""}" data-why="${k.k}"><span>${X.kpi[k.k]}</span><b>${k.v} <i class="${good}">${tr}</i></b><small>${k.sub}</small></button>`; }).join("");
     }
 
-    function labels(){
-      if (!world) return;
-      const all = hints(st, lang), H = {};
-      const order = ["rezerwy", "sklep", "granica", "farma", "piekarnia", "rzad", "nbp"];
-      order.filter(id => all[id]).slice(0, matchMedia("(max-width:900px)").matches ? 2 : 4).forEach(id => H[id] = all[id]);
-      const ids = ["rzad", "nbp", "rezerwy", "farma", "piekarnia", "sklep", "granica", ...view().built];
-      const names = { ...Object.fromEntries(Object.entries(B).map(([k, v]) => [k, v.name])), piekarnia2: BI.piekarnia2.name, nawadnianie: BI.nawadnianie.name };
-      $("#glabels").innerHTML = ids.map(id => { const p = world.screenPos(id), W = $("#gscene").clientWidth, x = H[id] ? clamp(p.x, 85, W - 85) : p.x; return `<button class="glabel ${sel === id ? "on" : ""} ${H[id] ? "hint" : ""}" data-b="${id}" style="left:${x}px;top:${Math.max(H[id] ? 54 : 30, p.y)}px">${H[id] ? `<em>${esc(H[id])}</em>` : ""}<span>${esc(names[id])}</span></button>`; }).join("");
-    }
-    function floatText(id, text, good){
-      if (!world) return;
-      const p = world.screenPos(id), d = document.createElement("div");
-      d.className = "gfloat " + (good ? "up" : "down"); d.textContent = text; d.style.left = p.x + "px"; d.style.top = Math.max(40, p.y - 10) + "px";
-      $("#gfx").appendChild(d); setTimeout(() => d.remove(), 1800);
+    // ---------- wydarzenia, ryzyka i wiadomości (na mapie)
+    function feed(){
+      const evs = s.events.map(e => { const ph = S.phaseOf(e), E = X.ev[e.k]; return `<button class="nv-ev ${ph}" data-evk="${e.k}">${E.icon} <b>${E.name}</b> <span>${X.phase[ph]}</span></button>`; }).join("");
+      const risk = Object.entries(s.risks || {}).filter(([k, p]) => p >= 0.25 && !s.events.some(e => e.k === k)).sort((a, b) => b[1] - a[1]).slice(0, 2)
+        .map(([k, p]) => `<button class="nv-ev risk" data-tab-go="economy">${X.ev[k].icon} ${L("Ryzyko", "Риск")}: ${X.ev[k].name} <b>${Math.round(p * 100)}%</b></button>`).join("");
+      const news = s.news.slice(-3).reverse().map(n => { const [ic, title] = newsText(n, lang); return `<button class="nv-news" data-tab-go="news"><i>${ic}</i>${esc(title)}</button>`; }).join("");
+      $("#nvfeed").innerHTML = `${evs || risk ? `<div class="nv-evs">${evs}${risk}</div>` : ""}<div class="nv-daily"><b>Novaria Daily</b>${news || `<span class="nv-muted">${L("Spokojny dzień w Novarii.", "Спокойный день в Новарии.")}</span>`}</div>`;
     }
 
-    const okRow = (ok, t) => `<li class="${ok ? "ok" : "no"}">${ok ? "✓" : "✗"} ${t}</li>`;
-    function overviewPanel(){
-      const r = sim(st);
-      return `<div class="gph"><h2>${T.economy}</h2><button class="gcol" data-col aria-label="${L("Zwiń", "Свернуть")}">▾</button></div>
-        <div class="gpb">
-        <div class="gbox"><b>${L("Cele w tym miesiącu", "Цели в этом месяце")}</b>
-          <ul class="ggoal">${okRow(r.ok.price, T.goalList[0] + ` → ${zl(r.P)}`)}${okRow(r.ok.shortage, T.goalList[1] + ` → ${fmt(r.shortage)}%`)}${okRow(r.ok.farmInc, T.goalList[2] + ` → ${pc(r.farmInc)}`)}${okRow(r.ok.unemp, T.goalList[3] + ` → ${fmt(r.unemp)}%`)}${okRow(r.ok.budget, T.goalList[4] + ` → ${fmt(r.budgetAfter)}`)}</ul>
-          <p class="gverd ${r.rational ? "ok" : "no"}">${r.rational ? L("Decyzje racjonalne: wszystkie cele spełnione.", "Решения рациональны: все цели выполнены.") : L("Decyzje nieracjonalne: nie wszystkie cele są spełnione.", "Решения нерациональны: не все цели выполнены.")} ${T.welfare}: <b>${Math.round(r.W)}</b></p></div>
-        <div class="gbox"><div class="gbh"><b>${L("Przepływ: zboże → chleb → ludzie", "Поток: зерно → хлеб → люди")}</b>${whyBtn("bread")}</div>${flow(r)}</div>
-        ${st.projects.length ? `<div class="gbox"><b>${L("Budowy", "Стройки")}</b>${st.projects.map(projHtml).join("")}</div>` : ""}
-        <div class="gbox"><div class="gbh"><b>${L("Budżet w tym miesiącu (mln zł)", "Бюджет в этом месяце (млн zł)")}</b>${whyBtn("budget")}</div>${budgetTbl(r)}</div>
-        ${st.log.length ? `<div class="gbox"><b>${L("Dziennik", "Журнал")}</b><ul class="glog">${st.log.slice(-4).reverse().map(x => `<li>${inline(x)}</li>`).join("")}</ul></div>` : ""}
-        </div>`;
-    }
-    function projHtml(p){
-      const M = BUILD[p.type].months, done = M - p.left, pct = Math.round(100 * done / M), ready = st.m + p.left + 1;
-      const eff = p.type === "piekarnia2" ? L(`+1 000 tys. bochenków mocy od miesiąca ${ready}`, `+1 000 тыс. буханок мощности с месяца ${ready}`) : L(`pełny efekt od miesiąca ${ready}; teraz ${pc(100 * st.irrig)} efektu`, `полный эффект с месяца ${ready}; сейчас ${pc(100 * st.irrig)} эффекта`);
-      return `<div class="gprog"><div class="gbl"><span>🏗️ ${BI[p.type].name}</span><b>${pct}%</b></div><div class="gbt"><i class="c" style="width:${pct}%"></i></div><p class="gsmall">${L(`Pozostało: ${p.left} mies.`, `Осталось: ${p.left} мес.`)} · ${eff}</p></div>`;
-    }
-
-    // ---------- karty budynków
-    function card(id, r){
-      if (id === "farma"){ const pr = projection(); return `${tbl([[L("Pogoda", "Погода"), weatherName(r.w, L)], [L("Potencjał pól", "Потенциал полей"), tt(r.pot)], [L("Zbiory w tym miesiącu", "Урожай в этом месяце"), `${tt(r.harvest)} · ${pc(100 * r.harvest / REF.harvest)} ${L("normy", "нормы")}`], [L("Cena zboża", "Цена зерна"), n0(r.grainPrice) + " zł/t"], [T.farmInc, pc(r.farmInc)], [L("Pracują w rolnictwie", "Работают в сельском хозяйстве"), n0(r.jobs.farm * 10) + L(" osób", " чел.")], [L("Nawadnianie", "Орошение"), pc(100 * st.irrig)]])}
-        ${whyBtn("farmInc")}<b>${L("Zbiory w tym roku (t/mies.)", "Урожай за год (т/мес.)")}</b>${chart([{ n: L("zbiory (prognoza)", "урожай (прогноз)"), c: "#d4a514", v: Array.from({ length: MONTHS }, (_, m) => m < st.m ? st.hist[m]?.r.harvest ?? null : pr[m]?.harvest ?? null) }, { n: L("normalnie 900 t", "норма 900 т"), c: "#94a3b8", dash: 1, v: Array(MONTHS).fill(REF.harvest) }])}<p class="gsmall">${L("Czerwone pole: blokada importu. Susza w 4. miesiącu obniży zbiory o 20% (z nawadnianiem tylko o 8%).", "Красная зона: блокада импорта. Засуха в 4-м месяце снизит урожай на 20% (с орошением только на 8%).")}</p>`; }
-      if (id === "piekarnia" || id === "piekarnia2"){
-        const pr = projection(), demand5 = Array.from({ length: MONTHS }, (_, m) => m < st.m ? st.hist[m]?.r.Dbase ?? null : pr[m]?.Dbase ?? null);
-        const capS = Array.from({ length: MONTHS }, (_, m) => m < st.m ? st.hist[m]?.r.capacity ?? null : pr[m]?.capacity ?? null);
-        const grainS = Array.from({ length: MONTHS }, (_, m) => m < st.m ? st.hist[m]?.r.grain ?? null : pr[m]?.grain ?? null);
-        const over = demand5.findIndex((v, m) => m >= st.m && v != null && capS[m] != null && v > capS[m]);
-        const util = 100 * r.production / r.capacity, supply = 100 * r.grain / r.capacity;
-        const neck = r.bottleneck === "grain" ? L(`Piekarnia może upiec ${ty(r.capacity)}, ale zboża jest tylko na ${ty(r.grain)} — pracuje na ${pc(util)}. Ogranicza ją <b>brak zboża</b>, więc druga piekarnia nic by teraz nie dała.`, `Пекарня может испечь ${ty(r.capacity)}, но зерна хватает лишь на ${ty(r.grain)} — работает на ${pc(util)}. Её ограничивает <b>нехватка зерна</b>, поэтому вторая пекарня сейчас ничего бы не дала.`)
-          : L(`Zboża jest ${tt(r.grain)}, ale piece mogą przerobić tylko ${ty(r.capacity)} — ${tt(r.grain - r.capacity)} zboża leży w magazynach. Piekarnia nie produkuje więcej, bo <b>ogranicza ją moc</b>.`, `Зерна ${tt(r.grain)}, но печи переработают лишь ${ty(r.capacity)} — ${tt(r.grain - r.capacity)} зерна лежит на складах. Пекарня не производит больше, потому что <b>её ограничивает мощность</b>.`);
-        return `${tbl([[L("Moc maksymalna (wszystkie piekarnie)", "Макс. мощность (все пекарни)"), ty(r.capacity) + L("/mies.", "/мес.")], [L("Dostępne zboże", "Доступное зерно"), tt(r.grain)], [L("Produkcja w tym miesiącu", "Выпуск в этом месяце"), ty(r.production)], [L("Wykorzystanie mocy", "Загрузка мощности"), pc(util) + ` <small>(${L("produkcja / moc", "выпуск / мощность")})</small>`], [L("Zaopatrzenie w zboże", "Обеспеченность зерном"), pc(supply) + ` <small>(${L("zboże / moc", "зерно / мощность")})</small>`], [r.grain >= r.capacity ? L("Nadwyżka zboża", "Излишек зерна") : L("Brakuje zboża do pełnej mocy", "Не хватает зерна до полной мощности"), tt(Math.abs(r.grain - r.capacity))], [L("Pracownicy piekarni", "Работники пекарен"), n0(r.jobs.bakery * 10) + L(" osób", " чел.")]])}
-          <p class="gextra">${neck}</p>
-          <b>${L("Czy budować? Popyt przy 5 zł vs moc vs zboże", "Строить ли? Спрос при 5 zł vs мощность vs зерно")}</b>${chart([{ n: L("popyt przy 5 zł", "спрос при 5 zł"), c: "#2347c5", v: demand5 }, { n: L("moc piekarni", "мощность"), c: "#c23a1a", dash: 1, v: capS }, { n: L("dostępne zboże", "доступное зерно"), c: "#d4a514", v: grainS }], over >= 0 ? over : null)}
-          <p class="gsmall">${over >= 0 ? L(`Popyt przekroczy moc w miesiącu ${over + 1} (czerwona kropka). Budowa trwa 3 mies.`, `Спрос превысит мощность в месяце ${over + 1} (красная точка). Стройка длится 3 мес.`) : L("Przy obecnych decyzjach popyt nie przekroczy mocy do końca roku.", "При текущих решениях спрос не превысит мощность до конца года.")} ${L("Piekarnia pomaga tylko tam, gdzie żółta linia (zboże) jest nad czerwoną (moc).", "Пекарня помогает только там, где жёлтая линия (зерно) выше красной (мощность).")}</p>`;
-      }
-      if (id === "sklep") return `${tbl([[L("Cena chleba", "Цена хлеба"), zl(r.P) + (r.capped ? L(" (maks.)", " (потолок)") : "")], [L("Cena równowagi", "Равновесная цена"), zl(r.Peq)], [L("Popyt — chcą kupić", "Спрос — хотят купить"), ty(r.demand)], [L("Podaż — dostępny chleb", "Предложение — доступный хлеб"), ty(r.production)], [L("Sprzedaż — kupili", "Продажи — купили"), ty(r.sales)], r.short > 1 ? [L("Niedobór", "Дефицит"), ty(r.short), "bad"] : [L("Niesprzedany chleb", "Непроданный хлеб"), ty(r.surplus)], [L("Na mieszkańca (100 tys. osób)", "На жителя (100 тыс. чел.)"), fmt(r.sales / 100) + L(" bochenka/mies.", " буханки/мес.")]])}
-        ${whyBtn("shelves")} ${whyBtn("bread")}
-        <p class="gsmall">${L(`Elastyczność: przy cenie o 1 zł wyższej ludzie chcieliby ${ty(r.demandAt(r.P + 1))} (${sign(100 * (r.demandAt(r.P + 1) / r.demand - 1))}%), o 1 zł niższej — ${ty(r.demandAt(Math.max(1, r.P - 1)))}. Chleb to dobro podstawowe: popyt zmienia się słabo, więc mały brak towaru mocno podnosi cenę.`, `Эластичность: при цене на 1 zł выше люди хотели бы ${ty(r.demandAt(r.P + 1))} (${sign(100 * (r.demandAt(r.P + 1) / r.demand - 1))}%), на 1 zł ниже — ${ty(r.demandAt(Math.max(1, r.P - 1)))}. Хлеб — базовый товар: спрос меняется слабо, поэтому небольшая нехватка сильно поднимает цену.`)}</p>`;
-      if (id === "granica") return `${tbl([[L("Import w tym miesiącu", "Импорт в этом месяце"), tt(r.imp)], [L("Docelowy przy obecnym cle", "Целевой при текущей пошлине"), tt(r.impTarget)], [L("Limit", "Лимит"), tt(r.icap) + (BLOCKADE.includes(r.m) ? L(" (blokada)", " (блокада)") : "")], [L("Cło", "Пошлина"), st.d.tariff + "%"], [L("Wpływy z cła", "Доход от пошлины"), fmt(r.tariffRev) + T.mln]])}
-        <p class="gsmall">${L("Importerzy co miesiąc pokonują połowę drogi do poziomu docelowego: zmiana cła działa w pełni po 2–3 miesiącach. Blokada działa od razu.", "Импортёры каждый месяц проходят половину пути к целевому уровню: изменение пошлины действует полностью через 2–3 месяца. Блокада действует сразу.")}</p>`;
-      if (id === "rezerwy"){
-        let need = 0; for (const m of BLOCKADE) if (m >= st.m){ const pot = potential(m) * (1 + 0.12 * st.irrig), w = 1 - (1 - WEATHER[m]) * (1 - 0.6 * st.irrig); need += Math.max(0, r.Dbase * 0.95 - (pot * w + st.subsidyBoost) - importCap(m)); }
-        return `${tbl([[L("Zapas w magazynie", "Запас на складе"), tt(st.stock)], [L("W tym miesiącu", "В этом месяце"), r.rel ? L(`uwalniasz ${tt(r.rel)}`, `выпускаешь ${tt(r.rel)}`) : r.buy ? L(`kupujesz ${tt(r.buy)}`, `покупаешь ${tt(r.buy)}`) : "0"], [L("Zapas po miesiącu", "Запас после месяца"), tt(r.stockAfter)], st.m <= BLOCKADE[2] ? [L("Ile może brakować w blokadzie", "Сколько может не хватать в блокаду"), "≈ " + tt(need)] : null, [L("Koszt operacji", "Стоимость операций"), fmt(r.reserveCost) + T.mln]])}
-          <p class="gsmall">${st.m < BLOCKADE[0] && r.rel > 0 ? L(`⚠️ Zapewniasz tańszy chleb dziś kosztem mniejszego bezpieczeństwa w miesiącach 3–5.`, `⚠️ Ты обеспечиваешь дешёвый хлеб сегодня ценой меньшей безопасности в месяцы 3–5.`) : L("Rezerwa wygładza chwilowy wstrząs podaży. Zapas jest skończony — co wydasz teraz, tego zabraknie w następnym kryzysie.", "Резерв сглаживает временный шок предложения. Запас конечен — что потратишь сейчас, того не хватит в следующий кризис.")}</p>`;
-      }
-      if (id === "rzad") return `${budgetTbl(r)}${whyBtn("budget")}`;
-      if (id === "nbp") return `${tbl([[L("Stopa referencyjna", "Референсная ставка"), fmt(st.d.rate) + "%"], [L("Wpływ na popyt", "Влияние на спрос"), sign(100 * (r.rateF - 1)) + "%"], [L("Wpływ na zatrudnienie", "Влияние на занятость"), sn0(r.jobs.rate * 10) + L(" osób", " чел.")], [T.unemp, fmt(r.unemp) + "%"], [L("Inflacja (rocznie)", "Инфляция (годовая)"), fmt(r.inflation) + "%"]])}${whyBtn("unemp")}`;
+    // ---------- etykiety budynków (z ikoną problemu)
+    const NAMES = { farma: L("Farmy", "Фермы"), silosy: L("Silosy", "Силосы"), piekarnia: L("Piekarnia", "Пекарня"), piekarnia2: L("Piekarnia 2", "Пекарня 2"), piekarnia3: L("Piekarnia 3", "Пекарня 3"), sklep: L("Sklepy", "Магазины"), rzad: L("Rząd", "Правительство"), nbp: "NBP", bank: L("Bank", "Банк"), fabryka: L("Fabryka", "Фабрика"), port: L("Port", "Порт"), nawadnianie: L("Nawadnianie", "Орошение"), elektrownia: L("Elektrownia", "Электростанция"), kolej: L("Dworzec", "Вокзал"), port2: L("Nabrzeże", "Причал") };
+    function alertOf(id){
+      const sh = s.b.short / Math.max(1, s.b.demand);
+      if (id === "sklep" && sh > 0.02) return "🧺";
+      if (id.startsWith("piekarnia") && s.b.prod < s.b.demand * 0.97 && s.b.grainLimit < s.b.cap) return "⚠️";
+      if (id === "farma" && s.w.rain < 0.82 && D().month >= 2 && D().month <= 8) return "🌵";
+      if (id === "silosy" && s.g.stock < s.b.prod * 1.2) return "⚠️";
+      if (id === "fabryka" && s.events.some(e => e.k === "recession" || e.k === "energy")) return "📉";
+      if (id === "bank" && s.events.some(e => e.k === "credit")) return "🏦";
+      if (id === "port" && s.events.some(e => e.k === "trade")) return "🚫";
       return "";
     }
-
-    // ---------- skutki zmiany decyzji: teraz / za 1–2 mies. / później / ryzyko
-    const CHAINS = {
-      tariff: [["Cło", "Пошлина", 1], ["Budżet (wpływy)", "Бюджет (доходы)", 1], ["Import", "Импорт", -1], ["Zboże", "Зерно", -1], ["Cena chleba", "Цена хлеба", 1], ["Dochód rolników", "Доход фермеров", 1], ["Konsumpcja", "Потребление", -1]],
-      subsidy: [["Dopłaty", "Дотации", 1], ["Budżet", "Бюджет", -1], ["Dochód rolników", "Доход фермеров", 1], ["Przyszłe zbiory", "Будущий урожай", 1]],
-      cap: [["Cena maks.", "Потолок", -1], ["Cena chleba", "Цена хлеба", -1], ["Chętni (popyt)", "Желающие (спрос)", 1], ["Podaż", "Предложение", 0], ["Niedobór", "Дефицит", 1]],
-      reserve: [["Uwalnianie", "Выпуск", 1], ["Zboże teraz", "Зерно сейчас", 1], ["Cena chleba", "Цена хлеба", -1], ["Zapas na kryzys", "Запас на кризис", -1]],
-      rate: [["Stopa NBP", "Ставка NBP", 1], ["Popyt", "Спрос", -1], ["Presja cenowa", "Давление на цены", -1], ["Zatrudnienie", "Занятость", -1]],
-    };
-    function chainPreview(k, up){
-      return `<div class="gpc">${CHAINS[k].map(([pl, ru, d]) => { const v = d * (up ? 1 : -1); return `<span>${L(pl, ru)} ${v > 0 ? '<i class="ga u">↑</i>' : v < 0 ? '<i class="ga d">↓</i>' : '<i class="ga n">=</i>'}</span>`; }).join("<em>→</em>")}</div>`;
-    }
-    function preview(k, from, to){
-      const a = horizon(st, forecastBase, 3).rs, b = horizon(st, { ...forecastBase, [k]: to }, 3).rs, up = to > from, blk = BLOCKADE.includes(st.m);
-      const txt = {
-        tariff: { now: up ? L(`Wpływy z cła: ${sign(a[0].tariffRev)} → ${sign(b[0].tariffRev)} mln.`, `Доход от пошлины: ${sign(a[0].tariffRev)} → ${sign(b[0].tariffRev)} млн.`) : L(`Mniej wpływów z cła: ${fmt(a[0].tariffRev)} → ${fmt(b[0].tariffRev)} mln.`, `Меньше дохода от пошлины: ${fmt(a[0].tariffRev)} → ${fmt(b[0].tariffRev)} млн.`),
-          soon: L(`Import ${tt(a[0].imp)} → ${tt(b[0].imp)}, za miesiąc ${tt(a[1]?.imp ?? 0)} → ${tt(b[1]?.imp ?? 0)} (importerzy reagują stopniowo).`, `Импорт ${tt(a[0].imp)} → ${tt(b[0].imp)}, через месяц ${tt(a[1]?.imp ?? 0)} → ${tt(b[1]?.imp ?? 0)} (импортёры реагируют постепенно).`) + (blk ? L(" Teraz blokada: najwyżej 120 t.", " Сейчас блокада: максимум 120 т.") : ""),
-          risk: up ? L("Mniej zboża, droższy chleb — groźne przed blokadą i suszą.", "Меньше зерна, дороже хлеб — опасно перед блокадой и засухой.") : L("Tańsze zboże z zagranicy obniża dochód krajowych rolników.", "Дешёвое иностранное зерно снижает доход местных фермеров.") },
-        subsidy: { now: L(`Koszt: ${sign(-(to - from))} mln co miesiąc. Dochód rolników ${pc(a[0].farmInc)} → ${pc(b[0].farmInc)}.`, `Расход: ${sign(-(to - from))} млн каждый месяц. Доход фермеров ${pc(a[0].farmInc)} → ${pc(b[0].farmInc)}.`),
-          soon: L("Od następnego miesiąca rolnicy zasieją więcej: +2,5 t zbiorów za każdy 1 mln miesięcznie (narasta).", "Со следующего месяца фермеры посеют больше: +2,5 т урожая за каждый 1 млн в месяц (накапливается)."),
-          risk: L("Budżet: dopłaty płacisz co miesiąc aż do zmiany.", "Бюджет: дотации платишь каждый месяц, пока не изменишь.") },
-        cap: { now: b[0].capped ? L(`Cena ${zl(b[0].P)}, ale chętni chcą ${ty(b[0].demand)}, a chleba jest ${ty(b[0].production)}: niedobór ${ty(b[0].short)}`, `Цена ${zl(b[0].P)}, но желающие хотят ${ty(b[0].demand)}, а хлеба ${ty(b[0].production)}: дефицит ${ty(b[0].short)}`) : L("Cena maksymalna jest powyżej ceny rynkowej — nic nie zmienia.", "Потолок выше рыночной цены — ничего не меняет."),
-          soon: L("Cena maksymalna nie dodaje ani jednego bochenka.", "Потолок цены не добавляет ни одной буханки."),
-          risk: L("Kolejki, puste półki i niższa stabilność rynku.", "Очереди, пустые полки и ниже стабильность рынка.") },
-        reserve: { now: to > 0 ? L(`Na rynek trafi ${tt(b[0].rel)} więcej zboża; niedobór ${ty(a[0].short)} → ${ty(b[0].short)}`, `На рынок попадёт ${tt(b[0].rel)} зерна; дефицит ${ty(a[0].short)} → ${ty(b[0].short)}`) : to < 0 ? L(`Z rynku zniknie ${tt(b[0].buy)} zboża, koszt ${fmt(b[0].reserveCost)} mln.`, `С рынка уйдёт ${tt(b[0].buy)} зерна, стоимость ${fmt(b[0].reserveCost)} млн.`) : L("Magazyn bez zmian.", "Склад без изменений."),
-          soon: L(`Zapas po 3 mies.: ${tt(st.stock - a.reduce((s, r) => s + r.rel - r.buy, 0))} → ${tt(st.stock - b.reduce((s, r) => s + r.rel - r.buy, 0))}.`, `Запас через 3 мес.: ${tt(st.stock - a.reduce((s, r) => s + r.rel - r.buy, 0))} → ${tt(st.stock - b.reduce((s, r) => s + r.rel - r.buy, 0))}.`),
-          risk: to > 0 && st.m < BLOCKADE[0] ? L("Blokada (mies. 3–5) jeszcze przed Tobą — wtedy zapas będzie cenniejszy.", "Блокада (мес. 3–5) ещё впереди — тогда запас будет ценнее.") : to < 0 ? L("Teraz mniej chleba na rynku i wyższa cena.", "Сейчас меньше хлеба на рынке и выше цена.") : L("Zapas jest skończony.", "Запас конечен.") },
-        rate: { now: L(`Popyt ${ty(a[0].demand)} → ${ty(b[0].demand)}; bezrobocie ${fmt(a[0].unemp)}% → ${fmt(b[0].unemp)}%.`, `Спрос ${ty(a[0].demand)} → ${ty(b[0].demand)}; безработица ${fmt(a[0].unemp)}% → ${fmt(b[0].unemp)}%.`),
-          soon: up ? L("Mniejszy popyt → mniejsza presja na ceny w kolejnych miesiącach.", "Меньший спрос → меньше давление на цены в следующие месяцы.") : L("Większy popyt → większa presja na ceny w kolejnych miesiącach.", "Больший спрос → больше давление на цены в следующие месяцы."),
-          risk: up ? L("Wyższe bezrobocie → niższe dochody.", "Выше безработица → ниже доходы.") : L("Przy braku chleba większy popyt tylko podnosi cenę.", "При нехватке хлеба больший спрос лишь поднимает цену.") },
-      }[k];
-      const rows = a.map((x, i) => `<tr><td>${L("mies.", "мес.")} ${x.m + 1}</td><td>${zl(x.P)} → <b>${zl(b[i].P)}</b></td><td>${n0(x.short)} → <b>${n0(b[i].short)}</b></td><td>${sign(x.net)} → <b>${sign(b[i].net)}</b></td></tr>`).join("");
-      return `${chainPreview(k, up)}
-        <ul class="gsteps"><li><b>${L("Teraz", "Сейчас")}:</b> ${txt.now}</li><li><b>${L("Za 1–2 mies.", "Через 1–2 мес.")}:</b> ${txt.soon}</li><li><b>${L("Ryzyko", "Риск")}:</b> ${txt.risk}</li></ul>
-        <table class="gtbl"><tr><th></th><th>${L("chleb", "хлеб")}</th><th>${L("niedobór, tys.", "дефицит, тыс.")}</th><th>${L("saldo, mln", "сальдо, млн")}</th></tr>${rows}</table>
-        <p class="gverd ${b[0].rational ? "ok" : "no"}">${b[0].rational ? L("Po zmianie w tym miesiącu cele są spełnione.", "После изменения в этом месяце цели выполнены.") : L("Po zmianie co najmniej jeden cel w tym miesiącu nie jest spełniony.", "После изменения хотя бы одна цель в этом месяце не выполнена.")} ${T.welfare} ${sign(b[0].W - a[0].W)}</p>`;
+    function labels(){
+      if (!world) return;
+      const small = matchMedia("(max-width:700px)").matches;
+      $("#nvlab").innerHTML = world.ids().filter(id => NAMES[id] && (!small || ["farma", "silosy", "piekarnia", "sklep", "rzad", "nbp", "port"].includes(id) || alertOf(id))).map(id => { const p = world.screenPos(id), al = alertOf(id);
+        return `<button class="nv-lab ${sel === id ? "on" : ""} ${al ? "alert" : ""}" data-obj="${id}" style="left:${p.x}px;top:${p.y}px"><span>${al ? al + " " : ""}${NAMES[id]}</span></button>`; }).join("");
     }
 
-    function panel(){
-      const p = $("#gpanel");
-      if (!sel){ p.innerHTML = overviewPanel() + (!world ? `<div class="glist">${Object.keys(B).map(id => `<button class="gbtn" data-b="${id}">${esc(B[id].name)}</button>`).join("")}</div>` : ""); return; }
-      const r = sim(st);
-      if (sel === "piekarnia2" || sel === "nawadnianie"){ p.innerHTML = `<div class="gph"><button class="gback" data-b="">← ${T.economy}</button><button class="gcol" data-col>▾</button></div><div class="gpb"><h2>${BI[sel].name}</h2><p class="grole">${BI[sel].what}</p>${sel === "piekarnia2" ? card("piekarnia", r) : card("farma", r)}</div>`; return; }
-      const b = B[sel], H = hints(st, lang);
-      const bk = b.build, bInfo = bk && BI[bk], proj = st.projects.find(x => x.type === bk), isBuilt = (bk === "piekarnia2" && st.bakeries > 1) || (bk === "nawadnianie" && st.irrig >= 1);
-      p.innerHTML = `<div class="gph"><button class="gback" data-b="">← ${T.economy}</button><button class="gcol" data-col>▾</button></div>
-        <div class="gpb"><h2>${esc(b.name)}</h2>${H[sel] ? `<p class="ghint">${esc(H[sel])}</p>` : ""}<p class="grole">${inline(b.role)}</p>
-        <div class="gbox"><b>${L("Ten miesiąc", "Этот месяц")} <span class="gsmall">(${T.thisMonth})</span></b>${card(sel, r)}</div>
-        ${(b.controls || []).map(c => `<label class="gctl" for="c-${c.k}"><span>${c.label}<b id="v-${c.k}"></b></span>
-          <input type="range" id="c-${c.k}" min="${c.min}" max="${c.k === "reserve" ? Math.max(0, Math.min(c.max, Math.floor(st.stock / 10) * 10)) : c.max}" step="${c.step}" value="${st.d[c.k]}" ${st.done ? "disabled" : ""}></label>`).join("")}
-        ${b.controls ? `<div class="gforecast" id="gfc"><b>${T.forecast}</b><p class="gsmall">${T.noChange}</p></div>` : ""}
-        ${bInfo ? `<div class="gbox"><b>${bInfo.name}</b><p class="gsmall">${bInfo.what}</p>
-          ${isBuilt ? `<p class="gverd ok">${L("Zbudowane", "Построено")}</p>` : proj ? projHtml(proj)
-          : `<p class="gpc"><span>${L("Koszt teraz", "Расход сейчас")} <i class="ga d">↓</i></span><em>→</em><span>${L("budowa", "стройка")}</span><em>→</em><span>${L("miejsca pracy", "рабочие места")} <i class="ga u">↑</i></span><em>→</em><span>${bk === "piekarnia2" ? L("moc", "мощность") : L("zbiory", "урожай")} <i class="ga u">↑</i></span><em>→</em><span>${L("presja cenowa", "давление цен")} <i class="ga d">↓</i></span></p>
-            <button class="gbtn primary" id="gbuild" ${st.done ? "disabled" : ""}>${L("Zbuduj", "Построить")} (${BUILD[bk].cost} ${L("mln", "млн")})</button>`}</div>` : ""}</div>`;
-      forecastBase = { ...st.d };
-      (b.controls || []).forEach(c => {
-        const inp = p.querySelector("#c-" + c.k), out = p.querySelector("#v-" + c.k);
-        const show = () => { const v = +inp.value; out.textContent = (c.k === "cap" && v === 0) ? T.none : c.k === "reserve" ? (v < 0 ? L(`kupuj ${-v} t`, `покупать ${-v} т`) : v > 0 ? L(`uwalniaj ${v} t`, `выпускать ${v} т`) : "0") : fmt(v) + c.unit; };
-        inp.oninput = () => {
-          pause();
-          const from = forecastBase[c.k]; st.d[c.k] = +inp.value; show();
-          p.querySelector("#gfc").innerHTML = `<b>${T.forecast}</b>` + (from === st.d[c.k] ? `<p class="gsmall">${T.noChange}</p>` : preview(c.k, from, st.d[c.k]));
-          hud(); labels(); world?.apply(view());
-        };
-        show();
-      });
-      p.querySelector("#gbuild")?.addEventListener("click", () => {
-        if (st.budget < BUILD[bk].cost * 0.3){ p.querySelector("#gbuild").insertAdjacentHTML("afterend", `<p class="gverd no">${L("Za mało pieniędzy w budżecie na pierwszą ratę.", "В бюджете мало денег на первый платёж.")}</p>`); return; }
-        startBuild(st, bk); st.log.push(L(`Rozpoczęto budowę: ${bInfo.name}. ${BUILD[bk].site * 10} osób dostało pracę przy budowie.`, `Начато строительство: ${bInfo.name}. ${BUILD[bk].site * 10} человек получили работу на стройке.`));
-        floatText(sel, L(`+${BUILD[bk].site * 10} miejsc pracy`, `+${BUILD[bk].site * 10} рабочих мест`), true);
-        world?.apply(view()); panel(); hud(); labels();
-      });
-    }
-    function select(id){ if (tutorial) return; sel = id || null; $("#gpanel").classList.remove("collapsed"); $(".gbody").classList.remove("wide"); world?.highlight(sel); world?.render(); panel(); labels(); }
-
-    function modal(html, onClose){
-      const m = $("#gmodal");
-      m.innerHTML = html ? `<div class="gmodal"><div class="gcard">${html}<button class="gbtn primary" id="gclose" style="align-self:flex-end">${T.close} →</button></div></div>` : "";
-      m.querySelector("#gclose")?.addEventListener("click", () => { modal(""); onClose?.(); });
-      m.querySelector("#grestart")?.addEventListener("click", restart);
-      m.querySelectorAll("[data-apply]").forEach(b => b.addEventListener("click", () => { Object.assign(st.d, JSON.parse(b.dataset.apply)); modal(""); panel(); hud(); labels(); world?.apply(view()); }));
-    }
-
-    // ---------- samouczek
-    function tutSteps(){
-      const c5 = sim(st, { ...st.d, cap: 5 });
-      return [
-        { t: null, h: L("Witaj na mapie szkoleniowej", "Добро пожаловать на учебную карту"), b: `<p>${T.brief}</p><div class="gdef">${T.rationalDef}</div>` },
-        { t: "#gstats", h: L("Wskaźniki i „Dlaczego?”", "Показатели и «Почему?»"), b: `<p>${L("Pokazują prognozę na <b>bieżący miesiąc</b>. Zielone = cel spełniony, czerwone = nie. <b>Dotknij dowolnego wskaźnika</b>, a zobaczysz, co się stało, dlaczego i co możesz zrobić — z łańcuchem przyczyn na liczbach z tego miesiąca.", "Показывают прогноз на <b>текущий месяц</b>. Зелёный = цель выполнена, красный = нет. <b>Нажми на любой показатель</b> — увидишь, что произошло, почему и что можно сделать, с цепочкой причин на цифрах этого месяца.")}</p><ul class="gtutl">${T.goalList.map(x => `<li>${x}</li>`).join("")}</ul>` },
-        { t: null, h: L("Lekcja 1: dlaczego nie ustawić ceny 5 zł?", "Урок 1: почему не установить цену 5 zł?"), b: `<p>${L(`Gdyby rząd ustawił cenę maksymalną 5 zł, w tym miesiącu chętni chcieliby kupić <b>${ty(c5.demand)}</b> bochenków, a piekarnie upieką tylko <b>${ty(c5.production)}</b>. Zabrakłoby <b>${ty(c5.short)}</b>.`, `Если правительство установит потолок 5 zł, в этом месяце желающие захотят купить <b>${ty(c5.demand)}</b> буханок, а пекарни испекут лишь <b>${ty(c5.production)}</b>. Не хватит <b>${ty(c5.short)}</b>.`)}</p><p>${L("Cena 5 zł nie oznacza, że każdy kupi chleb za 5 zł. Cena jest niska, ale dostępność też. Żeby chleb potaniał naprawdę, musi go być więcej: zboże → piekarnie → sklep.", "Цена 5 zł не значит, что каждый купит хлеб за 5 zł. Цена низкая, но и доступность низкая. Чтобы хлеб реально подешевел, его должно стать больше: зерно → пекарни → магазин.")}</p>` },
-        ...["rzad", "nbp", "rezerwy", "farma", "piekarnia", "sklep", "granica"].map(id => ({ t: `.glabel[data-b="${id}"]`, id, h: B[id].name, b: `<p>${inline(B[id].role)}</p>` + (B[id].controls ? `<p class="gsmall">${L("Decyzje tutaj: ", "Решения здесь: ")}${B[id].controls.map(c => c.label).join("; ")}.</p>` : B[id].build ? `<p class="gsmall">${L("Tutaj zlecisz budowę: ", "Здесь можно заказать стройку: ")}${BI[B[id].build].name}.</p>` : "") })),
-        { t: "#gadv", h: T.advisor, b: `<p>${L("Doradca patrzy na ten i 3 kolejne miesiące (także na zbliżającą się blokadę), odrzuca decyzje nieracjonalne i spośród reszty wybiera tę z największym dobrobytem — i tłumaczy dlaczego.", "Советник смотрит на этот и 3 следующих месяца (в том числе на приближающуюся блокаду), отбрасывает нерациональные решения и из оставшихся выбирает с максимальным благосостоянием — и объясняет почему.")}</p>` },
-        { t: "#gplay", h: L("Czas", "Время"), b: `<p>${L("▶ uruchamia czas: miesiąc to 4 tygodnie. Decyzje działają z opóźnieniem: cena dochodzi do równowagi stopniowo, importerzy reagują w 1–2 mies., budowy trwają 3–4 mies. Na koniec miesiąca zobaczysz, dlaczego cena się zmieniła.", "▶ запускает время: месяц — это 4 недели. Решения действуют с задержкой: цена приходит к равновесию постепенно, импортёры реагируют за 1–2 мес., стройки идут 3–4 мес. В конце месяца увидишь, почему изменилась цена.")}</p><p><b>${L("Pierwsze zadanie: dotknij wskaźnika „Chleb” i sprawdź, dlaczego jest drogo. Potem zmień decyzję i naciśnij ▶.", "Первое задание: нажми на показатель «Хлеб» и выясни, почему дорого. Потом измени решение и нажми ▶.")}</b></p>` },
-      ];
-    }
-    function showTut(i){
-      const S = tutSteps(); tutorial = { i };
-      const step = S[i], box = $("#gtut");
-      let ring = "", pos = "center";
-      if (step.t){
-        const el = host.querySelector(step.t);
-        if (el){ const a = el.getBoundingClientRect(), hb = $(".gbody").getBoundingClientRect(); ring = `<div class="gring" style="left:${a.left - hb.left - 6}px;top:${a.top - hb.top - 6}px;width:${a.width + 12}px;height:${a.height + 12}px"></div>`; pos = a.top - hb.top > hb.height / 2 ? "top" : "bottom"; }
-      }
-      world?.highlight(step.id || null); world?.render();
-      box.innerHTML = `<div class="gtutwrap">${ring}<div class="gtcard ${pos}">
-        <span class="gsmall">${i + 1} / ${S.length}</span><h2>${step.h}</h2><div class="gtb">${step.b}</div>
-        <div class="gtnav"><button class="gbtn" id="tskip">${L("Pomiń", "Пропустить")}</button>
-        <span>${i > 0 ? `<button class="gbtn" id="tprev">←</button>` : ""}<button class="gbtn primary" id="tnext">${i + 1 < S.length ? T.close + " →" : L("Zaczynam", "Начинаю")}</button></span></div></div></div>`;
-      box.querySelector("#tnext").onclick = () => i + 1 < S.length ? showTut(i + 1) : endTut();
-      box.querySelector("#tprev")?.addEventListener("click", () => showTut(i - 1));
-      box.querySelector("#tskip").onclick = endTut;
-    }
-    function endTut(){ tutorial = null; $("#gtut").innerHTML = ""; try { localStorage.setItem(LS_TUT, "4"); } catch {} world?.highlight(sel); world?.render(); panel(); labels(); }
-    function startTut(){ pause(); modal(""); sel = null; panel(); showTut(0); }
-
-    // ---------- doradca
-    function advisor(){
-      pause();
-      const cur = sim(st), best = bestPolicy(st), curH = horizon(st, st.d).rs;
-      const curWh = curH.reduce((s, x) => s + x.W, 0) / curH.length, gap = best.Wh - curWh;
-      const names = { tariff: L("cło", "пошлина"), reserve: L("rezerwy", "резерв"), subsidy: L("dopłaty", "дотации"), rate: L("stopa NBP", "ставка NBP"), cap: L("cena maks.", "потолок цены") };
-      const b0 = best.r;
-      const why = {
-        tariff: v => v < st.d.tariff ? L(`Import wzrośnie (w tym mies. ${tt(cur.imp)} → ${tt(b0.imp)}, dalej więcej), więc zboża i chleba będzie więcej. Rolnicy stracą trochę dochodu, konsumenci zyskają więcej.`, `Импорт вырастет (в этом мес. ${tt(cur.imp)} → ${tt(b0.imp)}, дальше больше), значит зерна и хлеба станет больше. Фермеры немного потеряют, потребители выиграют больше.`) : L(`Zboża wystarcza: wyższe cło da ${fmt(b0.tariffRev)} mln wpływów i ochroni dochód rolników (${pc(cur.farmInc)} → ${pc(b0.farmInc)}).`, `Зерна хватает: более высокая пошлина даст ${fmt(b0.tariffRev)} млн дохода и защитит доход фермеров (${pc(cur.farmInc)} → ${pc(b0.farmInc)}).`),
-        reserve: v => v > st.d.reserve ? L(`Uwolnienie ${tt(Math.max(0, v))} obniży niedobór z ${fmt(cur.shortage)}% do ${fmt(b0.shortage)}%.${st.m < BLOCKADE[0] ? " Część zapasu zostaje na blokadę." : ""}`, `Выпуск ${tt(Math.max(0, v))} снизит дефицит с ${fmt(cur.shortage)}% до ${fmt(b0.shortage)}%.${st.m < BLOCKADE[0] ? " Часть запаса остаётся на блокаду." : ""}`) : v < 0 ? L("Zboża jest teraz dużo — to dobry moment, by odbudować zapas na przyszłe wstrząsy.", "Зерна сейчас много — хороший момент восстановить запас на будущие шоки.") : L(`Zostaw zapas: ${st.m < BLOCKADE[0] ? `za ${BLOCKADE[0] - st.m} mies. zacznie się blokada importu, wtedy każda tona będzie cenniejsza.` : "dziś nie jest potrzebny tak bardzo jak w kolejnych miesiącach."}`, `Сохрани запас: ${st.m < BLOCKADE[0] ? `через ${BLOCKADE[0] - st.m} мес. начнётся блокада импорта, тогда каждая тонна будет ценнее.` : "сегодня он нужен меньше, чем в следующие месяцы."}`),
-        subsidy: v => v > st.d.subsidy ? L(`Dochód rolników ${pc(cur.farmInc)} → ${pc(b0.farmInc)}, a od przyszłego miesiąca większe zbiory.`, `Доход фермеров ${pc(cur.farmInc)} → ${pc(b0.farmInc)}, а со следующего месяца больше урожай.`) : L("Dopłaty kosztują więcej, niż dają dobrobytu.", "Дотации стоят больше, чем дают благосостояния."),
-        rate: v => v > st.d.rate ? L(`Wyższa stopa ograniczy popyt (${ty(cur.demand)} → ${ty(b0.demand)}) i presję na ceny.`, `Более высокая ставка снизит спрос (${ty(cur.demand)} → ${ty(b0.demand)}) и давление на цены.`) : L(`Niższa stopa wesprze zatrudnienie (bezrobocie ${fmt(cur.unemp)}% → ${fmt(b0.unemp)}%).`, `Более низкая ставка поддержит занятость (безработица ${fmt(cur.unemp)}% → ${fmt(b0.unemp)}%).`),
-        cap: () => L("Cena maksymalna tworzy niedobór i nie zwiększa podaży.", "Потолок цены создаёт дефицит и не увеличивает предложение."),
+    // ---------- krótkie karty obiektów
+    function objCard(id){
+      const h = H(), b = s.b, g = s.g, m = s.m;
+      const row = (k, v, cls = "") => `<div class="nv-row ${cls}"><span>${k}</span><b>${v}</b></div>`;
+      const cards = {
+        farma: [L("Farmy", "Фермы"), [row(L("Pracownicy", "Работники"), X.n0(1900 * (0.8 + 0.2 * h.crop))), row(L("Prognoza zbiorów", "Прогноз урожая"), X.n0(h.harvestF) + " t"), row(L("Stan upraw", "Состояние посевов"), Math.round(h.crop * 100) + "%", h.crop < 0.85 ? "bad" : ""), row(L("Opady", "Осадки"), Math.round(h.rain * 100) + L("% normy", "% нормы"), h.rain < 0.85 ? "bad" : ""), row(L("Nawadnianie", "Орошение"), Math.round(s.infra.irrigation * 100) + "%"), row(L("Ryzyko suszy", "Риск засухи"), Math.round((s.risks.drought || 0) * 100) + "%", (s.risks.drought || 0) > 0.3 ? "bad" : "")], "grain"],
+        silosy: [L("Silosy zbożowe", "Зерновые силосы"), [row(L("Zapas rynkowy", "Рыночный запас"), X.n0(g.stock) + " t"), row(L("Wystarczy na", "Хватит на"), Math.round(g.stock / Math.max(1, b.prod) * 30) + L(" dni", " дн.")), row(L("Rezerwa państwa", "Госрезерв"), X.n0(g.reserve) + " t"), row(L("Cena zboża", "Цена зерна"), X.n0(g.price) + " zł/t"), row(L("Import / eksport", "Импорт / экспорт"), `${X.n0(g.imp)} / ${X.n0(g.exp)} ${L("t/mies.", "т/мес.")}`)], "grain"],
+        piekarnia: [L("Piekarnie", "Пекарни"), [row(L("Moc", "Мощность"), X.n0(b.cap) + L(" tys./mies.", " тыс./мес.")), row(L("Produkcja", "Выпуск"), X.n0(b.prod) + L(" tys.", " тыс.")), row(L("Wykorzystanie mocy", "Загрузка"), Math.round(100 * b.prod / b.cap) + "%"), row(L("Pracownicy", "Работники"), X.n0(150 * b.bakeries * (0.6 + 0.4 * b.prod / b.cap))), `<div class="nv-con">${L("Główne ograniczenie", "Главное ограничение")}: <b>${b.grainLimit < b.cap && b.prod < b.demand ? "🌾 " + L("brak zboża", "нехватка зерна") : b.prod >= b.cap * 0.99 ? "🏭 " + L("moc pieców", "мощность печей") : "🛒 " + L("popyt", "спрос")}</b></div>`], "bread"],
+        sklep: [L("Sklepy", "Магазины"), [row(L("Cena chleba", "Цена хлеба"), X.zl(Math.min(b.price, s.p.cap || 99))), row(L("Popyt", "Спрос"), X.n0(b.demand) + L(" tys.", " тыс.")), row(L("Podaż", "Предложение"), X.n0(b.prod) + L(" tys.", " тыс.")), row(L("Sprzedaż", "Продажи"), X.n0(b.sales) + L(" tys.", " тыс.")), row(L("Niedobór", "Дефицит"), X.n0(b.short) + L(" tys.", " тыс."), b.short > 1 ? "bad" : "")], "bread"],
+        rzad: [L("Rząd", "Правительство"), [row(L("Saldo (tempo/mies.)", "Сальдо (темп/мес.)"), X.sgn(h.budget) + L(" mln", " млн")), row(L("Dług", "Долг"), X.n0(m.debt) + L(" mln", " млн")), row(L("Dług / PKB", "Долг / ВВП"), Math.round(h.debtRatio * 100) + "%"), row(L("Odsetki", "Проценты"), X.n1(m.spendItems.interest * 30) + L(" mln/mies.", " млн/мес."))], "budget"],
+        nbp: [L("Narodowy Bank Polski", "Национальный банк"), [row(L("Stopa", "Ставка"), X.n1(s.p.rate) + "%"), row(L("Działa już (opóźnienie)", "Уже действует (задержка)"), X.n1(m.rateEff) + "%"), row(L("Stopa realna", "Реальная ставка"), X.n1(m.realRate) + "%"), row(L("Inflacja", "Инфляция"), X.pct(m.infl))], "infl"],
+        bank: [L("Banki", "Банки"), [row(L("Dostępność kredytu", "Доступность кредита"), Math.round(s.w.credit * 100) + "%", s.w.credit < 0.9 ? "bad" : ""), row(L("Inwestycje firm", "Инвестиции фирм"), X.n0(m.I) + L(" mln", " млн")), row(L("Ryzyko kryzysu", "Риск кризиса"), Math.round((s.risks.credit || 0) * 100) + "%")], "gdp"],
+        fabryka: [L("Przemysł i usługi", "Промышленность и услуги"), [row(L("Produkcja (PKB)", "Производство (ВВП)"), X.n0(m.Y) + L(" mln", " млн")), row(L("Wykorzystanie mocy", "Загрузка мощностей"), Math.round(100 * m.Y / m.Ypot) + "%"), row(L("Eksport", "Экспорт"), X.n0(m.X) + L(" mln", " млн")), row(L("Koszt energii", "Стоимость энергии"), Math.round(s.w.energy * 100) + "%", s.w.energy > 1.2 ? "bad" : "")], "gdp"],
+        port: [L("Port", "Порт"), [row(L("Przepustowość", "Пропускная способность"), Math.round(s.w.portCap * 100) + "%", s.w.portCap < 0.8 ? "bad" : ""), row(L("Cena zboża na świecie", "Мировая цена зерна"), X.n0(s.w.worldGrain) + " zł/t"), row(L("Cło", "Пошлина"), s.p.tariff + "%"), row(L("Eksport netto", "Чистый экспорт"), X.sgn(m.NX) + L(" mln", " млн"))], "grain"],
       };
-      const vfmt = (k, v) => k === "cap" && !v ? T.none : k === "reserve" ? (v < 0 ? L(`kupuj ${-v} t`, `покупать ${-v} т`) : v > 0 ? L(`uwalniaj ${v} t`, `выпускать ${v} т`) : "0") : fmt(v);
-      const diffs = Object.keys(names).filter(k => best.d[k] !== st.d[k]);
-      const status = cur.rational ? (gap < 1 ? L("<b>Twoje decyzje są racjonalne i prawie optymalne.</b>", "<b>Твои решения рациональны и почти оптимальны.</b>") : L(`<b>Twoje decyzje są racjonalne, ale nie optymalne.</b> Cele są spełnione, ale w tym i kolejnych 3 miesiącach można mieć średnio o ${fmt(gap)} pkt więcej dobrobytu.`, `<b>Твои решения рациональны, но не оптимальны.</b> Цели выполнены, но в этом и следующих 3 месяцах можно получить в среднем на ${fmt(gap)} п. больше благосостояния.`))
-        : L("<b>Twoje decyzje nie są racjonalne:</b> nie wszystkie cele są spełnione.", "<b>Твои решения не рациональны:</b> не все цели выполнены.");
-      const bestNote = best.level === 2 ? `<p class="gverd no">${L("W tym miesiącu żadna decyzja nie spełni wszystkich celów — doradca wybiera tę z najmniejszą liczbą niespełnionych celów.", "В этом месяце ни одно решение не выполнит все цели — советник выбирает вариант с наименьшим числом невыполненных целей.")}</p>` : best.level === 1 ? `<p class="gverd no">${L("Uwaga: budżet może nie wytrzymać do końca roku.", "Внимание: бюджет может не дотянуть до конца года.")}</p>` : "";
-      modal(`<h2>💡 ${T.advisor}</h2><p>${status}</p>${bestNote}
-        ${diffs.length ? `<b>${L("Co zmienić i dlaczego", "Что изменить и почему")}</b><ul>${diffs.map(k => `<li><b>${names[k]}: ${vfmt(k, st.d[k])} → ${vfmt(k, best.d[k])}</b>. ${why[k](best.d[k])}</li>`).join("")}</ul>` : ""}
-        <table class="gtbl"><tr><th></th><th>${L("Teraz", "Сейчас")}</th><th>${L("Optymalnie", "Оптимально")}</th></tr>
-          <tr><td>${T.bread}</td><td>${zl(cur.P)}</td><td>${zl(b0.P)}</td></tr>
-          <tr><td>${L("Niedobór", "Дефицит")}</td><td>${fmt(cur.shortage)}%</td><td>${fmt(b0.shortage)}%</td></tr>
-          <tr><td>${T.farmInc}</td><td>${pc(cur.farmInc)}</td><td>${pc(b0.farmInc)}</td></tr>
-          <tr><td>${T.unemp}</td><td>${fmt(cur.unemp)}%</td><td>${fmt(b0.unemp)}%</td></tr>
-          <tr><td>${L("Saldo budżetu", "Сальдо бюджета")}</td><td>${sign(cur.net)}</td><td>${sign(b0.net)}</td></tr>
-          <tr><td>${L("Cele spełnione", "Цели выполнены")}</td><td>${cur.rational ? "✓" : "✗"}</td><td>${b0.rational ? "✓" : "✗"}</td></tr>
-          <tr class="sum"><td>${T.welfare} (${L("śr. 4 mies.", "ср. 4 мес.")})</td><td>${Math.round(curWh)}</td><td>${Math.round(best.Wh)}</td></tr></table>
-        <p class="gsmall">${L("Racjonalne = spełnia cele. Optymalne = spośród racjonalnych daje najwięcej dobrobytu w tym i 3 kolejnych miesiącach.", "Рационально = выполняет цели. Оптимально = из рациональных даёт больше всего благосостояния в этом и 3 следующих месяцах.")}</p>
-        ${diffs.length ? `<button class="gbtn" data-apply='${JSON.stringify(best.d)}'>${L("Zastosuj te ustawienia", "Применить эти настройки")}</button>` : ""}`);
-      track?.("game", "advisor", Math.round(gap));
+      const key = id.startsWith("piekarnia") ? "piekarnia" : ({ port2: "port", nawadnianie: "farma", elektrownia: "fabryka", kolej: "fabryka" })[id] || id;
+      const c = cards[key]; if (!c) return "";
+      return `<div class="nv-ch"><b>${c[0]}</b><button class="nv-x" data-close aria-label="${L("Zamknij", "Закрыть")}">✕</button></div>${c[1].join("")}<button class="nv-why" data-why="${c[2]}">${X.why}</button>`;
+    }
+    function placeCard(x, y){ const el = $("#nvcard"), r = $("#nvst").getBoundingClientRect(), Wc = el.offsetWidth, Hc = el.offsetHeight; el.style.left = clamp(x - Wc / 2, 8, r.width - Wc - 8) + "px"; el.style.top = clamp(y - Hc - 24, 70, Math.max(70, r.height - Hc - 70)) + "px"; }
+    function showCard(id, x, y){ sel = id; world?.highlight(id); const el = $("#nvcard"); el.hidden = false; el.innerHTML = objCard(id); placeCard(x, y); labels(); track?.("game", "obj", id); }
+    function hideCard(){ sel = null; $("#nvcard").hidden = true; world?.highlight(null); labels(); }
+
+    // ---------- „Dlaczego?” — graf przyczynowy (węzły klikalne), bez ściany tekstu
+    const ABS = ["infl", "unemp", "rate", "budget", "NX"];
+    const NODE = {
+      rain: h => ["🌧️", L("Opady", "Осадки"), Math.round(h.rain * 100) + "%", "rain", 1],
+      crop: h => ["🌱", L("Stan upraw", "Посевы"), Math.round(h.crop * 100) + "%", "crop", 1],
+      harvest: h => ["🌾", L("Prognoza zbiorów", "Прогноз урожая"), X.n0(h.harvestF) + " t", "harvestF", 1],
+      stock: h => ["🏚️", L("Zapas zboża", "Запас зерна"), X.n0(h.stock) + " t", "stock", 1],
+      imp: h => ["🚢", L("Import zboża", "Импорт зерна"), X.n0(h.imp) + L(" t/mies.", " т/мес."), "imp", 1],
+      grain: h => ["💰", L("Cena zboża", "Цена зерна"), X.n0(h.grain) + " zł/t", "grain", -1, "grain"],
+      prod: h => ["🏭", L("Produkcja chleba", "Выпуск хлеба"), X.n0(h.prod) + L(" tys.", " тыс."), "prod", 1],
+      short: h => ["⚠️", L("Niedobór", "Дефицит"), X.n0(h.short) + L(" tys.", " тыс."), "short", -1],
+      bread: h => ["🍞", L("Cena chleba", "Цена хлеба"), X.zl(h.bread), "bread", -1, "bread"],
+      energy: h => ["⚡", L("Ceny energii", "Цены энергии"), Math.round(h.energy * 100) + "%", "energy", -1],
+      realInc: h => ["👛", L("Dochód realny", "Реальный доход"), Math.round(h.realInc * 100) + "%", "realInc", 1],
+      conf: h => ["🙂", L("Nastroje", "Настроения"), Math.round(h.conf * 100) + "%", "conf", 1],
+      rate: h => ["🏦", L("Stopa NBP", "Ставка NBP"), X.n1(h.rate) + "%", "rate", -1, "infl"],
+      C: h => ["🛍️", L("Konsumpcja", "Потребление"), X.n0(h.C) + L(" mln", " млн"), "C", 1],
+      I: h => ["🏗️", L("Inwestycje", "Инвестиции"), X.n0(h.I) + L(" mln", " млн"), "I", 1],
+      G: h => ["🏛️", L("Wydatki państwa", "Госрасходы"), X.n0(h.G) + L(" mln", " млн"), "G", 1, "budget"],
+      NX: h => ["🌍", L("Eksport netto", "Чистый экспорт"), X.sgn(h.NX) + L(" mln", " млн"), "NX", 1],
+      gdp: h => ["📈", L("PKB", "ВВП"), X.n0(h.Y) + L(" mln", " млн"), "Y", 1, "gdp"],
+      unemp: h => ["👷", L("Bezrobocie", "Безработица"), X.pct(h.unemp), "unemp", -1, "jobs"],
+      infl: h => ["📊", L("Inflacja", "Инфляция"), X.pct(h.infl), "infl", -1, "infl"],
+      budget: h => ["🧾", L("Saldo budżetu", "Сальдо бюджета"), X.sgn(h.budget) + L(" mln", " млн"), "budget", 1, "budget"],
+      debt: h => ["💸", L("Dług / PKB", "Долг / ВВП"), Math.round(h.debtRatio * 100) + "%", "debtRatio", -1],
+      approval: h => ["🗳️", L("Poparcie", "Поддержка"), Math.round(h.approval) + "%", "approval", 1, "approval"],
+    };
+    function whyModel(k){
+      const h = H(), a = ago(30);
+      const nodes = keys => keys.map(key => { const [ic, lab, val, f, goodDir, link] = NODE[key](h); const abs = ABS.includes(key); const dv = abs ? h[f] - a[f] : a[f] ? (h[f] / a[f] - 1) * 100 : 0; return { ic, lab, val, dv, abs, good: Math.abs(dv) < 0.3 ? 0 : (dv > 0) === (goodDir > 0) ? 1 : -1, link }; });
+      let chain, cause, side = [];
+      if (k === "bread" || k === "grain"){
+        const drivers = [["grain", h.costGrain - a.costGrain], ["energy", h.costEnergy - a.costEnergy], ["labor", h.costLabor - a.costLabor], ["scarcity", (h.scarcity - a.scarcity) * 3.6]].sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
+        const top = drivers[0][0], weak = h.harvestF < S.HARVEST0 * 0.92;
+        chain = top === "energy" ? ["energy", "bread"] : top === "scarcity" ? (weak ? ["rain", "harvest", "stock", "prod", "short", "bread"] : ["stock", "prod", "short", "bread"]) : weak ? ["rain", "crop", "harvest", "grain", "bread"] : ["stock", "imp", "grain", "bread"];
+        if (k === "grain") chain = ["rain", "harvest", "stock", "imp", "grain"];
+        cause = { grain: L("cena zboża", "цена зерна"), energy: L("koszty energii", "стоимость энергии"), labor: L("rosnące płace i ceny", "растущие зарплаты и цены"), scarcity: L("brak chleba na rynku (popyt > podaż)", "нехватка хлеба (спрос > предложения)") }[top];
+        if (Math.abs(drivers[0][1]) < 0.02) cause = L("cena stabilna — rynek blisko równowagi", "цена стабильна — рынок близок к равновесию");
+        if (k === "grain") cause = h.harvestF < S.HARVEST0 * 0.92 ? L("słabsza prognoza zbiorów", "слабый прогноз урожая") : h.stock < h.prod * 1.5 ? L("kończą się zapasy przed żniwami", "запасы заканчиваются до жатвы") : L("podaż i zapasy w normie", "предложение и запасы в норме");
+        if (s.b.capped) cause = L("cena maksymalna — tani chleb, ale go brakuje", "потолок цены — дешёвый хлеб, но его не хватает");
+        side = [[L("🌾 Zboże", "🌾 Зерно"), h.costGrain], [L("👷 Praca", "👷 Труд"), h.costLabor], [L("⚡ Energia", "⚡ Энергия"), h.costEnergy], [L("🏪 Marża i niedobór", "🏪 Маржа и дефицит"), h.bread - h.costGrain - h.costLabor - h.costEnergy]];
+      } else if (k === "infl"){
+        const y1 = s.hist[Math.max(0, s.hist.length - 361)]?.bread || h.bread;
+        const food = 0.15 * ((h.bread / y1 - 1) * 100), en = (h.energy - 1) * 12, dem = 0.45 * s.m.ygap;
+        const top = [["food", food], ["energy", en], ["demand", dem]].sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0][0];
+        chain = top === "energy" ? ["energy", "bread", "infl", "realInc"] : top === "food" ? ["harvest", "grain", "bread", "infl", "realInc"] : ["rate", "conf", "C", "gdp", "infl"];
+        cause = { food: L("drożejąca żywność (szok podażowy)", "дорожающая еда (шок предложения)"), energy: L("droga energia (inflacja kosztowa)", "дорогая энергия (инфляция издержек)"), demand: s.m.ygap > 0 ? L("popyt przewyższa możliwości gospodarki (inflacja popytowa)", "спрос превышает возможности экономики (инфляция спроса)") : L("słaby popyt hamuje ceny", "слабый спрос сдерживает цены") }[top];
+        side = [[L("🍞 Żywność", "🍞 Еда"), food], [L("⚡ Energia", "⚡ Энергия"), en], [L("📈 Popyt", "📈 Спрос"), dem], [L("🔮 Oczekiwania", "🔮 Ожидания"), s.m.inflE]];
+      } else if (k === "gdp" || k === "jobs"){
+        const top = ["C", "I", "G", "NX"].map(c => [c, h[c] - a[c]]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0][0];
+        chain = { C: ["conf", "realInc", "C"], I: ["rate", "I"], G: ["G"], NX: ["energy", "NX"] }[top].concat(k === "jobs" ? ["gdp", "unemp"] : ["gdp"]);
+        cause = { C: L("konsumpcja gospodarstw domowych", "потребление домохозяйств"), I: L("inwestycje firm (kredyt i stopy)", "инвестиции фирм (кредит и ставки)"), G: L("wydatki państwa", "госрасходы"), NX: L("handel zagraniczny", "внешняя торговля") }[top];
+        side = [["🛍️ C", h.C], ["🏗️ I", h.I], ["🏛️ G", h.G], ["🌍 NX", h.NX]];
+      } else if (k === "budget"){
+        chain = ["gdp", "unemp", "budget", "debt"];
+        const R = s.m.rev, Sp = s.m.spendItems;
+        side = [[L("💼 Podatek dochodowy", "💼 Подоходный налог"), R.tax * 30], ["🧾 VAT", R.vat * 30], [L("⚓ Cła", "⚓ Пошлины"), R.tariff * 30], [L("🏥 Usługi publiczne", "🏥 Госуслуги"), -Sp.services * 30], [L("🤝 Transfery i zasiłki", "🤝 Трансферы и пособия"), -Sp.transfers * 30], [L("🚜 Dopłaty rolne", "🚜 Агродотации"), -Sp.farm * 30], [L("🏗️ Inwestycje", "🏗️ Инвестиции"), -Sp.projects * 30], [L("💸 Odsetki", "💸 Проценты"), -Sp.interest * 30]].filter(x => Math.abs(x[1]) > 0.01);
+        const big = side.filter(x => x[1] < 0).sort((x, y) => x[1] - y[1])[0];
+        cause = h.budget < 0 ? L(`wydatki większe niż wpływy (największa pozycja: ${big[0]})`, `расходы больше доходов (крупнейшая статья: ${big[0]})`) : L("wpływy pokrywają wydatki", "доходы покрывают расходы");
+      } else {
+        chain = ["realInc", "unemp", "infl", "short", "approval"];
+        side = [[L("👛 Dochody realne", "👛 Реальные доходы"), 40 * (h.realInc - 1)], [L("👷 Bezrobocie", "👷 Безработица"), -2.6 * (h.unemp - 5)], [L("📊 Inflacja", "📊 Инфляция"), -1.8 * Math.max(0, h.infl - 3)], [L("🧺 Kolejki", "🧺 Очереди"), -1.2 * 100 * h.short / Math.max(1, h.demand)], [L("💼 Podatki", "💼 Налоги"), -0.6 * (s.p.tax - 22)], [L("🏥 Usługi i transfery", "🏥 Услуги и трансферы"), 4 * (s.p.spend - 17.5) + 0.1 * (s.p.transfers - 25)]];
+        cause = side.slice().sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0][0];
+      }
+      return { chain: nodes(chain), cause, side };
+    }
+    function whyHtml(k){
+      const W = whyModel(k), title = { bread: L("Cena chleba", "Цена хлеба"), grain: L("Cena zboża", "Цена зерна"), infl: X.kpi.infl, gdp: X.kpi.gdp, jobs: X.kpi.jobs, budget: X.kpi.budget, approval: X.kpi.approval }[k];
+      const last = W.chain[W.chain.length - 1];
+      const nodes = W.chain.map((n, i) => `<button class="nv-node ${n.good > 0 ? "g" : n.good < 0 ? "b" : ""}" ${n.link && n.link !== k ? `data-why="${n.link}"` : ""}><i>${n.ic}</i><span>${n.lab}</span><b>${n.val}</b><em>${Math.abs(n.dv) < 0.05 ? "→" : (n.dv > 0 ? "↑ +" : "↓ −") + X.n1(Math.abs(n.dv)) + (n.abs ? L(" pp", " пп") : "%")}</em></button>${i < W.chain.length - 1 ? '<div class="nv-arr">↓</div>' : ""}`).join("");
+      const maxS = Math.max(...W.side.map(x => Math.abs(x[1])), 0.001);
+      const fmtS = v => k === "bread" || k === "grain" ? X.zl(v) : k === "gdp" || k === "jobs" ? X.n0(v) : X.sgn(v);
+      const sideH = W.side.map(([n, v]) => `<div class="nv-sbar"><span>${n}</span><i class="${k === "budget" || k === "approval" ? (v >= 0 ? "g" : "b") : ""}" style="width:${Math.abs(v) / maxS * 100}%"></i><b>${fmtS(v)}</b></div>`).join("");
+      const sideT = { bread: L("Z czego składa się cena bochenka", "Из чего состоит цена буханки"), grain: L("Koszty bochenka", "Издержки буханки"), infl: L("Skąd inflacja (pkt proc.)", "Откуда инфляция (п.п.)"), gdp: L("PKB = C + I + G + NX (mln/mies.)", "ВВП = C + I + G + NX (млн/мес.)"), jobs: L("PKB = C + I + G + NX (mln/mies.)", "ВВП = C + I + G + NX (млн/мес.)"), budget: L("Wpływy i wydatki (mln/mies.)", "Доходы и расходы (млн/мес.)"), approval: L("Co wpływa na poparcie (pkt)", "Что влияет на поддержку (п.)") }[k];
+      return `<div class="nv-whyh"><small>${X.why}</small><h2>${title}: ${last.val}</h2><p class="nv-muted">${L("Zmiany w ostatnich 30 dniach. Dotknij węzła, aby zajrzeć głębiej.", "Изменения за 30 дней. Нажми на узел, чтобы копнуть глубже.")}</p></div>
+        <div class="nv-graph">${nodes}</div>
+        <p class="nv-cause"><b>${X.mainCause}:</b> ${W.cause}</p>
+        <details class="nv-more"><summary>${sideT}</summary>${sideH}</details>`;
+    }
+    function openWhy(k){ why = k; modal(whyHtml(k), "why"); track?.("game", "why", k); }
+
+    // ---------- zakładki
+    const spark = (vals, color = "#2347c5", hh = 70) => { if (vals.length < 2) return `<p class="nv-muted">${L("Dane zbiorą się z czasem.", "Данные накопятся со временем.")}</p>`; const mn = Math.min(...vals), mx = Math.max(...vals), W = 300; const pts = vals.map((v, i) => `${(i / (vals.length - 1) * W).toFixed(1)},${(hh - 8 - (v - mn) / ((mx - mn) || 1) * (hh - 16)).toFixed(1)}`).join(" "); return `<div class="nv-spk"><svg class="nv-spark" viewBox="0 0 ${W} ${hh}" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="2.2" vector-effect="non-scaling-stroke" points="${pts}"/></svg><small>${X.n1(mx)}</small><small>${X.n1(mn)}</small></div>`; };
+    let chartKey = "Y", fc = null, fcAt = -1;
+    function forecast(){ const k = Math.floor(s.day / 30); if (fcAt !== k || !fc){ fcAt = k; const p = S.project(s, 360); fc = { m3: p[2], m6: p[5], m12: p[11] }; } return fc; }
+    function panelHtml(){
+      const h = H(), m = s.m, b = s.b, g = s.g;
+      if (tab === "economy"){
+        const f = forecast(), arrow = (now, fut, goodUp, abs) => { if (fut == null) return ""; const d = abs ? fut - now : (fut / now - 1) * 100; const ic = Math.abs(d) < (abs ? 0.2 : 0.5) ? "→" : d > 0 ? "↗" : "↘"; const cls = ic === "→" ? "n" : (d > 0) === goodUp ? "g" : "b"; return `<i class="${cls}">${ic}</i>`; };
+        const rows = [[L("PKB", "ВВП"), "Y", true], [L("Inflacja", "Инфляция"), "infl", false, 1], [L("Bezrobocie", "Безработица"), "unemp", false, 1], [L("Cena chleba", "Цена хлеба"), "bread", false], [L("Eksport netto", "Чистый экспорт"), "NX", true, 1]];
+        const keys = [["Y", L("PKB", "ВВП")], ["infl", L("Inflacja", "Инфляция")], ["unemp", L("Bezrobocie", "Безработица")], ["bread", L("Chleb", "Хлеб")], ["grain", L("Zboże", "Зерно")], ["debtRatio", L("Dług/PKB", "Долг/ВВП")], ["realInc", L("Dochód realny", "Реальный доход")], ["rate", L("Stopa", "Ставка")], ["approval", L("Poparcie", "Поддержка")]];
+        const series = s.hist.filter((_, i) => i % 3 === 0).slice(-240).map(x => x[chartKey]);
+        return `<h2>${X.tabs.economy}</h2>
+          <div class="nv-box"><b>${L("Prognoza (bez nowych wstrząsów)", "Прогноз (без новых шоков)")}</b>
+          <table class="nv-tbl"><tr><th></th><th>${L("teraz", "сейчас")}</th><th>3 ${L("mies.", "мес.")}</th><th>6</th><th>12</th></tr>${rows.map(([n, f2, up, abs]) => `<tr><td>${n}</td><td>${f2 === "bread" ? X.zl(h[f2]) : abs ? X.n1(h[f2]) : X.n0(h[f2])}</td>${["m3", "m6", "m12"].map(p => `<td>${arrow(h[f2], f[p]?.[f2], up, abs)}</td>`).join("")}</tr>`).join("")}</table></div>
+          <div class="nv-box"><b>${L("Ryzyka na 3 miesiące", "Риски на 3 месяца")}</b>${Object.entries(s.risks).sort((a, b2) => b2[1] - a[1]).map(([k, p]) => `<div class="nv-sbar"><span>${X.ev[k].icon} ${X.ev[k].name}</span><i class="${p > 0.4 ? "b" : ""}" style="width:${p * 100}%"></i><b>${Math.round(p * 100)}%</b></div>`).join("")}<p class="nv-muted">${L("Szacunki są niepewne. Sygnały (opady, nastroje, dług, stopy) zmieniają ryzyko.", "Оценки неточны. Сигналы (осадки, настроения, долг, ставки) меняют риск.")}</p></div>
+          <div class="nv-box"><div class="nv-chips">${keys.map(([k2, n]) => `<button class="${k2 === chartKey ? "on" : ""}" data-chart="${k2}">${n}</button>`).join("")}</div>${spark(series)}<p class="nv-muted">${L("Ostatnie 2 lata", "Последние 2 года")}</p></div>
+          <div class="nv-box"><b>${L("Kogo dotykają zmiany", "Кого затрагивают изменения")}</b>${m.groups.map(G => `<div class="nv-sbar"><span>${{ low: L("Niskie dochody", "Низкие доходы"), mid: L("Średnie dochody", "Средние доходы"), high: L("Wysokie dochody", "Высокие доходы") }[G.k]}</span><i class="${G.realInc < 0.97 ? "b" : "g"}" style="width:${clamp(G.realInc * 70, 5, 100)}%"></i><b>${Math.round(G.realInc * 100)}%</b></div>`).join("")}<p class="nv-muted">${L("Dochód realny vs. normalny. Żywność to 28% wydatków biednych i 7% bogatych — droższy chleb uderza nierówno.", "Реальный доход vs. обычного. Еда — 28% расходов бедных и 7% богатых — дорогой хлеб бьёт неравномерно.")}</p></div>`;
+      }
+      if (tab === "budget"){
+        const R = m.rev, Sp = m.spendItems, rv = [["💼 " + L("Podatek dochodowy", "Подоходный налог"), R.tax], ["🧾 VAT", R.vat], ["⚓ " + L("Cła", "Пошлины"), R.tariff], ["🌾 " + L("Sprzedaż z rezerwy", "Продажи из резерва"), R.reserve]], sp = [["🏥 " + L("Usługi publiczne", "Госуслуги"), Sp.services], ["🤝 " + L("Transfery i zasiłki", "Трансферы и пособия"), Sp.transfers], ["🚜 " + L("Dopłaty rolne", "Агродотации"), Sp.farm], ["🏗️ " + L("Inwestycje", "Инвестиции"), Sp.projects], ["💸 " + L("Odsetki", "Проценты"), Sp.interest], ["🌾 " + L("Zakupy do rezerwy", "Закупки в резерв"), Sp.reserve]];
+        const mx = Math.max(...rv.map(x => x[1]), ...sp.map(x => x[1])) * 30;
+        const bars = (arr, cls) => arr.filter(x => x[1] > 0.0005).map(([n, v]) => `<div class="nv-sbar"><span>${n}</span><i class="${cls}" style="width:${v * 30 / mx * 100}%"></i><b>${X.n1(v * 30)}</b></div>`).join("");
+        return `<h2>${X.tabs.budget}</h2>
+          <div class="nv-tiles"><div><small>${L("Saldo / mies.", "Сальдо / мес.")}</small><b class="${h.budget < 0 ? "bad" : ""}">${X.sgn(h.budget)}</b></div><div><small>${L("Dług, mln", "Долг, млн")}</small><b>${X.n0(m.debt)}</b></div><div><small>${L("Dług / PKB", "Долг / ВВП")}</small><b class="${h.debtRatio > 0.9 ? "bad" : ""}">${Math.round(h.debtRatio * 100)}%</b></div><div><small>${L("Oprocentowanie długu", "Ставка по долгу")}</small><b>${X.n1(m.govRate)}%</b></div></div>
+          <div class="nv-box"><b>${L("Skąd pieniądze (mln/mies.)", "Откуда деньги (млн/мес.)")}</b>${bars(rv, "g")}</div>
+          <div class="nv-box"><b>${L("Na co (mln/mies.)", "Куда (млн/мес.)")}</b>${bars(sp, "b")}</div>
+          <div class="nv-chain">➖ ${L("deficyt", "дефицит")} → 🧾 ${L("pożyczki", "займы")} → 💸 ${L("dług ↑", "долг ↑")} → 📈 ${L("odsetki ↑", "проценты ↑")}</div>
+          <button class="nv-why" data-why="budget">${X.why}</button>`;
+      }
+      if (tab === "markets"){
+        const mx = Math.max(b.demand, b.cap, b.prod) * 1.05, bar = (n, v, cls) => `<div class="nv-sbar"><span>${n}</span><i class="${cls}" style="width:${v / mx * 100}%"></i><b>${X.n0(v)}</b></div>`;
+        const cst = b.cost, tot = b.price;
+        return `<h2>${X.tabs.markets}</h2>
+          <div class="nv-box"><div class="nv-ch"><b>🍞 ${L("Rynek chleba", "Рынок хлеба")} · ${X.zl(Math.min(b.price, s.p.cap || 99))}</b><button class="nv-why" data-why="bread">${X.why}</button></div>
+            ${bar(L("Popyt — chcą kupić", "Спрос — хотят купить"), b.demand, "d")}${bar(L("Podaż — upieczone", "Предложение — испечено"), b.prod, "p")}${bar(L("Sprzedaż — kupili", "Продажи — купили"), b.sales, "g")}${bar(L("Moc piekarni", "Мощность пекарен"), b.cap, "c")}
+            <p class="nv-muted">${L("tys. bochenków / mies.", "тыс. буханок / мес.")}${b.short > 1 ? ` · <b class="bad">${L("niedobór", "дефицит")} ${X.n0(b.short)}</b>` : ""}</p>
+            <div class="nv-stack">${[["g", cst.grain, "🌾"], ["l", cst.labor, "👷"], ["e", cst.energy, "⚡"], ["m", Math.max(0, tot - cst.grain - cst.labor - cst.energy), "🏪"]].map(([c, v, ic]) => `<i class="${c}" style="flex:${v}">${ic} ${X.n1(v)}</i>`).join("")}</div>
+            <p class="nv-muted">${L("Bochenek = zboże + praca + energia + marża (rośnie przy niedoborze).", "Буханка = зерно + труд + энергия + маржа (растёт при дефиците).")}</p></div>
+          <div class="nv-box"><div class="nv-ch"><b>🌾 ${L("Rynek zboża", "Рынок зерна")} · ${X.n0(g.price)} zł/t</b><button class="nv-why" data-why="grain">${X.why}</button></div>
+            <div class="nv-tiles"><div><small>${L("Zapas", "Запас")}</small><b>${X.n0(g.stock)} t</b></div><div><small>${L("Wystarczy na", "Хватит на")}</small><b>${Math.round(g.stock / Math.max(1, b.prod) * 30)} ${L("dni", "дн.")}</b></div><div><small>${L("Prognoza zbiorów", "Прогноз урожая")}</small><b>${X.n0(h.harvestF)} t</b></div><div><small>${L("Rezerwa państwa", "Госрезерв")}</small><b>${X.n0(g.reserve)} t</b></div></div>
+            <div class="nv-flow"><span>🌍 ${X.n0(s.w.worldGrain)} zł/t</span><em>${g.imp > g.exp + 1 ? "→ 🚢 " + L("import", "импорт") + " " + X.n0(g.imp) + " t →" : g.exp > 1 ? "← 🚢 " + L("eksport", "экспорт") + " " + X.n0(g.exp) + " t ←" : "⇄"}</em><span>🏠 ${X.n0(g.price)} zł/t</span></div>
+            <p class="nv-muted">${L("Import opłaca się, gdy w kraju zboże jest droższe niż na świecie z cłem i transportem; eksport — gdy tańsze.", "Импорт выгоден, когда внутри зерно дороже мирового с пошлиной и транспортом; экспорт — когда дешевле.")}</p></div>`;
+      }
+      if (tab === "policy") return policyHtml();
+      if (tab === "build") return buildHtml();
+      if (tab === "learn"){
+        const got = Object.keys(s.concepts);
+        return `<h2>${X.tabs.learn}</h2><p class="nv-muted">${L(`Odkryte pojęcia: ${got.length}/${Object.keys(CON).length}. Pojęcie odblokowuje się, gdy zobaczysz je we własnej gospodarce.`, `Открыто понятий: ${got.length}/${Object.keys(CON).length}. Понятие открывается, когда ты увидишь его в своей экономике.`)}</p>
+          ${Object.entries(CON).map(([k, c]) => got.includes(k) ? `<div class="nv-box"><b>${c.t}</b><div class="nv-chain">${c.chain.join(" → ")}</div><p>${c.d}</p><small class="nv-muted">${L("Odkryte", "Открыто")}: ${X.months[S.date(s.concepts[k]).month]}, ${X.year} ${S.date(s.concepts[k]).year + 1}</small></div>` : `<div class="nv-box locked"><b>🔒 ???</b></div>`).join("")}`;
+      }
+      if (tab === "news") return `<h2>Novaria Daily</h2>${s.news.slice().reverse().map(n => { const [ic, title, who, quote] = newsText(n, lang), d = S.date(n.day), P = NPC[who]; return `<article class="nv-art"><small>${d.day + 1} ${X.months[d.month]}, ${X.year} ${d.year + 1}</small><b>${ic} ${esc(title)}</b>${quote ? `<p><i>${P.icon}</i> „${esc(quote)}” <small>— ${lang === "ru" ? P.ru : P.pl}</small></p>` : ""}</article>`; }).join("") || `<p class="nv-muted">${L("Na razie cisza.", "Пока тихо.")}</p>`}`;
+      return "";
+    }
+    const POL = () => [
+      { k: "reserve", ic: "🌾", min: -300, max: 600, step: 50, f: v => v > 0 ? L(`uwalniaj ${v} t/mies.`, `выпускать ${v} т/мес.`) : v < 0 ? L(`kupuj ${-v} t/mies.`, `покупать ${-v} т/мес.`) : L("bez zmian", "без изменений"), n: L("Rezerwa zboża", "Резерв зерна"), chain: ["🌾 " + L("zboże na rynku", "зерно на рынке"), "🍞 " + L("produkcja", "выпуск"), "💰 " + L("cena chleba", "цена хлеба"), "🛡️ " + L("zapas na kryzys", "запас на кризис")] },
+      { k: "cap", ic: "📜", min: 0, max: 8, step: 0.25, f: v => v ? X.zl(v) : L("brak", "нет"), n: L("Cena maksymalna chleba", "Потолок цены хлеба"), chain: ["💰 " + L("cena", "цена"), "🛒 " + L("chętni", "желающие"), "🏭 " + L("podaż bez zmian", "предложение то же"), "🧺 " + L("niedobór", "дефицит")] },
+      { k: "farmSub", ic: "🚜", min: 0, max: 20, step: 1, f: v => v + L(" mln/mies.", " млн/мес."), n: L("Dopłaty dla rolników", "Дотации фермерам"), chain: ["🚜 " + L("dochód rolników", "доход фермеров"), "🌾 " + L("przyszłe zbiory", "будущий урожай"), "🧾 " + L("budżet", "бюджет")] },
+      { k: "tax", ic: "💼", min: 10, max: 40, step: 1, f: v => v + "%", n: L("Podatek dochodowy", "Подоходный налог"), chain: ["💼 " + L("podatek", "налог"), "👛 " + L("dochód do dyspozycji", "располагаемый доход"), "🛍️ " + L("konsumpcja", "потребление"), "📈 PKB", "🧾 " + L("wpływy", "доходы")] },
+      { k: "spend", ic: "🏥", min: 12, max: 26, step: 0.5, f: v => X.n1(v) + L("% PKB", "% ВВП"), n: L("Wydatki publiczne", "Госрасходы"), chain: ["🏛️ G", "📈 AD", "👷 " + L("zatrudnienie", "занятость"), "💸 " + L("dług", "долг")] },
+      { k: "transfers", ic: "🤝", min: 0, max: 80, step: 5, f: v => v + L(" mln/mies.", " млн/мес."), n: L("Transfery socjalne", "Социальные трансферы"), chain: ["🤝 " + L("dochody biednych", "доходы бедных"), "🛍️ " + L("konsumpcja", "потребление"), "🧾 " + L("budżet", "бюджет")] },
+      { k: "rate", ic: "🏦", min: 0.5, max: 12, step: 0.25, f: v => X.n1(v) + "%", n: L("Stopa referencyjna NBP", "Ставка NBP"), chain: ["🏦 " + L("stopa", "ставка"), "💳 " + L("kredyt", "кредит"), "🏗️ " + L("inwestycje", "инвестиции"), "📈 AD", "📊 " + L("inflacja (po miesiącach)", "инфляция (через месяцы)")] },
+      { k: "tariff", ic: "⚓", min: 0, max: 50, step: 5, f: v => v + "%", n: L("Cło na zboże", "Пошлина на зерно"), chain: ["⚓ " + L("cło", "пошлина"), "🚢 " + L("import", "импорт"), "🌾 " + L("cena zboża", "цена зерна"), "🚜 " + L("rolnicy", "фермеры"), "🧾 " + L("wpływy", "доходы")] },
+    ];
+    function policyHtml(){
+      return `<h2>${X.tabs.policy}</h2><p class="nv-muted">${L("Zmieniasz warunki — ludzie i firmy reagują z opóźnieniem. Po przesunięciu suwaka zobaczysz skutki za 3 i 6 miesięcy.", "Ты меняешь условия — люди и фирмы реагируют с задержкой. После движения ползунка увидишь последствия через 3 и 6 месяцев.")}</p>
+        ${POL().map(p => { const lock = !S.unlocked(s, p.k); return `<div class="nv-pol ${lock ? "locked" : ""}"><label for="pp-${p.k}"><span>${p.ic} ${p.n}</span><b id="pv-${p.k}">${p.f(s.p[p.k])}</b></label>
+          ${lock ? `<small class="nv-muted">🔒 ${L(`Dostępne od miesiąca ${S.UNLOCK[p.k] + 1}`, `Доступно с месяца ${S.UNLOCK[p.k] + 1}`)}</small>` : `<input type="range" id="pp-${p.k}" data-pol="${p.k}" min="${p.min}" max="${p.max}" step="${p.step}" value="${s.p[p.k]}"><div class="nv-pc">${p.chain.join(" <em>→</em> ")}</div><div class="nv-prev" id="pr-${p.k}"></div>`}</div>`; }).join("")}`;
+    }
+    function previewPolicy(k){
+      const pr = $("#pr-" + k); if (!pr) return;
+      const prev = prevVals[k] ?? s.p[k];
+      if (prev === s.p[k]){ pr.innerHTML = ""; return; }
+      const b0 = S.project(s, 180, { [k]: prev }), alt = S.project(s, 180, { [k]: s.p[k] });
+      const rows = [["📈 " + L("PKB", "ВВП"), "Y", 1, 0], ["📊 " + L("Inflacja", "Инфляция"), "infl", -1, 1], ["👷 " + L("Bezrobocie", "Безработица"), "unemp", -1, 1], ["🍞 " + L("Chleb", "Хлеб"), "bread", -1, 0], ["🧾 " + L("Saldo, mln", "Сальдо, млн"), "budget", 1, 2]];
+      const cell = (a, b2, good, abs) => { if (a == null || b2 == null) return "<td></td>"; const d = abs ? b2 - a : (b2 / a - 1) * 100; const cls = Math.abs(d) < 0.05 ? "" : (d > 0) === (good > 0) ? "g" : "b"; return `<td class="${cls}">${Math.abs(d) < 0.05 ? "≈" : (d > 0 ? "+" : "−") + X.n1(Math.abs(d)) + (abs === 1 ? L(" pp", " пп") : abs === 2 ? "" : "%")}</td>`; };
+      pr.innerHTML = `<table class="nv-tbl"><tr><th>${L("różnica vs. bez zmiany", "разница vs. без изменения")}</th><th>3 ${L("mies.", "мес.")}</th><th>6 ${L("mies.", "мес.")}</th></tr>${rows.map(([n, f, good, abs]) => `<tr><td>${n}</td>${[2, 5].map(c => cell(b0[c]?.[f], alt[c]?.[f], good, abs)).join("")}</tr>`).join("")}</table>`;
+    }
+    function buildHtml(){
+      const mi = D().mIndex;
+      const info = {
+        piekarnia: [L("+1 300 tys. bochenków mocy miesięcznie", "+1 300 тыс. буханок мощности в месяц"), L("Pomaga, gdy brakuje mocy — nie gdy brakuje zboża.", "Помогает, когда не хватает мощности — не зерна.")],
+        nawadnianie: [L("Susza obniża zbiory o 65% słabiej, pola +12%", "Засуха бьёт по урожаю на 65% слабее, поля +12%"), L("Odporność: zwraca się w latach suszy. Kanały działają częściowo już w trakcie budowy.", "Устойчивость: окупается в засушливые годы. Каналы частично работают уже во время стройки.")],
+        elektrownia: [L("Szoki cen energii słabsze o 25%", "Шоки цен энергии слабее на 25%"), L("Bezpieczeństwo energetyczne: słabsza inflacja kosztowa.", "Энергобезопасность: слабее инфляция издержек.")],
+        kolej: [L("Transport zboża −35%, potencjał PKB +5%", "Транспорт зерна −35%, потенциал ВВП +5%"), L("Taniej wozić = taniej produkować.", "Дешевле возить = дешевле производить.")],
+        port: [L("Eksport +25%, większa przepustowość", "Экспорт +25%, больше пропускная способность"), L("Więcej handlu — ale większa zależność od świata.", "Больше торговли — но больше зависимость от мира.")],
+      };
+      const doneK = k => (k === "nawadnianie" && s.infra.irrigation >= 1) || (k === "elektrownia" && s.infra.energyEff) || (k === "kolej" && s.infra.rail) || (k === "port" && s.infra.port) || (k === "piekarnia" && s.b.bakeries >= 3);
+      const tr = Math.max(1, s.m.spendItems.transfers * 30);
+      return `<h2>${X.tabs.build}</h2><p class="nv-muted">${L("Inwestycja to pieniądze dziś za korzyść jutro. Każdy milion wydany tu to milion, którego nie ma na nic innego.", "Инвестиция — деньги сегодня ради выгоды завтра. Каждый миллион здесь — миллион, которого нет ни на что другое.")}</p>
+        ${Object.entries(S.PROJECTS).map(([k, P]) => { const pr = s.projects.find(x => x.k === k), lock = mi < P.unlock, done = doneK(k);
+          const pct = pr ? Math.round(100 * pr.days / (P.months * 30)) : 0, endM = pr ? Math.floor((s.day + (P.months * 30 - pr.days)) / 30) : 0;
+          return `<div class="nv-proj ${lock ? "locked" : ""}"><div class="nv-ch"><b>${PN[k][0].toUpperCase() + PN[k].slice(1)}</b>${done ? `<span class="nv-ok">✓ ${L("gotowe", "готово")}</span>` : ""}</div>
+            <div class="nv-tiles"><div><small>💰 ${L("Koszt", "Стоимость")}</small><b>${P.cost} ${L("mln", "млн")}</b></div><div><small>⏳ ${L("Budowa", "Стройка")}</small><b>${P.months} ${L("mies.", "мес.")}</b></div><div><small>👷 ${L("Miejsca pracy", "Рабочие места")}</small><b>${P.jobs}</b></div></div>
+            <p>✨ ${info[k][0]}</p><p class="nv-muted">${info[k][1]} ${L(`Alternatywa: ${P.cost} mln = ${X.n1(P.cost / tr)} mies. transferów socjalnych.`, `Альтернатива: ${P.cost} млн = ${X.n1(P.cost / tr)} мес. соцтрансферов.`)}</p>
+            ${pr ? `<div class="nv-prog"><i style="width:${pct}%"></i></div><small>🏗️ ${pct}% · ${L("ukończenie", "завершение")}: ${X.months[endM % 12]}, ${X.year} ${Math.floor(endM / 12) + 1}</small>`
+              : lock ? `<small class="nv-muted">🔒 ${L(`Od miesiąca ${P.unlock + 1}`, `С месяца ${P.unlock + 1}`)}</small>` : done ? "" : `<button class="nv-btn" data-build="${k}">${L("Rozpocznij budowę", "Начать стройку")} · ${P.cost} ${L("mln", "млн")}</button>`}</div>`; }).join("")}`;
+    }
+    function openTab(k){
+      tab = tab === k ? null : k;
+      host.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+      const p = $("#nvpanel"); p.hidden = !tab;
+      if (tab === "policy") Object.keys(s.p).forEach(k2 => prevVals[k2] = s.p[k2]);
+      if (tab){ p.innerHTML = `<button class="nv-x nv-px" data-tab="${tab}" aria-label="${L("Zamknij", "Закрыть")}">✕</button>` + panelHtml(); p.scrollTop = 0; bindPanel(); }
+      track?.("game", "tab", tab || "none");
+    }
+    function refreshPanel(){ if (!tab || tab === "policy") return; const p = $("#nvpanel"), sc = p.scrollTop; const open = [...p.querySelectorAll("details")].map(d => d.open); p.innerHTML = `<button class="nv-x nv-px" data-tab="${tab}" aria-label="${L("Zamknij", "Закрыть")}">✕</button>` + panelHtml(); p.querySelectorAll("details").forEach((d, i) => d.open = open[i]); p.scrollTop = sc; bindPanel(); }
+    function bindPanel(){
+      $("#nvpanel").querySelectorAll("[data-pol]").forEach(inp => {
+        const k = inp.dataset.pol, P = POL().find(x => x.k === k);
+        inp.oninput = () => { S.setPolicy(s, k, +inp.value); $("#pv-" + k).textContent = P.f(+inp.value); clearTimeout(previewT); previewT = setTimeout(() => previewPolicy(k), 150); hud(); learnHooks("policy:" + k); };
+      });
+    }
+
+    // ---------- modal i powiadomienia
+    function modal(html, kind){
+      $("#nvmodal").innerHTML = html ? `<div class="nv-modal" data-kind="${kind || ""}"><div class="nv-mcard">${html}<button class="nv-btn" data-mclose>${kind === "intro" ? L("Zaczynam ▶", "Начинаю ▶") : L("Zamknij", "Закрыть")}</button></div></div>` : "";
+    }
+    function toast(html, ms = 7000, cls = ""){
+      const box = $("#nvtoasts"), t = document.createElement("div"); t.className = "nv-toast " + cls; t.innerHTML = html; box.appendChild(t);
+      setTimeout(() => t.classList.add("out"), ms); setTimeout(() => t.remove(), ms + 400);
+      while (box.children.length > (matchMedia("(max-width:900px)").matches ? 1 : 3)) box.firstChild.remove();
+    }
+    function unlockConcept(k){
+      if (s.concepts[k] != null) return;
+      s.concepts[k] = s.day; const c = CON[k];
+      toast(`<small>💡 ${L("Właśnie to zobaczyłeś", "Ты только что это увидел")}</small><div class="nv-chain">${c.chain.join(" → ")}</div><b>${L("To się nazywa", "Это называется")}: ${c.t}</b>`, 9000, "learn");
+      sound.ping(); track?.("game", "concept", k);
+    }
+    // doświadczenie → wyjaśnienie → pojęcie
+    function learnHooks(tag){
+      const sh = s.b.short / Math.max(1, s.b.demand), h = H(), a = ago(30);
+      if (sh > 0.02) unlockConcept("shortage");
+      if (s.b.capped && sh > 0.02) unlockConcept("ceiling");
+      if (s.concepts.shortage != null && s.day - s.concepts.shortage > 20 && h.bread > a.bread * 1.02) unlockConcept("equilibrium");
+      if (h.bread > a.bread * 1.06 && h.demand < a.demand) unlockConcept("elasticity");
+      if (s.events.some(e => e.k === "drought" && S.phaseOf(e) !== "warning")){ unlockConcept("scarcity"); if (s.w.crop < 0.9) unlockConcept("supplyShock"); }
+      if (s.events.some(e => e.k === "energy" && S.phaseOf(e) === "crisis")) unlockConcept("costPush");
+      if (s.events.some(e => e.k === "boom") && s.m.ygap > 1) unlockConcept("demandPull");
+      if (s.events.some(e => e.k === "recession" && S.phaseOf(e) !== "warning")) unlockConcept("cycle");
+      if (tag === "policy:spend" || tag === "policy:tax" || tag === "policy:transfers") unlockConcept("fiscal");
+      if (tag === "policy:rate") unlockConcept("monetary");
+      if (tag === "policy:tariff" || s.g.imp > 150 || s.g.exp > 150) unlockConcept("trade");
+      if (tag === "build") unlockConcept("opportunity");
+      if (s.projects.some(p => p.days > 40)) unlockConcept("multiplier");
+      if (s.m.debtRatio > 0.7) unlockConcept("debt");
+    }
+
+    // ---------- raport miesiąca: kafelki, wartości na koniec miesiąca = górny pasek w tej chwili
+    function monthReport(){
+      const r = s.lastReport; if (!r) return;
+      const prev = s.monthly[s.monthly.length - 2];
+      const tile = (n, v, d, goodUp, fmtD) => `<div><small>${n}</small><b>${v}</b>${d != null ? `<i class="${Math.abs(d) < 0.05 ? "n" : (d > 0) === goodUp ? "g" : "b"}">${d > 0 ? "↑" : d < 0 ? "↓" : "→"} ${fmtD(Math.abs(d))}</i>` : ""}</div>`;
+      const top = s.news.filter(n => n.day >= s.day - 30).slice(-2).map(n => { const [ic, t] = newsText(n, lang); return `<li>${ic} ${esc(t)}</li>`; }).join("");
+      toast(`<small>📅 ${L("Koniec miesiąca", "Конец месяца")}: ${X.months[r.month]}, ${X.year} ${r.year + 1}</small>
+        <div class="nv-tiles sm">${tile(L("PKB", "ВВП"), X.n0(r.YEnd), prev ? (r.YEnd / prev.YEnd - 1) * 100 : null, true, v => X.n1(v) + "%")}${tile(L("Inflacja", "Инфляция"), X.pct(r.infl), prev ? r.infl - prev.infl : null, false, v => X.n1(v))}${tile(L("Bezrobocie", "Безработица"), X.pct(r.unemp), r.unemp - r.unempStart, false, v => X.n1(v))}${tile(L("Chleb", "Хлеб"), X.zl(r.breadEnd), (r.breadEnd / r.breadStart - 1) * 100, false, v => X.n1(v) + "%")}${tile(L("Saldo w miesiącu", "Сальдо за месяц"), X.sgn(r.budget), null)}${tile(L("Poparcie", "Поддержка"), Math.round(r.approval) + "%", prev ? r.approval - prev.approval : null, true, v => X.n1(v))}</div>
+        ${top ? `<ul>${top}</ul>` : ""}`, speed >= 16 ? 3500 : 8000, "month");
     }
 
     // ---------- czas
-    function monthEnd(){
-      if (st.done) return;
-      const before = st.budget, prevP = st.price, stBefore = { ...st, d: { ...st.d } };
-      const { r, finished } = advance(st);
-      const ev = [];
-      finished.forEach(t => { ev.push(t === "piekarnia2" ? L(`Ukończono: ${BI[t].name}. Od teraz moc: ${ty(st.bakeries * NORM)}`, `Построено: ${BI[t].name}. Теперь мощность: ${ty(st.bakeries * NORM)}`) : L(`Ukończono: ${BI[t].name} — pełny efekt.`, `Построено: ${BI[t].name} — полный эффект.`)); floatText(t === "piekarnia2" ? "piekarnia" : "farma", t === "piekarnia2" ? L("+1 000 tys. mocy", "+1 000 тыс. мощности") : L("+12% potencjału", "+12% потенциала"), true); });
-      if (r.capped && r.short > 1) ev.push(L(`⚠️ Chleb był tani (${zl(r.P)}), ale nie dla wszystkich: zabrakło ${ty(r.short)} bochenków.`, `⚠️ Хлеб был дешёвым (${zl(r.P)}), но не для всех: не хватило ${ty(r.short)} буханок.`));
-      else if (!r.ok.shortage) ev.push(L(`Zabrakło ${ty(r.short)} bochenków: cena jeszcze nie dogoniła równowagi.`, `Не хватило ${ty(r.short)} буханок: цена ещё не догнала равновесную.`));
-      if (!r.ok.farmInc) ev.push(L(`Rolnicy protestują: dochód tylko ${pc(r.farmInc)} normalnego.`, `Фермеры протестуют: доход лишь ${pc(r.farmInc)} обычного.`));
-      if (!r.ok.unemp) ev.push(L(`Bezrobocie ${fmt(r.unemp)}%.`, `Безработица ${fmt(r.unemp)}%.`));
-      if (!r.ok.budget) ev.push(L("Budżet poniżej limitu.", "Бюджет ниже лимита."));
-      if (st.m === BLOCKADE[0]) ev.push(L("Od teraz przez 3 miesiące import jest zablokowany (max 120 t).", "Следующие 3 месяца импорт заблокирован (макс. 120 т)."));
-      if (st.m === BLOCKADE[0] + 1) ev.push(L("Prognoza: w tym miesiącu susza (−20% zbiorów).", "Прогноз: в этом месяце засуха (−20% урожая)."));
-      if (st.m === BLOCKADE[BLOCKADE.length - 1] + 1) ev.push(L("Blokada importu się skończyła.", "Блокада импорта закончилась."));
-      if (st.m === 7) ev.push(L("Do miasta napłynęli nowi mieszkańcy: popyt +3%.", "В город приехали новые жители: спрос +3%."));
-      if (st.m === 9) ev.push(L("Nowe żniwa! Zbiory wracają do normy — dobry moment, by odbudować rezerwy.", "Новый урожай! Урожай возвращается к норме — хороший момент пополнить резерв."));
-      st.log.push(`${T.month} ${st.m}: ${L("chleb", "хлеб")} ${fmt(r.P)} zł, ${L("niedobór", "дефицит")} ${n0(r.short)} ${L("tys.", "тыс.")}, ${T.welfare.toLowerCase()} ${Math.round(r.W)}${r.rational ? " ✓" : " ✗"}`);
-      if (Math.abs(st.budget - before) >= 0.1) floatText("rzad", sign(st.budget - before) + T.mln, st.budget >= before);
-      track?.("game", "1-m" + st.m, Math.round(r.W));
-      world?.apply(view()); hud(); labels(); panel();
-      if (st.done){ pause(); finish(); return; }
-      const big = Math.abs(r.dP) >= 3;
-      if (ev.length || big || !r.rational){
-        pause();
-        const c = causes(stBefore, r, L), cc = { r: "🔴", o: "🟠", y: "🟡" };
-        modal(`<h2>${L("Koniec miesiąca", "Конец месяца")} ${st.m}</h2>
-          <p>${L(`Cena chleba: ${zl(prevP)} → <b>${zl(r.P)}</b> (${sign(r.dP)}%).`, `Цена хлеба: ${zl(prevP)} → <b>${zl(r.P)}</b> (${sign(r.dP)}%).`)} ${T.welfare}: <b>${Math.round(r.W)}</b> · ${r.rational ? L("decyzje racjonalne ✓", "решения рациональны ✓") : L("decyzje nieracjonalne ✗", "решения нерациональны ✗")}</p>
-          ${c.list.length ? `<b>${L("Dlaczego cena jest taka?", "Почему цена такая?")}</b><ul class="gcause">${c.list.slice(0, 3).map(x => `<li>${cc[x.col]} ${x.txt}</li>`).join("")}</ul>` : ""}
-          ${ev.length ? `<b>${L("Wydarzenia", "События")}</b><ul>${ev.map(e => `<li>${inline(e)}</li>`).join("")}</ul>` : ""}
-          <p class="gsmall">${L("Gra jest zatrzymana. Dotknij wskaźnika, aby zobaczyć pełny łańcuch przyczyn.", "Игра на паузе. Нажми на показатель, чтобы увидеть полную цепочку причин.")}</p>`);
-      }
+    const MS = { 1: 1100, 4: 280, 16: 70 };
+    function setSpeed(v){
+      clearInterval(timer); timer = null;
+      if (v > 0 && !s.over){ speed = v; timer = setInterval(stepDay, MS[v]); }
+      hud(); visual();
     }
-    function dayTick(){ if (st.done) return; st.day++; if (st.day >= DAYS) monthEnd(); else hud(); }
-    function play(){ if (st.done || timer || tutorial) return; modal(""); timer = setInterval(dayTick, 300 / speed); world?.setRunning(true); hud(); }
-    function pause(){ if (timer){ clearInterval(timer); timer = null; } world?.setRunning(false); if ($("#gplay")) hud(); }
+    function stepDay(){
+      if (s.over){ setSpeed(0); finish(); return; }
+      const nNews = s.news.length;
+      S.tick(s);
+      if (s.day % 30 === 0){ monthReport(); save(); }
+      if (s.news.length > nNews){ const n = s.news[s.news.length - 1]; if (/:crisis$|^warn:/.test(n.id)){ if (speed >= 4) setSpeed(0); const [ic, t] = newsText(n, lang); toast(`<b>${ic} ${esc(t)}</b>${speed >= 4 || !timer ? `<small>${L("Czas zatrzymany — sprawdź, co się dzieje.", "Время остановлено — посмотри, что происходит.")}</small>` : ""}`, 9000, "alert"); sound.ping(); } }
+      learnHooks();
+      hud(); feed(); visual();
+      if (s.day % 3 === 0){ labels(); refreshPanel(); if (sel) $("#nvcard").innerHTML = objCard(sel); }
+      if (why && s.day % 2 === 0){ const c = $("#nvmodal .nv-mcard"); if (c){ const o = c.querySelector("details")?.open; c.innerHTML = whyHtml(why) + `<button class="nv-btn" data-mclose>${L("Zamknij", "Закрыть")}</button>`; if (o) c.querySelector("details").open = true; } }
+      if (s.over) finish();
+    }
+    function visual(){
+      const d = D(), h = H();
+      world?.apply({ prod: s.b.prod / S.BAKERY_CAP / s.b.bakeries, act: s.m.Y / s.m.Ypot, trade: clamp((s.g.imp + s.g.exp) / 300 + s.m.X / 150, 0.1, 1.5), short: 100 * s.b.short / Math.max(1, s.b.demand), stock: clamp(s.g.stock / 12000, 0, 1),
+        crop: s.w.crop, month: d.month, dayIn: (d.day + 1) / 30, rain: s.w.rain, energy: s.w.energy,
+        building: s.projects.map(p => p.k), built: [s.infra.irrigation >= 1 && "nawadnianie", s.infra.energyEff && "elektrownia", s.infra.rail && "kolej", s.infra.port && "port"].filter(Boolean), bakeries: s.b.bakeries, running: !!timer, speed, workers: 1 - h.unemp / 100 });
+      sound.set({ rain: s.w.rain, act: s.m.Y / s.m.Ypot, alarm: s.events.some(e => S.phaseOf(e) === "crisis") });
+    }
     function finish(){
-      const g = grade(st), H = st.hist;
-      try { const prev = JSON.parse(localStorage.getItem(LS) || "null"); if (prev == null || g.stars > prev) localStorage.setItem(LS, JSON.stringify(g.stars)); } catch {}
-      track?.("game", "1-end", Math.round(g.eff));
-      const top = H.reduce((a, h) => h.r.P > a.r.P ? h : a, H[0]);
-      const capM = H.filter(h => h.r.capped).length, blkRel = H.filter(h => BLOCKADE.includes(h.m)).reduce((s, h) => s + h.r.rel, 0), earlyRel = H.filter(h => h.m < BLOCKADE[0]).reduce((s, h) => s + h.r.rel, 0);
-      const ratNotOpt = H.filter(h => h.r.rational && h.bestW - h.r.W > 1).length;
-      const qa = [
-        [L("Dlaczego chleb drożał?", "Почему хлеб дорожал?"), L(`Najdrożej było w miesiącu ${top.m + 1} (${zl(top.r.P)}): podaż chleba (${ty(top.r.production)}) nie nadążała za popytem. Cena rośnie, gdy podaż nie nadąża za popytem.`, `Дороже всего было в месяце ${top.m + 1} (${zl(top.r.P)}): предложение хлеба (${ty(top.r.production)}) не успевало за спросом. Цена растёт, когда предложение не успевает за спросом.`)],
-        [L("Dlaczego cena maksymalna tworzy niedobór?", "Почему потолок цены создаёт дефицит?"), capM ? L(`Używałeś jej przez ${capM} mies.: cena poniżej równowagi zwiększa liczbę chętnych, a nie liczbę bochenków.`, `Ты использовал его ${capM} мес.: цена ниже равновесной увеличивает число желающих, а не число буханок.`) : L("Cena poniżej równowagi zwiększa liczbę chętnych, a nie liczbę bochenków.", "Цена ниже равновесной увеличивает число желающих, а не число буханок.")],
-        [L("Po co rezerwa i dlaczego nie zawsze jej używać?", "Зачем резерв и почему не всегда им пользоваться?"), L(`Przed blokadą uwolniłeś ${tt(earlyRel)}, w blokadzie ${tt(blkRel)}. Rezerwa wygładza chwilowy wstrząs, ale jest skończona — zużyta wcześniej nie pomoże w kryzysie.`, `До блокады ты выпустил ${tt(earlyRel)}, в блокаду ${tt(blkRel)}. Резерв сглаживает временный шок, но он конечен — потраченный раньше не поможет в кризис.`)],
-        [L("Kiedy budowa się opłaca?", "Когда стройка выгодна?"), L("Gdy zwiększa przyszłą moc tam, gdzie brakuje mocy. Gdy brakuje zboża, dodatkowe piece stoją.", "Когда увеличивает будущую мощность там, где её не хватает. Если не хватает зерна, дополнительные печи простаивают.")],
-        [L("Racjonalne a optymalne", "Рационально и оптимально"), L(`W ${ratNotOpt} mies. Twoje decyzje spełniały cele, ale nie dawały największego dobrobytu — kilka decyzji może być racjonalnych, a tylko jedna optymalna.`, `В ${ratNotOpt} мес. твои решения выполняли цели, но не давали максимального благосостояния — рациональных решений может быть несколько, а оптимальное одно.`)],
-      ];
-      modal(`<h2>${L("Koniec roku", "Конец года")}: ${"★".repeat(g.stars)}${"☆".repeat(3 - g.stars)}</h2>
-        <table class="gtbl"><tr><td>${L("Miesiące z decyzjami racjonalnymi", "Месяцы с рациональными решениями")}</td><td>${Math.round(g.rationalShare * 12)}/12</td></tr>
-          <tr><td>${L("Twój średni dobrobyt", "Твоё среднее благосостояние")}</td><td>${fmt(g.W)}</td></tr>
-          <tr><td>${L("Optymalny średni dobrobyt", "Оптимальное среднее благосостояние")}</td><td>${fmt(g.bestW)}</td></tr>
-          <tr class="sum"><td>${L("Efektywność", "Эффективность")}</td><td>${Math.round(g.eff)}%</td></tr></table>
-        <b>${L("Czego nauczył Cię ten rok", "Чему научил этот год")}</b><ul class="gcause">${qa.map(([q, a]) => `<li><b>${q}</b> ${a}</li>`).join("")}</ul>
-        <button class="gbtn" id="grestart">${T.restart}</button>`);
+      if (finish.done) return; finish.done = true;
+      clearInterval(timer); timer = null; hud();
+      try { localStorage.removeItem(LS_SAVE); } catch {}
+      const sc = S.score(s), a = sc.start, z = sc.end;
+      const stars = sc.total >= 75 ? 3 : sc.total >= 60 ? 2 : sc.total >= 45 ? 1 : 0;
+      try { const prev = JSON.parse(localStorage.getItem(LS) || "null"); if (prev == null || stars > prev) localStorage.setItem(LS, JSON.stringify(stars)); } catch {}
+      track?.("game", "term-end", Math.round(sc.total));
+      const dif = (n, v) => `<div><small>${n}</small><b>${v > 0 ? "+" : ""}${X.n1(v)}%</b></div>`;
+      const names = Object.fromEntries(POL().map(p => [p.k, p.n]));
+      const key = s.decisions.filter(dd => dd.k !== "reserve" || Math.abs(dd.v) >= 200).sort((x, y) => (y.k === "build") - (x.k === "build")).slice(0, 5);
+      modal(`<h2>${s.lost ? "🏛️ " + L("Rząd upadł", "Правительство пало") : "🏁 " + L("Kadencja zakończona", "Срок завершён")} ${"★".repeat(stars)}${"☆".repeat(3 - stars)}</h2>
+        ${s.lost ? `<p>${{ hyper: L("Hiperinflacja zniszczyła zaufanie do pieniądza.", "Гиперинфляция разрушила доверие к деньгам."), debt: L("Państwo straciło dostęp do finansowania.", "Государство потеряло доступ к финансированию."), jobs: L("Masowe bezrobocie.", "Массовая безработица."), food: L("Kryzys żywnościowy.", "Продовольственный кризис."), approval: L("Społeczeństwo odebrało Ci zaufanie.", "Общество лишило тебя доверия.") }[s.lost]}</p>` : ""}
+        <b>${L("Co się zmieniło?", "Что изменилось?")}</b>
+        <div class="nv-tiles">${dif("PKB", (z.Y / a.Y - 1) * 100)}${dif(L("Dochód realny", "Реальный доход"), (z.realInc / a.realInc - 1) * 100)}<div><small>${L("Inflacja", "Инфляция")}</small><b>${X.pct(z.infl)}</b></div><div><small>${L("Bezrobocie", "Безработица")}</small><b>${X.pct(z.unemp)}</b></div><div><small>${L("Dług/PKB", "Долг/ВВП")}</small><b>${Math.round(z.debtRatio * 100)}%</b></div><div><small>${L("Poparcie", "Поддержка")}</small><b>${Math.round(z.approval)}%</b></div></div>
+        <b>${L("Ocena", "Оценка")}: ${Math.round(sc.total)}/100</b>
+        ${Object.entries(sc.parts).map(([k, v]) => `<div class="nv-sbar"><span>${{ economy: L("Gospodarka", "Экономика"), stability: L("Stabilność", "Стабильность"), state: L("Państwo", "Государство"), society: L("Społeczeństwo", "Общество"), resilience: L("Odporność", "Устойчивость") }[k]}</span><i class="${v >= 60 ? "g" : "b"}" style="width:${v}%"></i><b>${Math.round(v)}</b></div>`).join("")}
+        <b>${L("Przetrwane kryzysy", "Пережитые кризисы")}</b><p>${s.crises.map(c => `✓ ${X.ev[c.k].icon} ${X.ev[c.k].name}`).join(" · ") || L("brak", "нет")}</p>
+        <b>${L("Ważne decyzje", "Важные решения")}</b><ul>${key.map(dd => { const dt = S.date(dd.day); return `<li>${X.months[dt.month]}, ${X.year} ${dt.year + 1}: ${dd.k === "build" ? "🏗️ " + PN[dd.v] : names[dd.k] + " → " + (POL().find(p => p.k === dd.k)?.f(dd.v) ?? dd.v)}</li>`; }).join("") || `<li>${L("Prawie niczego nie zmieniano.", "Почти ничего не менялось.")}</li>`}</ul>
+        <button class="nv-btn" id="nvnew">${L("Nowa kadencja (inne kryzysy)", "Новый срок (другие кризисы)")}</button>`, "end");
     }
-    function restart(){ pause(); st = newState(); sel = null; modal(""); world?.apply(view()); hud(); panel(); labels(); }
 
+    // ---------- wstęp: krótki, wizualny
+    function intro(){
+      modal(`<h2>🏛️ ${L("Witaj w Novarii", "Добро пожаловать в Новарию")}</h2>
+        <div class="nv-tiles"><div><small>👥 ${L("Mieszkańcy", "Жители")}</small><b>120 000</b></div><div><small>📈 PKB</small><b>${X.n0(H().Y)} ${L("mln/mies.", "млн/мес.")}</b></div><div><small>⏳ ${L("Kadencja", "Срок")}</small><b>8 ${L("lat", "лет")}</b></div></div>
+        <div class="nv-chain">🌾 ${L("farmy", "фермы")} → 🏚️ ${L("silosy", "силосы")} → 🏭 ${L("piekarnie", "пекарни")} → 🏪 ${L("sklepy", "магазины")} → 👥 ${L("ludzie", "люди")}</div>
+        <ul class="nv-steps"><li>▶ ${L("Gospodarka żyje sama — obserwuj mapę i wiadomości.", "Экономика живёт сама — наблюдай за картой и новостями.")}</li><li>👆 ${L("Klikaj budynki i wskaźniki → „Dlaczego?”.", "Нажимай на здания и показатели → «Почему?».")}</li><li>🎛️ ${L("Polityka zmienia warunki, nie ceny. Skutki przychodzą z opóźnieniem.", "Политика меняет условия, а не цены. Последствия приходят с задержкой.")}</li><li>🎯 ${L("Cel: oddać kraj silniejszy i odporniejszy niż dziś.", "Цель: передать страну сильнее и устойчивее, чем сегодня.")}</li></ul>
+        <p class="nv-muted">${L("Na początku masz rynek chleba. Podatki, NBP i handel odblokują się z czasem. Spacja = pauza.", "Сначала у тебя рынок хлеба. Налоги, NBP и торговля откроются со временем. Пробел = пауза.")}</p>`, "intro");
+      try { localStorage.setItem(LS_TUT, "5"); } catch {}
+    }
+
+    // ---------- obsługa kliknięć
     host.addEventListener("click", e => {
-      if (e.target.closest("[data-col]")){ $("#gpanel").classList.toggle("collapsed"); $(".gbody").classList.toggle("wide", $("#gpanel").classList.contains("collapsed")); return; }
-      const w = e.target.closest("[data-why]"); if (w && !tutorial){ why(w.dataset.why); return; }
-      const b = e.target.closest("[data-b]"); if (b) select(b.dataset.b);
+      const t = e.target;
+      if (t.closest("[data-mclose]") || (t.closest(".nv-modal") && !t.closest(".nv-mcard"))){ const intro0 = $(".nv-modal")?.dataset.kind === "intro"; why = null; modal(""); if (intro0 && !timer) setSpeed(1); return; }
+      if (t.closest("#nvnew")){ s = S.newGame(); finish.done = false; modal(""); hud(); feed(); visual(); labels(); setSpeed(1); return; }
+      const sp = t.closest("[data-sp]"); if (sp){ setSpeed(+sp.dataset.sp); return; }
+      const w = t.closest("[data-why]"); if (w){ openWhy(w.dataset.why); return; }
+      const tb = t.closest("[data-tab]"); if (tb){ openTab(tb.dataset.tab); return; }
+      const tg = t.closest("[data-tab-go]"); if (tg){ if (tab !== tg.dataset.tabGo) openTab(tg.dataset.tabGo); return; }
+      const ev = t.closest("[data-evk]"); if (ev){ openWhy({ drought: "grain", energy: "infl", boom: "infl", recession: "gdp", credit: "gdp", trade: "grain" }[ev.dataset.evk]); return; }
+      const ch = t.closest("[data-chart]"); if (ch){ chartKey = ch.dataset.chart; refreshPanel(); return; }
+      const bd = t.closest("[data-build]"); if (bd){ if (S.startProject(s, bd.dataset.build)){ learnHooks("build"); toast(`🏗️ ${L("Budowa ruszyła", "Стройка началась")}: ${PN[bd.dataset.build]}`, 4000); visual(); refreshPanel(); } return; }
+      if (t.closest("[data-close]")){ hideCard(); return; }
+      const ob = t.closest("[data-obj]"); if (ob){ const r = ob.getBoundingClientRect(), st = $("#nvst").getBoundingClientRect(); showCard(ob.dataset.obj, r.left - st.left + r.width / 2, r.top - st.top); return; }
     });
-    $("#gplay").onclick = () => timer ? pause() : play();
-    $("#gspeed").onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; if (timer){ clearInterval(timer); timer = setInterval(dayTick, 300 / speed); } hud(); };
-    $("#gadv").onclick = () => { if (!tutorial) advisor(); };
-    $("#ghelp").onclick = startTut;
-    if (matchMedia("(max-width:900px)").matches) $("#gpanel").classList.add("collapsed");
-    hud(); panel();
+    $("#nvsnd").onclick = () => { if (sound.enabled){ sound.off(); $("#nvsnd").textContent = "🔇"; } else { sound.on(); $("#nvsnd").textContent = "🔊"; } };
+    const onKey = e => { if (!host.isConnected){ window.removeEventListener("keydown", onKey); return; } if (e.target.closest?.("input, textarea")) return; if (e.code === "Space"){ e.preventDefault(); setSpeed(timer ? 0 : speed || 1); } if (e.key === "Escape"){ why = null; modal(""); hideCard(); } };
+    window.addEventListener("keydown", onKey);
 
-    let seenTut = false; try { seenTut = localStorage.getItem(LS_TUT) === "4"; } catch {}
+    hud(); feed();
+    let seen = false; try { seen = localStorage.getItem(LS_TUT) === "5"; } catch {}
     loadThree().then(THREE => {
-      const load = $("#gload");
-      let ok = !!THREE;
-      if (ok){ try { world = makeScene(THREE, $("#gcv")); } catch (e) { ok = false; } }
-      if (!ok){ load.textContent = T.noGL; panel(); if (!seenTut) startTut(); return; }
-      load.remove();
-      world.resize(); world.apply(view()); labels();
-      $("#gcv").addEventListener("click", e => select(world.pick(e.clientX, e.clientY)));
-      const ro = new ResizeObserver(() => { if (!host.isConnected){ ro.disconnect(); pause(); world.dispose(); return; } world.resize(); labels(); if (tutorial) showTut(tutorial.i); });
-      ro.observe($("#gscene"));
-      if (!seenTut) startTut();
+      const ld = $("#nvload");
+      if (THREE){ try { world = makeWorld(THREE, $("#nvcv")); } catch (e) { world = null; } }
+      if (!world) ld.textContent = L("Ten ekran nie obsługuje 3D — gospodarka działa dalej, korzystaj z zakładek.", "Этот экран не поддерживает 3D — экономика работает, пользуйся вкладками.");
+      else { ld.remove(); world.resize(); visual(); labels();
+        $("#nvcv").addEventListener("click", e => { const id = world.pick(e.clientX, e.clientY); const r = $("#nvst").getBoundingClientRect(); if (id) showCard(id, e.clientX - r.left, e.clientY - r.top); else hideCard(); });
+        const ro = new ResizeObserver(() => { if (!host.isConnected){ ro.disconnect(); return; } world.resize(); labels(); }); ro.observe($("#nvst"));
+      }
+      const iv = setInterval(() => { if (!host.isConnected){ clearInterval(iv); clearInterval(timer); timer = null; world?.dispose(); sound.off(); save(); return; } if (!timer){ labels(); } }, 500);
+      if (!seen) intro(); else setSpeed(1);
     });
-    window.addEventListener("hashchange", () => { if (!host.isConnected) pause(); }, { once: true });
+    window.addEventListener("pagehide", save);
   }
 
-  window.BrainstormGame = { mount, _model: { newState, sim, step, horizon, advance, grade, bestPolicy, startBuild, causes, GOALS, BLOCKADE } };
+  window.BrainstormGame = { mount };
 })();
