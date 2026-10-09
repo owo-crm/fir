@@ -251,5 +251,41 @@ test("odporność: magazyny łagodzą szok gazowy, efektywność obniża inflacj
   assert(b.mx < a.mx - 0.5 && b.mn > a.mn + 0.003, `inflacja ${a.mx}→${b.mx}, PKB ${a.mn}→${b.mn}`);
 });
 
+test("prośba o pomoc: susza w Ukrainie → wybór z kosztem i skutkami", () => {
+  const mk = () => { const s = S.newGame(51); s.flags.noEvents = true; const e = S.startEvent(s, "ua_drought"); e.len = 240; for (let d = 0; d < 60 && !s.aid; d++) S.tick(s, 1); return s; };
+  const a = mk(); assert(a.aid && a.aid.partner === "UA" && a.aid.market === "zboze", "brak prośby");
+  assert(a.news.some(n => n.id === "aid_request"), "brak wiadomości");
+  const r0 = a.partners.UA.relationship, net0 = a.macro.debt - a.macro.reserves, len0 = a.events[0].len;
+  S.respondAid(a, "help"); assert(!a.aid, "prośba nie zamknięta");
+  assert(Math.abs((a.macro.debt - a.macro.reserves) - net0 - S.AID.help.cost) < 1e-9, "koszt pomocy nie w długu");
+  assert(a.events[0].len < len0, "pomoc nie skraca kryzysu u partnera");
+  for (let d = 0; d < 90; d++) S.tick(a, 1); assert(a.partners.UA.relationship > r0 + 0.08, "relacje nie wzrosły");
+  const b = mk(); S.respondAid(b, "sell"); const c = b.contracts.find(x => x.aid);
+  assert(c && c.type === "export" && c.market === "zboze" && c.status === "active", "brak awaryjnej dostawy");
+  const d = mk(), rd = d.partners.UA.relationship; S.respondAid(d, "decline"); assert(d.partners.UA.relationship < rd, "odmowa bez kosztu");
+  const e = mk(); for (let i = 0; i < 31; i++) S.tick(e, 1); assert(!e.aid, "brak wygaśnięcia prośby");
+});
+
+test("kontrakty: kara za zerwanie i odszkodowanie od partnera trafiają do bilansu", () => {
+  const s = S.newGame(23); const o = s.offers[0]; S.acceptOffer(s, o.id);
+  const c = s.contracts.find(x => x.id === o.id), net0 = s.macro.debt - s.macro.reserves, pen = S.cancelPenalty(c);
+  S.cancelContract(s, c.id);
+  assert(Math.abs((s.macro.debt - s.macro.reserves) - net0 - pen) < 1e-9 && pen > 0, "kara nie w bilansie");
+  assert(Math.abs(pen - S.valueOf(c.market, c.volume, c.price) * 0.25) < 0.01, "kara ≠ 25% wartości rocznej");
+});
+
+test("sektory: zatrudnienie sumuje się do liczby pracujących", () => {
+  const s = days(S.newGame(29), 40), sum = Object.values(s.sectors).reduce((a, x) => a + (x.jobs || 0), 0);
+  assert(Math.abs(sum - S.DATA.macro.laborForce * (1 - s.macro.unemployment / 100)) < 1e-6, "suma " + sum);
+});
+
+test("banki: bufor kapitałowy chroni w kryzysie, ale kosztuje w spokojnych czasach", () => {
+  const run = b => { const s = S.newGame(7); s.flags.noEvents = true; s.quiet = true; S.setPolicy(s, "capBuffer", b, true); for (let i = 0; i < 36; i++) S.tick(s, 30); const y0 = s.macro.Y; const e = S.startEvent(s, "bank_stress"); e.len = 300; let mn = 9; for (let d = 0; d < 360; d++){ S.tick(s, 1); mn = Math.min(mn, s.macro.Y / y0); } return { y0, mn, b: s.macro.bank }; };
+  const lo = run(0), hi = run(4);
+  assert(hi.y0 < lo.y0, "wyższy bufor powinien kosztować w spokojnych czasach");
+  assert(hi.mn > lo.mn + 0.003, `bufor nie chroni: ${lo.mn} vs ${hi.mn}`);
+  for (const r of [lo, hi]) assert(r.b.npl > 1 && r.b.npl < 16 && r.b.capital > 5 && r.b.capital < 26, "banki poza zakresem");
+});
+
 console.log(`\n${pass} ok, ${fail} błędów`);
 if (fail) process.exit(1);

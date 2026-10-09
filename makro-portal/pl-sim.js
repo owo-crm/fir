@@ -37,7 +37,7 @@
     const s = {
       schemaVersion: SCHEMA, seed: seed >>> 0, dayIndex: 0,
       policy: { vat: D.budget.taxes.vat, pit: D.budget.taxes.pit, cit: D.budget.taxes.cit, rate: M.policyRate, social: D.budget.spending.social, health: D.budget.spending.health, admin: D.budget.spending.admin,
-        programs: Object.fromEntries(PROG.map(k => [k, D.programs[k].base])), reserveTarget: { zboze: 1, gaz: 1, paliwa: 1 } },
+        programs: Object.fromEntries(PROG.map(k => [k, D.programs[k].base])), reserveTarget: { zboze: 1, gaz: 1, paliwa: 1 }, capBuffer: 1.5 },
       pe: null,
       macro: { Y: M.gdp, Ypot: M.gdp * 1.005, C: M.consumption, I: M.investment, G: M.government, X: 0, M: 0, NX: 0, servicesNet: M.servicesNet,
         priceLevel: 1, cpi: 1, inflation: M.inflation, core: M.inflation, inflE: 3.0, unemployment: M.unemployment, rateEff: M.policyRate, realRate: M.policyRate - 3,
@@ -118,8 +118,15 @@
       for (const mk of MK) P.supply[mk] = ema(P.supply[mk] ?? 1, fx.supply[pk + mk] ?? 1, 15, dt); }
     const freightT = fx.freight * (1 - 0.15 * (E("logistyka") - 1)) * (1 - innov(s, "freight"));
     m.freight = ema(m.freight, clamp(freightT, 0.5, 3), 15, dt);
-    m.credit = ema(m.credit, fx.credit * clamp(1 - 0.03 * (m.rateEff - 4.25), 0.7, 1.15), 20, dt);
-    m.bankStress = ema(m.bankStress, clamp(0.1 + (1 - fx.credit) * 3 + Math.max(0, m.rateEff - 7) * 0.05, 0, 1), 20, dt);
+    // 3b) banki: oprocentowanie kredytów, złe kredyty (NPL), kapitał; bufor kapitałowy (decyzja gracza) = bezpieczeństwo kosztem akcji kredytowej
+    const B = m.bank = m.bank || { npl: 4, capital: 17, loans: 1650, loanGrowth: 5, lendRate: 6.6, depositRate: 3 };
+    const buf = p.capBuffer ?? 1.5;
+    B.lendRate = m.rateEff + 1.9 + 3 * m.bankStress + 0.3 * (buf - 1.5);
+    B.depositRate = Math.max(0, m.rateEff - 1.1);
+    B.npl = ema(B.npl, clamp(4 + 0.5 * (m.unemployment - DATA.macro.unemployment) + 0.25 * Math.max(0, B.lendRate - 6.6) + 8 * (1 - fx.credit) - 1.0 * Math.min(0, (m.gap ?? 0) - (s.flags.gap0 ?? 0)), 1.5, 16), 120, dt);
+    B.capital = ema(B.capital, clamp(15.5 + buf - 0.5 * (B.npl - 4) - 25 * (1 - fx.credit) + 0.15 * (B.lendRate - B.depositRate - 3.6), 6, 25), 180, dt);
+    m.credit = ema(m.credit, fx.credit * clamp(1 - 0.03 * (m.rateEff - 4.25), 0.7, 1.15) * clamp(1 - 0.02 * (buf - 1.5) - 0.06 * Math.max(0, 13.5 - B.capital), 0.7, 1.05), 20, dt);
+    m.bankStress = ema(m.bankStress, clamp(0.1 + (1 - fx.credit) * 3 + Math.max(0, m.rateEff - 7) * 0.05 + 0.06 * Math.max(0, 14 - B.capital) + 0.01 * Math.max(0, B.npl - 6), 0, 1), 20, dt);
 
     // 4) wydajność i potencjał: edukacja, R&D, modernizacja, logistyka (wolno)
     // X(k) = dodatkowe „trwałe” finansowanie programu w mld zł/rok (po opóźnieniu). Efekt liczony od kwoty, nie od procentu,
@@ -318,6 +325,11 @@
     m.govRate = govRate;
     m.nominalGDP = nom; m.debtRatio = m.debt / nom * 100; m.netDebtRatio = (m.debt - (m.reserves || 0)) / nom * 100;
 
+    // 10a) zatrudnienie w sektorach: produkcja ÷ wydajność, przeskalowane do łącznej liczby pracujących
+    { let tot = 0; const raw = {};
+      for (const k of SEC){ const S = s.sectors[k], Bs = DATA.sectors[k]; if (!Bs.employ) continue; raw[k] = Bs.employ * S.output / (S.productivity / m.prod * (k === "przemysl" ? 1 + 0.5 * clamp(0.003 * XP("przemysl"), 0, 0.25) : 1)); tot += raw[k]; }
+      const empl = DATA.macro.laborForce * (1 - m.unemployment / 100);
+      for (const k of Object.keys(raw)){ const S = s.sectors[k]; S.jobs = empl * raw[k] / tot; S.va = DATA.sectors[k].share * m.Y * S.output / Math.max(0.3, s.sectors.uslugi.output); S.prodPerWorker = S.va / Math.max(0.01, S.jobs); } }
     // 10b) społeczeństwo (wskaźniki do odczytu; nie wpływają na resztę modelu)
     if (s.flags.disp0) m.realIncome = m.disp / s.flags.disp0;
     m.employment = DATA.macro.laborForce * (1 - m.unemployment / 100);
@@ -377,7 +389,7 @@
       const T = DATA.contractTemplates[Math.floor(r() * DATA.contractTemplates.length)];
       if (s.offers.some(o => o.partner === T.partner && o.market === T.market) || s.contracts.some(c => c.status === "active" && c.partner === T.partner && c.market === T.market)) continue;
       const q = s.markets[T.market], vol = +(T.vol[0] + r() * (T.vol[1] - T.vol[0])).toFixed(2), dur = Math.round(T.dur[0] + r() * (T.dur[1] - T.dur[0]));
-      if (r() > 0.45 + 0.6 * s.partners[T.partner].relationship) continue;           // słabe relacje = mniej ofert
+      if (r() > 0.45 + 0.6 * s.partners[T.partner].relationship - 1.2 * Math.max(0, 0.95 - (s.flags.playerReliability ?? 0.95))) continue;   // słabe relacje lub zła reputacja Polski = mniej ofert
       const prem = T.prem[0] + r() * (T.prem[1] - T.prem[0]) + (T.type === "export" ? 1 : -1) * (s.partners[T.partner].relationship - 0.65) * 0.05;
       const price = +(q.world * (1 + prem)).toFixed(DATA.markets[T.market].price < 10 ? 3 : 0);
       s.offers.push({ id: s.nextId++, partner: T.partner, market: T.market, type: T.type, volume: vol, price, months: dur, guarantee: 0.8, penalty: +(valueOf(T.market, vol, price) * 0.05).toFixed(2), expires: s.dayIndex + 28, rounds: 0, status: "offer" });
@@ -411,7 +423,7 @@
     const volGain = (o.type === "import" ? want.volume - o.volume : o.volume - want.volume) / o.volume * 0.3;
     const guarGain = (o.type === "import" ? want.guarantee - o.guarantee : o.guarantee - want.guarantee) * 0.3;
     const ask_ = Math.max(0, priceGain) + Math.max(0, volGain) + Math.max(0, guarGain) + Math.abs(want.months - o.months) / o.months * 0.05;
-    const room = 0.02 + 0.08 * P.relationship + 0.04 * (P.reliability - 0.8) - o.rounds * 0.02;
+    const room = 0.02 + 0.08 * P.relationship + 0.04 * (P.reliability - 0.8) + 0.1 * ((s.flags.playerReliability ?? 0.95) - 0.95) - o.rounds * 0.02;
     o.rounds++;
     if (ask_ <= room){ Object.assign(o, want); o.penalty = +(valueOf(o.market, o.volume, o.price) * 0.05).toFixed(2); return { result: "accepted", offer: o }; }
     if (ask_ <= room * 2.5 && o.rounds < 3){ const f = room / ask_; o.price = +(o.price + (want.price - o.price) * f * 0.8).toFixed(o.price < 10 ? 3 : 0); o.volume = +(o.volume + (want.volume - o.volume) * f).toFixed(2); o.months = Math.round(o.months + (want.months - o.months) * f); return { result: "counter", offer: o }; }
@@ -442,7 +454,7 @@
       c.delivered += c.volume / 12 * c.delivery;
       if (c.delivery < c.guarantee){ c.shortfalls++;
         const forceMajeure = c.type === "import" ? (s.partners[c.partner].supply[c.market] ?? 1) < 0.95 || s.partners[c.partner].route < 0.95 : s.events.length > 0;
-        if (c.type === "import"){ s.partners[c.partner].reliability = clamp(s.partners[c.partner].reliability - (forceMajeure ? 0.01 : 0.05), 0.3, 1); if (!s.quiet) pushNews(s, "contract_shortfall", { id: c.id, fm: forceMajeure }); }
+        if (c.type === "import"){ s.partners[c.partner].reliability = clamp(s.partners[c.partner].reliability - (forceMajeure ? 0.01 : 0.05), 0.3, 1); if (!forceMajeure) oneOff(s, -c.penalty, "compensation"); /* partner płaci nam karę */ if (!s.quiet) pushNews(s, "contract_shortfall", { id: c.id, fm: forceMajeure }); }
         else { if (!forceMajeure){ s.flags.playerReliability = clamp((s.flags.playerReliability ?? 0.95) - 0.03, 0, 1); oneOff(s, c.penalty, "penalty"); } if (!s.quiet) pushNews(s, "contract_underdelivery", { id: c.id, fm: forceMajeure }); }
       }
       if (s.dayIndex >= c.end){ c.status = "done"; s.partners[c.partner].relationship = clamp(s.partners[c.partner].relationship + (c.shortfalls ? 0 : 0.04), 0, 1); if (!s.quiet) pushNews(s, "contract_done", { id: c.id }); }
@@ -462,6 +474,24 @@
     oneOff(s, K.cost, "diplomacy");     // jednorazowy koszt (finansowany długiem)
     s.decisions.push({ day: s.dayIndex, k: "diplomacy", v: pk + ":" + kind }); if (!s.quiet) pushNews(s, "diplomacy", { pk, kind });
     return { ok: true };
+  }
+
+  // ------------------------------------------------------------ prośba partnera o pomoc (bez wojen): wybór z realnymi kosztami
+  const AID = { help: { cost: 1.5, rel: 0.12, shorten: 0.25 }, sell: { rel: 0.05, months: 3, share: 0.08, prem: 0.1 }, decline: { rel: -0.06 }, timeout: { rel: -0.03 } };
+  function maybeAid(s, ev){
+    const T = DATA.events[ev.k]; if (!T.aid || s.aid || !s.partners[T.partner] || DATA.partners[T.partner].restricted) return;
+    const q = s.markets[T.aid], vol = +(q.prod * AID.sell.share).toFixed(2);
+    s.aid = { id: s.nextId++, eid: ev.id, k: ev.k, partner: T.partner, market: T.aid, volume: vol, price: +(q.world * (1 + AID.sell.prem)).toFixed(q.world < 10 ? 3 : 0), created: s.dayIndex, deadline: s.dayIndex + 30 };
+    pushNews(s, "aid_request", { pk: T.partner, mk: T.aid });
+  }
+  function respondAid(s, choice){
+    const a = s.aid; if (!a) return null; const P = s.partners[a.partner], O = AID[choice]; if (!O) return null;
+    const gain = O.rel; s.diplo = s.diplo || [];
+    if (gain > 0) s.diplo.push({ pk: a.partner, kind: "aid", t: 0, len: 90, gain, rel: 0.02 }); else P.relationship = clamp(P.relationship + gain, 0, 1);
+    if (choice === "help"){ oneOff(s, O.cost, "aid"); const ev = s.events.find(e => e.id === a.eid); if (ev) ev.len = Math.max(ev.t + 30, Math.round(ev.len * (1 - O.shorten))); }
+    if (choice === "sell") s.contracts.push({ id: s.nextId++, partner: a.partner, market: a.market, type: "export", volume: a.volume * 12 / O.months / 4, price: a.price, months: O.months, guarantee: 0.5, penalty: 0, status: "active", start: s.dayIndex, end: s.dayIndex + O.months * DAYS, delivered: 0, shortfalls: 0, delivery: 1, aid: true });
+    s.decisions.push({ day: s.dayIndex, k: "aid", v: a.partner + ":" + choice }); pushNews(s, "aid_answer", { pk: a.partner, choice });
+    s.aid = null; return { ok: true, choice };
   }
 
   // ------------------------------------------------------------ innowacje (prawdopodobieństwo zależy od R&D i edukacji)
@@ -502,7 +532,7 @@
     return { day: s.dayIndex, Y: m.Y, Ypot: m.Ypot, nominalGDP: m.Y * m.priceLevel, growthYoY: m.growthYoY, inflation: m.inflation, core: m.core, unemployment: m.unemployment, balance: m.balance, debt: m.debt, debtRatio: m.debtRatio,
       X: m.X, M: m.M, tradeBalance: m.X - m.M, C: m.C, I: m.I, G: m.G, NX: m.NX, rate: s.policy.rate, rateEff: m.rateEff, energyCost: m.energyCost, gasImportShare: m.gasImportShare, priceLevel: m.priceLevel, cpi: m.cpi,
       gas: mk.gaz.price, power: mk.prad.price, grain: mk.zboze.price, food: mk.zywnosc.price, credit: m.credit, conf: m.conf, revenue: m.revenue, spending: m.spending, prod: m.prod, pi: m.pi ? { ...m.pi } : null,
-      rev: m.rev ? { ...m.rev } : null, spend: m.spend ? { ...m.spend } : null, disp: m.disp, gap: m.gap, realIncome: m.realIncome ?? 1, mood: m.mood ?? 60, employment: m.employment, gasImp: mk.gaz.imp, gasProdD: mk.gaz.prod,
+      rev: m.rev ? { ...m.rev } : null, spend: m.spend ? { ...m.spend } : null, disp: m.disp, gap: m.gap, realIncome: m.realIncome ?? 1, mood: m.mood ?? 60, employment: m.employment, npl: m.bank?.npl, capital: m.bank?.capital, lendRate: m.bank?.lendRate, reserves: m.reserves || 0, gasImp: mk.gaz.imp, gasProdD: mk.gaz.prod,
       mk: Object.fromEntries(MK.map(k => [k, { price: mk[k].price, world: mk[k].world, prod: mk[k].prod, demand: mk[k].demand, imp: mk[k].imp, exp: mk[k].exp, stock: mk[k].stock, shortage: mk[k].shortage, parity: mk[k].parity, impCap: mk[k].impCap, impValue: mk[k].impValue, expValue: mk[k].expValue }])) };
   }
 
@@ -521,7 +551,7 @@
       else setPolicy(s, k, v, silent);
     }
   }
-  const LIMITS = { vat: [15, 27], pit: [8, 25], cit: [9, 30], rate: [0.25, 12], social: [600, 900], health: [180, 320], admin: [240, 360] };
+  const LIMITS = { capBuffer: [0, 4], vat: [15, 27], pit: [8, 25], cit: [9, 30], rate: [0.25, 12], social: [600, 900], health: [180, 320], admin: [240, 360] };
   function setPolicy(s, key, value, silent){
     let old;
     if (key.startsWith("programs.")){ const k = key.slice(9), P = DATA.programs[k]; if (!P) return; old = s.policy.programs[k]; s.policy.programs[k] = clamp(+value, 0, P.max); }
@@ -583,7 +613,7 @@
   // ------------------------------------------------------------ wiadomości (tylko ważne)
   function pushNews(s, id, data = {}){
     const key = id + (data.k || "") + (data.id || "");
-    if (s.news.some(n => n.key === key && s.dayIndex - n.day < 60 && !/offer|contract|innovation|diplomacy/.test(id))) return;
+    if (s.news.some(n => n.key === key && s.dayIndex - n.day < 60 && !/offer|contract|innovation|diplomacy|aid_/.test(id))) return;
     s.news.push({ ...data, ref: data.id, key, id, day: s.dayIndex }); if (s.news.length > 80) s.news.shift();
   }
   function checkNews(s){
@@ -594,7 +624,8 @@
     if (now.gas / mo.gas > 1.12) pushNews(s, "gas_up", { v: (now.gas / mo.gas - 1) * 100 });
     if (now.debtRatio > 60 && mo.debtRatio <= 60) pushNews(s, "debt_60", { v: now.debtRatio });
     for (const k of MK) if (s.markets[k].shortage > 0.03) pushNews(s, "shortage", { k: k, v: s.markets[k].shortage * 100 });
-    for (const ev of s.events){ const ph = phase(ev); if (ph !== ev.ph){ ev.ph = ph; if (ph !== "signal") pushNews(s, "event_" + ph, { k: ev.k, eid: ev.id }); } }
+    for (const ev of s.events){ const ph = phase(ev); if (ph !== ev.ph){ ev.ph = ph; if (ph !== "signal") pushNews(s, "event_" + ph, { k: ev.k, eid: ev.id }); if (ph === "stress") maybeAid(s, ev); } }
+    if (s.aid && s.dayIndex >= s.aid.deadline) respondAid(s, "timeout");
     void m;
   }
 
@@ -628,6 +659,6 @@
 
   const API = { DATA, SCHEMA, DAYS, MK, PK, PROG, SEC, newGame, tick, date, snapshot, project, setPolicy, applyPolicyPatch, startEvent, phase, intensity,
     makeOffers, acceptOffer, rejectOffer, negotiate, cancelContract, assessContract, implementInnovation, innovationChance, goalStatus, confidence, risks, buildReport,
-    createClock, diplomacy, DIPLO, serialize, deserialize, opportunityCost, valueOf, clone, programStock };
+    createClock, diplomacy, DIPLO, respondAid, AID, cancelPenalty, serialize, deserialize, opportunityCost, valueOf, clone, programStock };
   if (typeof module !== "undefined" && module.exports) module.exports = API; else root.PLSim = API;
 })(typeof window !== "undefined" ? window : globalThis);
