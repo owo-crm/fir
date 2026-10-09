@@ -143,5 +143,29 @@ test("„Dlaczego?” bez zmyślonych procentów", () => {
   assert(Math.abs(p.expect + p.demand + p.energy + p.food - s.macro.inflation) < 1e-9 && inf.exact, "rozbicie inflacji niedokładne");
 });
 
+test("dyplomacja: relacja rośnie z czasem, kosztuje, BY zablokowana", () => {
+  const s = S.newGame(41); s.flags.noEvents = true;
+  const r0 = s.partners.DE.relationship, d0 = s.macro.debt;
+  assert(S.diplomacy(s, "DE", "mission").ok, "misja odrzucona");
+  assert(s.macro.debt > d0, "brak kosztu");
+  assert(!S.diplomacy(s, "DE", "agreement").ok, "druga akcja naraz");
+  assert(S.diplomacy(s, "BY", "mission").reason === "sanctions", "BY nie zablokowana");
+  days(s, 30); const r1 = s.partners.DE.relationship; days(s, 160);
+  assert(r1 > r0 && r1 < r0 + 0.03, "efekt nie jest stopniowy");
+  assert(s.partners.DE.relationship >= r0 + 0.07, "brak efektu po pół roku");
+});
+
+test("więcej OZE i efektywności → mniejszy import gazu po 5 latach", () => {
+  const s = S.newGame(43); s.flags.noEvents = true;
+  const a = S.project(s, 60), b = S.project(s, 60, { programs: { oze: 40, efektywnosc: 20 } });
+  assert(b[59].gasImp < a[59].gasImp * 0.97, `import gazu: ${a[59].gasImp} → ${b[59].gasImp}`);
+  assert(b[11].gasImp > a[11].gasImp * 0.97, "efekt za szybko");
+});
+
+test("wskaźniki społeczne w zakresie", () => {
+  const s = days(S.newGame(47), 40);
+  assert(s.macro.mood > 5 && s.macro.mood < 95 && s.macro.employment > 15 && Math.abs(s.macro.realIncome - 1) < 0.2, "mood/employment/realIncome");
+});
+
 console.log(`\n${pass} ok, ${fail} błędów`);
 if (fail) process.exit(1);

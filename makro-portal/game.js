@@ -57,6 +57,94 @@
     const monthName = (m, y) => `${MONTHS[m][0].toUpperCase() + MONTHS[m].slice(1)} ${y}`;
     const dateStr = di => { const d = S.date(di); return `${d.day + 1} ${MGEN[d.month]} ${d.year}`; };
     const UNIT = L("mld zł/rok", "млрд zł/год"), PP = L(" p.p.", " п.п."), RR = L("% r/r", "% г/г");
+    // zmiana jako kolorowa strzałka: good = +1 (wzrost dobry), −1 (wzrost zły), 0 (neutralnie)
+    const dl = (v, f = n1, good = 1, unit = "") => { const z = Math.abs(v) < 0.05 * (f === n0 ? 10 : 1); const c = z ? "z" : good === 0 ? "n" : (v > 0) === (good > 0) ? "g" : "r";
+      return `<span class="pl-d ${c}">${z ? "•" : v > 0 ? "▲" : "▼"} ${f(Math.abs(v))}${unit}</span>`; };
+    const lvl = (v, f = n1, unit = "") => `<span class="${v < 0 ? "r" : "g"}">${f(v)}${unit}</span>`;
+    const MSHORT = lang === "ru" ? ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"] : ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+    // słupki SVG (przewijane w poziomie, gdy jest ich dużo)
+    function barChart(items, fmt = n1, unit = ""){
+      if (!items.length) return `<p class="muted small">${L("Dane pojawią się po pierwszym pełnym miesiącu gry.", "Данные появятся после первого полного месяца игры.")}</p>`;
+      const bw = 34, W = Math.max(300, items.length * bw), H = 150, top = 18, bot = 22, vals = items.map(x => x.v);
+      const mx = Math.max(0, ...vals), mn = Math.min(0, ...vals), r = (mx - mn) || 1, y = v => top + (mx - v) / r * (H - top - bot);
+      let g = `<line x1="0" x2="${W}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" class="zero"/>`;
+      const step = W / items.length;
+      items.forEach((it, i) => { const x = i * step + step * 0.16, w = step * 0.68, y0 = y(0), yv = y(it.v);
+        g += `<g class="${it.cls || "n"}"><rect x="${x.toFixed(1)}" y="${Math.min(y0, yv).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(1, Math.abs(yv - y0)).toFixed(1)}" rx="2"><title>${esc(it.label)}: ${fmt(it.v)}${unit}</title></rect><text x="${(x + w / 2).toFixed(1)}" y="${(it.v >= 0 ? yv - 4 : yv + 11).toFixed(1)}" class="v">${fmt(it.v)}</text><text x="${(x + w / 2).toFixed(1)}" y="${H - 6}" class="l">${esc(it.label)}</text></g>`; });
+      return `<div class="pl-bars"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
+    }
+    const SERIES = { gdp: ["growthYoY", n1, "%", v => v >= 3 ? "g" : v < 0 ? "r" : "w"], inflation: ["inflation", n1, "%", v => v >= 2 && v <= 4 ? "g" : v > 5 ? "r" : "w"], unemployment: ["unemployment", n1, "%", v => v <= 6 ? "g" : v > 8 ? "r" : "w"],
+      debt: ["debtRatio", n1, "%", v => v <= 60 ? "g" : v > 65 ? "r" : "w"], budget: ["balance", n0, "", v => v >= 0 ? "g" : "r"], trade: ["tradeBalance", n0, "", v => v >= 0 ? "g" : "w"], gas: ["gas", n0, "", () => "n"], power: ["power", n0, "", () => "n"], grain: ["grain", n0, "", () => "n"],
+      exports: ["X", n0, "", () => "n"], imports: ["M", n0, "", () => "n"], mood: ["mood", n0, "", v => v >= 55 ? "g" : v < 40 ? "r" : "w"], realIncome: ["realIncome", v => n1((v - 1) * 100), "%", v => v >= 1 ? "g" : "r"] };
+    function seriesItems(key, mode){
+      const [f, , , cl] = SERIES[key], M = s.monthly.filter(z => z[f] != null);
+      if (mode === "m") return M.slice(-24).map(z => { const d = S.date(Math.max(0, z.day - 1)); return { label: MSHORT[d.month] + (d.month === 0 ? " " + String(d.year).slice(2) : ""), v: z[f], cls: cl(z[f]) }; });
+      const by = {}; M.forEach(z => { const y = S.date(Math.max(0, z.day - 1)).year; (by[y] = by[y] || []).push(z[f]); });
+      const cy = S.date(s.dayIndex).year;
+      return Object.entries(by).map(([y, a]) => { const v = a.reduce((p, c) => p + c, 0) / a.length; return { label: y + (+y === cy ? "*" : ""), v, cls: cl(v) }; });
+    }
+    const seriesChart = (key, mode) => { const [, fmt, unit] = SERIES[key]; return barChart(seriesItems(key, mode), fmt, unit) + (mode === "y" ? `<p class="muted small">${L("Średnia roczna; * rok w toku.", "Среднее за год; * текущий год.")}</p>` : ""); };
+
+    // „?” — jak suwak działa na gospodarkę (bez liczb)
+    const H_ = (up, down, why) => ({ up, down, why });
+    const HELP = lang === "ru" ? {
+      "programs.siec": H_(["надёжность электроснабжения", "доля энергии, доходящей до потребителей", "устойчивость к авариям"], ["потери в сетях", "риск отключений и простоев заводов"], "Новые линии и подстанции меньше теряют энергию и быстрее перенаправляют ток при аварии. Эффект через годы, пока идёт строительство; сейчас растут только расходы."),
+      "programs.magazyny": H_(["запасы газа и резерв мощности", "устойчивость цен при шоках"], ["скачки цен зимой и при сбоях", "зависимость от срочных закупок"], "Хранилища позволяют закупать газ, когда он дешевле, и использовать запас во время кризиса. Импорт они почти не заменяют — они сглаживают его во времени."),
+      "programs.oze": H_(["собственная выработка электроэнергии", "энергетическая независимость", "конкурентоспособность промышленности в будущем"], ["сжигание газа в электростанциях → импорт газа", "чувствительность к мировым ценам"], "Каждая новая ВИЭ или АЭС вытесняет газовые электростанции, поэтому газа нужно меньше. Строительство долгое — первые годы видны только расходы бюджета."),
+      "programs.efektywnosc": H_(["производительность (меньше затрат на единицу продукции)", "реальные доходы домохозяйств"], ["потребление энергии и газа", "импорт энергоносителей", "энергетическая инфляция"], "Утепление зданий и экономичное оборудование уменьшают спрос на энергию. Это самый быстрый способ снизить импорт газа."),
+      "programs.logistyka": H_(["пропускная способность портов, железных дорог и трасс", "экспорт и импорт без пробок", "потенциал роста"], ["стоимость перевозок", "уязвимость к штормам и пробкам"], "Лучшие дороги и порты удешевляют торговлю и позволяют больше экспортировать. Если финансирование ниже уровня содержания, инфраструктура стареет и пропускная способность падает."),
+      "programs.edukacja": H_(["квалификация работников → производительность", "долгосрочный рост ВВП", "шанс на инновации"], ["безработица в долгой перспективе"], "Образование действует медленнее всего: эффект появляется, когда выпускники выходят на рынок труда. Сокращение бюджета образования сначала незаметно, а потом снижает потенциал экономики."),
+      "programs.badania": H_(["шанс на открытия и инновации", "производительность промышленности", "конкурентоспособность экспорта"], ["энергоёмкость (через новые технологии)"], "Наука не гарантирует результата — она повышает вероятность открытий. Каждое открытие можно внедрить, и тогда оно постоянно улучшает экономику."),
+      "programs.rolnictwo": H_(["устойчивость урожая к засухе", "собственное производство зерна и еды"], ["зависимость от импорта зерна", "продовольственная инфляция при неурожае"], "Орошение и устойчивые сорта снижают потери при засухе, поэтому цены на еду меньше скачут."),
+      "programs.przemysl": H_(["производительность и конкурентоспособность промышленности", "экспорт", "инвестиции"], ["энергоёмкость", "издержки производства"], "Модернизация делает заводы эффективнее: они производят больше при меньших затратах и выигрывают у иностранных конкурентов."),
+      vat: H_(["доходы бюджета (быстро)", "цены в магазинах"], ["потребление", "реальные доходы людей"], "НДС входит в цену почти всех товаров. Повышение быстро наполняет бюджет, но люди меньше покупают, а инфляция на время растёт."),
+      pit: H_(["доходы бюджета"], ["располагаемый доход", "потребление", "настроения"], "Подоходный налог забирает часть зарплаты: у людей меньше денег, потребление и экономика растут медленнее."),
+      cit: H_(["доходы бюджета"], ["инвестиции фирм", "будущий рост"], "Налог на прибыль уменьшает деньги, которые фирмы могут вложить в развитие. Эффект виден в инвестициях и в росте через годы."),
+      social: H_(["доходы и потребление домохозяйств", "настроения", "поддержка в кризис"], ["сальдо бюджета", "при перегреве — инфляция"], "Соцвыплаты быстро попадают в магазины, поддерживая спрос. В кризис это смягчает падение, но постоянно высокие выплаты увеличивают дефицит и долг."),
+      health: H_(["качество жизни и настроения", "здоровье работников → производительность"], ["сальдо бюджета"], "Здравоохранение — расход, который окупается медленно: здоровые люди дольше и продуктивнее работают."),
+      admin: H_(["качество работы государства"], ["сальдо бюджета (при сокращении — улучшается)"], "Это самый простой способ сэкономить, но слишком сильное сокращение ухудшает работу учреждений."),
+      rate: H_(["стоимость кредита", "сбережения"], ["инфляция и инфляционные ожидания", "инвестиции и потребление", "рост ВВП в краткосрочной перспективе"], "Высокая ставка охлаждает экономику: кредит дорожает, фирмы и люди тратят меньше, цены растут медленнее. Действует через несколько месяцев."),
+      "reserve.zboze": H_(["продовольственная безопасность", "стабильность цен на еду при засухе"], ["свободные деньги сейчас (закупки в запас)"], "Резерв — это буфер: его пополняют в спокойные времена и используют, когда у партнёров неурожай."),
+      "reserve.gaz": H_(["устойчивость к перебоям поставок газа"], ["свободные деньги сейчас", "при повышении — временно больше импорта"], "Больший запас газа означает, что сбой у поставщика не сразу ударит по заводам и домам."),
+      "reserve.paliwa": H_(["устойчивость транспорта и промышленности к скачкам цен нефти"], ["свободные деньги сейчас"], "Запасы топлива смягчают скачки цен на нефть, но их покупка требует денег сейчас."),
+    } : {
+      "programs.siec": H_(["niezawodność dostaw prądu", "część energii, która dociera do odbiorców", "odporność na awarie"], ["straty w sieci", "ryzyko wyłączeń i przestojów fabryk"], "Nowe linie i stacje mniej tracą energii i szybciej przekierowują prąd przy awarii. Efekt przychodzi po latach budowy; na początku rosną tylko wydatki."),
+      "programs.magazyny": H_(["zapasy gazu i rezerwa mocy", "stabilność cen w czasie wstrząsów"], ["skoki cen zimą i przy zakłóceniach", "zależność od pilnych zakupów"], "Magazyny pozwalają kupować gaz, gdy jest tańszy, i korzystać z zapasu w kryzysie. Prawie nie zastępują importu — rozkładają go w czasie."),
+      "programs.oze": H_(["własna produkcja prądu", "niezależność energetyczna", "konkurencyjność przemysłu w przyszłości"], ["spalanie gazu w elektrowniach → import gazu", "wrażliwość na ceny światowe"], "Każde nowe źródło OZE lub atomowe wypiera elektrownie gazowe, więc potrzeba mniej gazu. Budowa trwa długo — w pierwszych latach widać tylko koszt dla budżetu."),
+      "programs.efektywnosc": H_(["wydajność (mniej kosztów na jednostkę produkcji)", "realne dochody gospodarstw"], ["zużycie energii i gazu", "import nośników energii", "inflacja energetyczna"], "Ocieplanie budynków i oszczędne urządzenia zmniejszają popyt na energię. To najszybszy sposób na mniejszy import gazu."),
+      "programs.logistyka": H_(["przepustowość portów, kolei i tras", "eksport i import bez korków", "potencjał wzrostu"], ["koszt transportu", "wrażliwość na sztormy i zatory"], "Lepsze drogi i porty obniżają koszt handlu i pozwalają więcej eksportować. Jeśli finansowanie spadnie poniżej utrzymania, infrastruktura się starzeje i przepustowość maleje."),
+      "programs.edukacja": H_(["kwalifikacje pracowników → wydajność", "długookresowy wzrost PKB", "szansa na innowacje"], ["bezrobocie w długim okresie"], "Edukacja działa najwolniej: efekt pojawia się, gdy absolwenci wchodzą na rynek pracy. Cięcia są najpierw niewidoczne, a potem obniżają potencjał gospodarki."),
+      "programs.badania": H_(["szansa na odkrycia i innowacje", "wydajność przemysłu", "konkurencyjność eksportu"], ["energochłonność (dzięki nowym technologiom)"], "Nauka nie gwarantuje wyniku — zwiększa prawdopodobieństwo odkryć. Każde odkrycie można wdrożyć i wtedy trwale poprawia gospodarkę."),
+      "programs.rolnictwo": H_(["odporność plonów na suszę", "własna produkcja zboża i żywności"], ["zależność od importu zboża", "inflacja żywności przy nieurodzaju"], "Nawadnianie i odporne odmiany zmniejszają straty przy suszy, więc ceny żywności mniej skaczą."),
+      "programs.przemysl": H_(["wydajność i konkurencyjność przemysłu", "eksport", "inwestycje"], ["energochłonność", "koszty produkcji"], "Modernizacja sprawia, że fabryki produkują więcej przy niższych kosztach i wygrywają z konkurencją z zagranicy."),
+      vat: H_(["dochody budżetu (szybko)", "ceny w sklepach"], ["konsumpcja", "realne dochody ludzi"], "VAT jest w cenie prawie każdego towaru. Podwyżka szybko zasila budżet, ale ludzie kupują mniej, a inflacja na chwilę rośnie."),
+      pit: H_(["dochody budżetu"], ["dochód rozporządzalny", "konsumpcja", "nastroje"], "PIT zabiera część pensji: ludzie mają mniej pieniędzy, konsumpcja i gospodarka rosną wolniej."),
+      cit: H_(["dochody budżetu"], ["inwestycje firm", "przyszły wzrost"], "CIT zmniejsza pieniądze, które firmy mogą zainwestować. Skutek widać w inwestycjach i we wzroście po latach."),
+      social: H_(["dochody i konsumpcja gospodarstw", "nastroje", "wsparcie w kryzysie"], ["saldo budżetu", "przy przegrzaniu — inflacja"], "Świadczenia szybko trafiają do sklepów i podtrzymują popyt. W kryzysie łagodzą spadek, ale stale wysokie zwiększają deficyt i dług."),
+      health: H_(["jakość życia i nastroje", "zdrowie pracowników → wydajność"], ["saldo budżetu"], "Zdrowie to wydatek, który zwraca się powoli: zdrowi ludzie pracują dłużej i wydajniej."),
+      admin: H_(["jakość działania państwa"], ["saldo budżetu (przy cięciach — poprawa)"], "To najprostsze miejsce na oszczędności, ale zbyt duże cięcia pogarszają pracę urzędów."),
+      rate: H_(["koszt kredytu", "oszczędności"], ["inflacja i oczekiwania inflacyjne", "inwestycje i konsumpcja", "wzrost PKB w krótkim okresie"], "Wysoka stopa chłodzi gospodarkę: kredyt drożeje, firmy i ludzie wydają mniej, ceny rosną wolniej. Działa po kilku miesiącach."),
+      "reserve.zboze": H_(["bezpieczeństwo żywnościowe", "stabilne ceny żywności przy suszy"], ["wolne pieniądze teraz (zakup na zapas)"], "Rezerwa to bufor: uzupełnia się ją w spokojnych czasach i używa, gdy partnerzy mają nieurodzaj."),
+      "reserve.gaz": H_(["odporność na przerwy w dostawach gazu"], ["wolne pieniądze teraz", "przy podwyżce — chwilowo większy import"], "Większy zapas gazu sprawia, że awaria u dostawcy nie uderzy od razu w fabryki i domy."),
+      "reserve.paliwa": H_(["odporność transportu i przemysłu na skoki cen ropy"], ["wolne pieniądze teraz"], "Zapasy paliw łagodzą skoki cen ropy, ale ich zakup wymaga pieniędzy teraz."),
+    };
+    const helpOpen = new Set(), helpGas = {};
+    const ENERGY_P = ["oze", "efektywnosc", "magazyny", "siec"];
+    // ile % importu gazu zastąpimy przy podanej zmianie polityki (1 / 3 / 5 lat)
+    let baseProjCache = null;
+    const baseProj = () => { const k = s.dayIndex; if (!baseProjCache || baseProjCache.k !== k) baseProjCache = { k, p: S.project(s, 60) }; return baseProjCache.p; };
+    const gasReplace = patch => { const a = baseProj(), b = S.project(s, 60, patch); return [11, 35, 59].map(i => Math.max(0, (1 - b[i].gasImp / a[i].gasImp) * 100)); };
+    function helpBox(key){
+      const h = HELP[key]; if (!h) return "";
+      let gas = "";
+      if (key.startsWith("programs.") && ENERGY_P.includes(key.slice(9))){
+        const pk = key.slice(9), ck = pk + ":" + S.date(s.dayIndex).monthIndex;
+        if (!helpGas[ck]) helpGas[ck] = gasReplace({ programs: { [pk]: Math.min(D.programs[pk].max, s.policy.programs[pk] + 10) } });
+        const g = helpGas[ck];
+        gas = `<p class="pl-gasr">${ic("flame")}${L("Gdyby dodać +10 mld zł/rok: zastąpimy", "Если добавить +10 млрд zł/год: заменим")} <b>${n1(g[0])}%</b> / <b>${n1(g[1])}%</b> / <b>${n1(g[2])}%</b> ${L("importu gazu po 1 / 3 / 5 latach", "импорта газа через 1 / 3 / 5 лет")}</p>`;
+      }
+      return `<div class="pl-help"><div class="pl-hcols"><div><b class="hu">▲ ${L("Rośnie", "Растёт")}</b><ul>${h.up.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div><div><b class="hd">▼ ${L("Spada", "Падает")}</b><ul>${h.down.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div></div><p>${esc(h.why)}</p>${gas}</div>`;
+    }
 
     // ------------------------------------------------------------ stan
     let s = null;
@@ -65,7 +153,7 @@
     let tut = { done: false, step: 0 };
     try { tut = JSON.parse(localStorage.getItem(LS_TUT) || "null") || tut; } catch {}
     const clock = S.createClock({ daySec: 12, maxCatchUp: 2 });
-    let section = null, ov = null, ovBuilt = null, why = null, partnerSel = null, draft = {}, lastMonth = -1, sigRight = "", sigOv = "", chatHtml = "", chatPath = [];
+    let dataMode = "m", whyTab = "why", chatFull = false, section = null, ov = null, ovBuilt = null, why = null, partnerSel = null, draft = {}, lastMonth = -1, sigRight = "", sigOv = "", chatHtml = "", chatPath = [];
     const ui = { whyOpened: false, partnerOpened: null, asked: false };
     ctx.track?.("game", "pl_open");
 
@@ -74,9 +162,9 @@
     const $ = (q, r = host) => r.querySelector(q), $$ = (q, r = host) => [...r.querySelectorAll(q)];
 
     const SECTIONS = [["gosp", "chart", L("Gospodarka", "Экономика")], ["budzet", "coins", L("Budżet", "Бюджет")], ["sektory", "factory", L("Sektory", "Секторы")], ["handel", "globe", L("Handel", "Торговля")],
-      ["energia", "bolt", L("Energia", "Энергия")], ["nauka", "cap", L("Edukacja i Nauka", "Образование")], ["banki", "bank", L("Banki", "Банки")], ["dane", "data", L("Dane", "Данные")], ["ust", "gear", L("Ustawienia", "Настройки")]];
-    const PROG_SEC = { siec: "energia", magazyny: "energia", oze: "energia", efektywnosc: "energia", logistyka: "handel", edukacja: "nauka", badania: "nauka", rolnictwo: "sektory", przemysl: "sektory" };
-    const targetSection = t => !t ? null : t.startsWith("programs.") ? PROG_SEC[t.slice(9)] : t.startsWith("reserve.") || t === "trade" ? "handel" : t === "rate" ? "banki" : ["vat", "pit", "cit", "social", "health", "admin", "budget"].includes(t) ? "budzet" : null;
+      ["energia", "bolt", L("Energia", "Энергия")], ["edukacja", "cap", L("Edukacja", "Образование")], ["nauka", "flask", L("Nauka", "Наука")], ["banki", "bank", L("Banki", "Банки")], ["spol", "people", L("Społeczeństwo", "Общество")], ["infra", "anchor", L("Infrastruktura", "Инфраструктура")], ["dyplo", "doc", L("Dyplomacja", "Дипломатия")], ["dane", "data", L("Dane", "Данные")], ["ust", "gear", L("Ustawienia", "Настройки")]];
+    const PROG_SEC = { siec: "infra", magazyny: "energia", oze: "energia", efektywnosc: "energia", logistyka: "infra", edukacja: "edukacja", badania: "nauka", rolnictwo: "sektory", przemysl: "sektory" };
+    const targetSection = t => !t ? null : t.startsWith("programs.") ? PROG_SEC[t.slice(9)] : t.startsWith("reserve.") || t === "trade" ? "handel" : t === "rate" ? "banki" : ["social", "health"].includes(t) ? "spol" : ["vat", "pit", "cit", "admin", "budget"].includes(t) ? "budzet" : null;
 
     host.innerHTML = `
       <header class="pl-top">
@@ -167,19 +255,19 @@
     // ------------------------------------------------------------ górny pasek i wskaźniki
     const histAgo = days => { const H = s.history; return H.length > days ? H[H.length - 1 - days] : H[0] || s.start; };
     const KPIS = [
-      ["gdp", "chart", L("PKB", "ВВП"), () => s.macro.Y * s.macro.priceLevel, v => (v / 1000).toFixed(2).replace(".", ",") + " " + L("bln zł", "трлн zł"), () => sgn(s.macro.growthYoY) + RR, 1, "nominalGDP"],
-      ["inflation", "flame", L("Inflacja", "Инфляция"), () => s.macro.inflation, v => n1(v) + "%", d => sgn(d) + PP, -1, "inflation"],
-      ["unemployment", "people", L("Bezrobocie", "Безработица"), () => s.macro.unemployment, v => n1(v) + "%", d => sgn(d) + PP, -1, "unemployment"],
-      ["budget", "coins", L("Budżet", "Бюджет"), () => s.macro.balance, v => sgn(v, n0) + " " + L("mld zł", "млрд"), () => sgn(s.macro.balance / s.macro.nominalGDP * 100) + L("% PKB", "% ВВП"), 1, "balance"],
-      ["debt", "bank", L("Dług/PKB", "Долг/ВВП"), () => s.macro.debtRatio, v => n1(v) + "%", d => sgn(d) + PP, -1, "debtRatio"],
-      ["exports", "up", L("Eksport", "Экспорт"), () => s.macro.X, v => n0(v) + " " + L("mld", "млрд"), (d, p) => sgn(d / Math.max(1, p) * 100) + "%", 1, "X"],
-      ["imports", "down", L("Import", "Импорт"), () => s.macro.M, v => n0(v) + " " + L("mld", "млрд"), (d, p) => sgn(d / Math.max(1, p) * 100) + "%", 0, "M"],
+      ["gdp", "chart", L("PKB", "ВВП"), () => s.macro.Y * s.macro.priceLevel, v => (v / 1000).toFixed(2).replace(".", ",") + " " + L("bln zł", "трлн zł"), () => dl(s.macro.growthYoY, n1, 1, RR), 1, "nominalGDP"],
+      ["inflation", "flame", L("Inflacja", "Инфляция"), () => s.macro.inflation, v => n1(v) + "%", d => dl(d, n1, -1, PP), -1, "inflation"],
+      ["unemployment", "people", L("Bezrobocie", "Безработица"), () => s.macro.unemployment, v => n1(v) + "%", d => dl(d, n1, -1, PP), -1, "unemployment"],
+      ["budget", "coins", L("Budżet", "Бюджет"), () => s.macro.balance, v => lvl(v, n0) + " " + L("mld", "млрд"), () => lvl(s.macro.balance / s.macro.nominalGDP * 100, n1, L("% PKB", "% ВВП")), 1, "balance"],
+      ["debt", "bank", L("Dług/PKB", "Долг/ВВП"), () => s.macro.debtRatio, v => n1(v) + "%", d => dl(d, n1, -1, PP), -1, "debtRatio"],
+      ["exports", "up", L("Eksport", "Экспорт"), () => s.macro.X, v => n0(v) + " " + L("mld", "млрд"), (d, p) => dl(d / Math.max(1, p) * 100, n1, 1, "%"), 1, "X"],
+      ["imports", "down", L("Import", "Импорт"), () => s.macro.M, v => n0(v) + " " + L("mld", "млрд"), (d, p) => dl(d / Math.max(1, p) * 100, n1, 0, "%"), 0, "M"],
     ];
     function drawKpis(){
       const a = histAgo(30);
       $("#plkpi").innerHTML = KPIS.map(([k, icn, t, get, f, fd, good, hk]) => { const v = get(), p = a[hk] ?? v, d = v - p, th = Math.abs(p) * 0.003 + 0.02;
         const cls = !good || Math.abs(d) <= th ? "" : (d > 0) === (good > 0) ? "up" : "down";
-        return `<button class="pl-kpi k-${k}" data-why="${k}">${ic(icn)}<span><small>${t}</small><b>${f(v)}</b><i class="${cls}">${fd(d, p)}</i></span></button>`; }).join("");
+        return `<button class="pl-kpi k-${k}" data-why="${k}">${ic(icn)}<span><small>${t}</small><b>${f(v)}</b><i>${fd(d, p)}</i></span></button>`; }).join("");
     }
     function drawTop(){
       $("#pldate").textContent = dateStr(s.dayIndex);
@@ -205,17 +293,17 @@
     const priceStr = (k, p) => D.markets[k].price < 10 ? L("indeks ", "индекс ") + n0(p * 100) : n0(p) + " " + D.markets[k].priceUnit;
     function drawBottom(){
       const H = s.history.slice(-360), take = k => H.map(x => x[k]), a = histAgo(30), m = s.macro;
-      const items = [["gdp", L("PKB", "ВВП"), take("nominalGDP"), (m.Y * m.priceLevel / 1000).toFixed(2).replace(".", ",") + " " + L("bln", "трлн"), sgn(m.growthYoY) + RR, "var(--pl-green)"],
-        ["inflation", L("Inflacja", "Инфляция"), take("inflation"), n1(m.inflation) + "%", sgn(m.inflation - a.inflation) + PP, "var(--pl-red)"],
-        ["unemployment", L("Bezrobocie", "Безработица"), take("unemployment"), n1(m.unemployment) + "%", sgn(m.unemployment - a.unemployment) + PP, "var(--pl-blue)"],
-        ["debt", L("Dług/PKB", "Долг/ВВП"), take("debtRatio"), n1(m.debtRatio) + "%", sgn(m.debtRatio - a.debtRatio) + PP, "var(--pl-gold)"],
-        ["trade", L("Saldo handlu", "Торг. сальдо"), take("tradeBalance"), sgn(m.X - m.M, n0) + " " + L("mld", "млрд"), L("towary, rocznie", "товары, в год"), "var(--pl-violet)"]];
+      const items = [["gdp", L("PKB", "ВВП"), take("nominalGDP"), (m.Y * m.priceLevel / 1000).toFixed(2).replace(".", ",") + " " + L("bln", "трлн"), dl(m.growthYoY, n1, 1, RR), "var(--pl-green)"],
+        ["inflation", L("Inflacja", "Инфляция"), take("inflation"), n1(m.inflation) + "%", dl(m.inflation - a.inflation, n1, -1, PP), "var(--pl-red)"],
+        ["unemployment", L("Bezrobocie", "Безработица"), take("unemployment"), n1(m.unemployment) + "%", dl(m.unemployment - a.unemployment, n1, -1, PP), "var(--pl-blue)"],
+        ["debt", L("Dług/PKB", "Долг/ВВП"), take("debtRatio"), n1(m.debtRatio) + "%", dl(m.debtRatio - a.debtRatio, n1, -1, PP), "var(--pl-gold)"],
+        ["trade", L("Saldo handlu", "Торг. сальдо"), take("tradeBalance"), lvl(m.X - m.M, n0) + " " + L("mld", "млрд"), L("towary, rocznie", "товары, в год"), "var(--pl-violet)"]];
       const tot = m.C + m.I + m.G + Math.max(0, m.NX);
       const parts = [[L("Konsumpcja", "Потребление"), m.C, "#4ea1ff"], [L("Inwestycje", "Инвестиции"), m.I, "#3fc28a"], [L("Wydatki państwa", "Госрасходы"), m.G, "#e2b44c"], [L("Eksport netto", "Чистый экспорт"), Math.max(0, m.NX), "#b77cf2"]];
       $("#plbottom").innerHTML = `<section class="pl-panel pl-ind"><h5>${ic("chart")}${L("Najważniejsze wskaźniki", "Главные показатели")}</h5><div class="pl-indg">${items.map(([k, t, v, now, d, c]) => `<button class="pl-mini" data-why="${k}"><small>${t}</small><b>${now}</b><i>${d}</i>${spark(v, c)}</button>`).join("")}</div></section>
         <section class="pl-panel pl-str"><h5>${ic("data")}${L("Struktura popytu (PKB)", "Структура спроса (ВВП)")}</h5><div class="pl-strg">${donut(parts)}<ul>${parts.map(([t, v, c]) => `<li><i style="background:${c}"></i>${t}<b>${Math.round(v / tot * 100)}%</b></li>`).join("")}</ul></div></section>
         <section class="pl-panel pl-res"><h5>${ic("box")}${L("Zasoby i rynki (ceny krajowe)", "Ресурсы и рынки (внутренние цены)")}</h5><div class="pl-resg">${RES.map(([k, icn, t]) => { const p = s.markets[k].price, p0 = a.mk?.[k]?.price ?? p, d = (p / p0 - 1) * 100;
-          return `<button class="pl-resi" data-why="${k === "gaz" ? "gas" : k === "prad" ? "power" : k === "zboze" || k === "zywnosc" ? "grain" : "imports"}">${ic(icn)}<span><small>${t}</small><b>${priceStr(k, p)}</b><i class="${d > 0.3 ? "r" : d < -0.3 ? "g" : ""}">${sgn(d)}%</i></span></button>`; }).join("")}</div></section>`;
+          return `<button class="pl-resi" data-why="${k === "gaz" ? "gas" : k === "prad" ? "power" : k === "zboze" || k === "zywnosc" ? "grain" : "imports"}">${ic(icn)}<span><small>${t}</small><b>${priceStr(k, p)}</b><i>${dl(d, n1, -1, "%")}</i></span></button>`; }).join("")}</div></section>`;
     }
 
     // ------------------------------------------------------------ prawa kolumna: doradca (skrót), wiadomości, kontrakty
@@ -242,6 +330,7 @@
         contract_broken: ["alert", L("Zerwano kontrakt", "Контракт разорван"), cdesc + L(" — kara i spadek zaufania.", " — штраф и падение доверия.")],
         contract_shortfall: ["down", L("Niepełne dostawy partnera", "Недопоставка партнёра"), cdesc + (n.fm ? L(" (siła wyższa)", " (форс-мажор)") : "")],
         contract_underdelivery: ["down", L("Polska nie dostarczyła pełnej ilości", "Польша недопоставила"), cdesc + (n.fm ? L(" (siła wyższa)", " (форс-мажор)") : L(" — kara i niższa wiarygodność", " — штраф и ниже надёжность"))],
+        diplomacy: ["globe", n.kind === "agreement" ? L("Rozmowy o umowie handlowej", "Переговоры о торговом соглашении") : L("Misja handlowa", "Торговая миссия"), n.pk && D.partners[n.pk] ? nm(D.partners[n.pk]) : ""],
         contract_done: ["check", L("Kontrakt zakończony", "Контракт завершён"), cdesc],
         innovation_found: ["bulb", L("Nowe odkrycie", "Новое открытие"), inn(n.ref) + L(" — możesz wdrożyć (Edukacja i Nauka).", " — можно внедрить (Образование).")], innovation_done: ["check", L("Wdrożono innowację", "Инновация внедрена"), inn(n.ref)],
         inflation_high: ["flame", L("Inflacja powyżej 5%", "Инфляция выше 5%"), n1(n.v) + "%", "inflation"], unemployment_high: ["people", L("Bezrobocie powyżej 7%", "Безработица выше 7%"), n1(n.v) + "%", "unemployment"],
@@ -251,7 +340,7 @@
       const t = T[n.id] || ["news", String(n.id), ""];
       let wk = t[3], fl = null;
       if (wk === "ev"){ const E = D.events[n.k] || {}, e = E.effects || {}; fl = E.partner || "PL"; wk = e.world?.gaz ? "gas" : e.domesticYield || e.supply?.UA ? "grain" : e.domestic?.prad ? "power" : e.demand ? "exports" : "imports"; }
-      if (c) fl = c.partner;
+      if (c) fl = c.partner; if (n.id === "diplomacy") fl = n.pk;
       return { icon: t[0], title: t[1], text: t[2], why: wk, flag: fl, tone: /alert|down|flame/.test(t[0]) ? "bad" : /check|bulb/.test(t[0]) ? "good" : "" };
     }
     const newsItem = n => { const t = newsText(n); return `<li class="${t.tone}"><span class="ni">${t.flag ? flag(t.flag, 26) : ic(t.icon)}</span><div><b>${esc(t.title)}</b>${t.text ? `<p>${esc(t.text)}</p>` : ""}${t.why ? `<button class="pl-link" data-why="${t.why}">${L("Dlaczego?", "Почему?")}</button>` : ""}</div><small>${dateStr(n.day)}</small></li>`; };
@@ -261,7 +350,7 @@
       if (!force && sig === sigRight) return; sigRight = sig;
       const hasPlan = r && Object.keys(r.patch).length;
       $("#plright").innerHTML = `<section class="pl-panel pl-advc" id="pladv"><div class="pl-advh">${avatar()}<div><h4>${L("Doradca ekonomiczny", "Экономический советник")}</h4><small>${r ? monthName(r.month, r.year) : ""}</small></div></div>
-          <p>${esc(advisorBrief())}</p><div class="pl-two"><button class="pl-btn" data-ov="advisor">${L("Szczegóły", "Подробнее")}</button><button class="pl-btn go" data-apply="1" ${hasPlan ? "" : "disabled"}>${L("Zastosuj zalecenia", "Применить советы")}</button></div></section>
+          <p>${esc(advisorBrief())}</p><div class="pl-three"><button class="pl-btn" data-ov="advisor">${L("Szczegóły", "Подробнее")}</button><button class="pl-btn" data-ov="chat">${ic("help")}${L("Zapytaj", "Спросить")}</button><button class="pl-btn go" data-apply="1" ${hasPlan ? "" : "disabled"}>${L("Zastosuj zalecenia", "Применить советы")}</button></div></section>
         <section class="pl-panel"><h5>${ic("news")}${L("Wiadomości", "Новости")}<button class="pl-more" data-ov="news">${L("Zobacz wszystkie", "Все")}</button></h5><ul class="pl-news">${s.news.slice().reverse().slice(0, 4).map(newsItem).join("")}</ul></section>
         <section class="pl-panel" id="plcon"><h5>${ic("doc")}${L("Aktywne kontrakty", "Активные контракты")}<button class="pl-more" data-ov="contracts">${L("Zobacz wszystkie", "Все")}</button></h5>
           ${s.offers.length ? `<button class="pl-offbar" data-ov="contracts">${ic("doc")}<span>${L("Nowe oferty", "Новые предложения")}: <b>${s.offers.length}</b></span><em>${L("Sprawdź", "Открыть")}</em></button>` : ""}
@@ -285,7 +374,7 @@
       const xs = [8, 70, 135, 200], ys = [s.macro.Y, ...vals].map(v => (40 - (v - mn) / r * 30).toFixed(1));
       const nom = (x, i) => (x.Y / s.macro.Y) * Y0 * Math.pow(1 + x.inflation / 100, [1, 3, 5][i]) / 1000;
       return `<div class="pl-scen ${cls}"><h6>${ic(icn)}${title}</h6><svg viewBox="0 0 208 46" preserveAspectRatio="none"><polyline points="${xs.map((x, i) => x + "," + ys[i]).join(" ")}"/>${xs.slice(1).map((x, i) => `<circle cx="${x}" cy="${ys[i + 1]}" r="2.6"/>`).join("")}</svg>
-        <div class="pl-scg">${arr.map((x, i) => `<div><b>≈${nom(x, i).toFixed(2).replace(".", ",")} ${L("bln zł", "трлн")}</b><i>(${sgn(x.growth)}%)</i><small>${x.h} ${L("mies.", "мес.")}</small></div>`).join("")}</div>
+        <div class="pl-scg">${arr.map((x, i) => `<div><b>≈${nom(x, i).toFixed(2).replace(".", ",")} ${L("bln zł", "трлн")}</b><i>${dl(x.growth, n1, 1, "%")}</i><small>${x.h} ${L("mies.", "мес.")}</small></div>`).join("")}</div>
         <table class="pl-tbl sm">${[[L("Inflacja", "Инфляция"), "inflation"], [L("Bezrobocie", "Безработица"), "unemployment"], [L("Dług/PKB", "Долг/ВВП"), "debtRatio"], [L("Import gazu", "Импорт газа"), "gasImportShare"]].map(([t, k]) => `<tr><td>${t}</td>${arr.map(x => `<td>${n1(x[k])}%</td>`).join("")}</tr>`).join("")}</table></div>`;
     }
     const GOAL_IC = { inflation: "target", growthAvg: "chart", debtRatio: "coins", gasImportShare: "flame" };
@@ -296,7 +385,7 @@
       return `<div class="pl-advhead">${avatar("big")}<div><h3>${L("Doradca ekonomiczny", "Экономический советник")}</h3><small>${L("Analiza · Prognozy · Rekomendacje", "Анализ · Прогнозы · Рекомендации")}</small>
           <p class="pl-bubble">${L("Dzień dobry, Panie Premierze. Poniżej najnowsze prognozy i zalecenia — decyzja należy do Pana.", "Добрый день, господин премьер. Ниже свежие прогнозы и рекомендации — решение за вами.")} ${esc(advisorBrief())}</p></div>
           <div class="pl-conf"><small>${monthName(r.month, r.year)}</small><div>${ring(c0.value)}<span><b>${c0.value}%</b><small>${L("Pewność prognozy", "Уверенность прогноза")}</small></span></div></div></div>
-        <section class="pl-panel"><h5>${ic("calendar")}${L("Zmiany w ostatnim miesiącu", "Изменения за месяц")}</h5><div class="pl-chg">${[[L("Inflacja", "Инфляция"), pv.inflation, nw.inflation, "%"], [L("Bezrobocie", "Безработица"), pv.unemployment, nw.unemployment, "%"], [L("Dług/PKB", "Долг/ВВП"), pv.debtRatio, nw.debtRatio, "%"], [L("Gaz", "Газ"), pv.gas, nw.gas, " zł/MWh"]].map(([t, a, b, u]) => `<span><small>${t}</small>${u === "%" ? n1(a) : n0(a)} → <b>${u === "%" ? n1(b) : n0(b)}${u}</b></span>`).join("")}</div></section>
+        <section class="pl-panel"><h5>${ic("calendar")}${L("Zmiany w ostatnim miesiącu", "Изменения за месяц")}</h5><div class="pl-chg">${[[L("Inflacja", "Инфляция"), pv.inflation, nw.inflation, "%"], [L("Bezrobocie", "Безработица"), pv.unemployment, nw.unemployment, "%"], [L("Dług/PKB", "Долг/ВВП"), pv.debtRatio, nw.debtRatio, "%"], [L("Gaz", "Газ"), pv.gas, nw.gas, " zł/MWh"]].map(([t, a, b, u]) => `<span><small>${t}</small><b>${u === "%" ? n1(b) : n0(b)}${u}</b> ${dl(b - a, u === "%" ? n1 : n0, -1)}</span>`).join("")}</div></section>
         <section class="pl-panel"><h5>${ic("target")}${L("Cele na najbliższe 3 lata", "Цели на ближайшие 3 года")}</h5><div class="pl-goals">${r.goals.map(g => `<div class="${g.ok ? "ok" : "no"}">${ic(GOAL_IC[g.metric] || "target")}<span><small>${GOAL_T[g.metric]?.[0] || nm(g)}</small><b>${GOAL_T[g.metric]?.[1] || ""}</b><i>${L("teraz", "сейчас")} ${n1(g.value)}% · ${g.ok ? L("w celu", "в цели") : L("poza celem", "вне цели")}</i></span></div>`).join("")}</div><p class="muted small">${L("Do końca okresu", "До конца периода")}: ${Math.max(0, r.goals[0]?.monthsLeft ?? 0)} ${L("mies.", "мес.")}</p></section>
         <section class="pl-panel"><h5>${ic("chart")}${L("Prognoza wzrostu PKB — porównanie scenariuszy", "Прогноз роста ВВП — сравнение сценариев")}</h5><div class="pl-scens">${scen(r.base, L("Przy obecnej polityce", "При текущей политике"), "", "clock")}${r.alt ? scen(r.alt, L("Po proponowanych zmianach", "После предложенных изменений"), "alt", "check") : `<div class="pl-scen alt"><h6>${ic("check")}${L("Po proponowanych zmianach", "После изменений")}</h6><p class="muted">${L("Doradca nie proponuje zmian.", "Советник не предлагает изменений.")}</p></div>`}</div>
           <p class="muted small">${L("Prognoza modelu gry bez losowych wydarzeń. Pewność", "Прогноз модели без случайных событий. Уверенность")}: ${r.confidence.map(c => `${c.h} ${L("mies.", "мес.")} ${c.value}%`).join(" · ")}${c0.reasons.length ? ` — ${L("niższa, bo", "ниже, потому что")}: ${c0.reasons.map(x => CONF_R[x]).join(", ")}` : ""}.</p></section>
@@ -309,7 +398,7 @@
       const qty = (k, v) => (v < 10 ? n1(v) : n0(v)) + " " + D.markets[k].unit;
       return `<div class="pl-offer"><div class="pl-oh">${flag(o.partner, 30)}<div><small>${L("Propozycja kontraktu", "Предложение контракта")} <em class="pl-new">${L("Nowa", "Новое")}</em></small><b>${imp ? L("Import", "Импорт") : L("Eksport", "Экспорт")}: ${nm(D.markets[o.market]).toLowerCase()} — ${nm(D.partners[o.partner])}</b></div><span class="muted small">${L("ważna", "действует")} ${Math.max(0, o.expires - s.dayIndex)} ${L("dni", "дн.")}</span></div>
         <div class="pl-og"><span><small>${L("Wolumen", "Объём")}</small>${qty(o.market, o.volume)}/${L("rok", "год")}</span><span><small>${L("Cena", "Цена")}</small>${priceStr(o.market, o.price)}</span><span><small>${L("Czas trwania", "Срок")}</small>${o.months} ${L("mies.", "мес.")}</span>
-        <span><small>${L("Gwarantowany wolumen", "Гарантированный объём")}</small>${Math.round(o.guarantee * 100)}%</span><span><small>${L("Wartość roczna", "Годовая стоимость")}</small><b class="gold">${n1(a.valuePerYear)} ${L("mld zł", "млрд")}</b></span><span><small>${L("vs rynek", "vs рынок")}</small><b class="${a.vsMarket >= 0 ? "g" : "r"}">${sgn(a.vsMarket)} ${L("mld/rok", "млрд/год")}</b></span>
+        <span><small>${L("Gwarantowany wolumen", "Гарантированный объём")}</small>${Math.round(o.guarantee * 100)}%</span><span><small>${L("Wartość roczna", "Годовая стоимость")}</small><b class="gold">${n1(a.valuePerYear)} ${L("mld zł", "млрд")}</b></span><span><small>${L("vs rynek", "vs рынок")}</small><b>${dl(a.vsMarket, n1, 1, " " + L("mld/rok", "млрд/год"))}</b></span>
         <span><small>${L("Kara za zerwanie", "Штраф за разрыв")}</small>${n1(o.penalty * 12)} ${L("mld zł", "млрд")}</span><span><small>${L("Ryzyko partnera", "Риск партнёра")}</small>${risk}</span><span><small>${L("Wolna przepustowość", "Свободная пропускная")}</small>${qty(o.market, Math.max(0, a.capacityLeft))}</span></div>
         <p class="small muted">${imp ? L("Stała cena chroni przed skokami cen świata, ale wiąże, gdy ceny spadną.", "Фиксированная цена защищает от скачков, но связывает, если цены упадут.") : a.domesticEffect === "tight" ? L("Uwaga: mało wolnego towaru — kontrakt może zabrać podaż z rynku krajowego.", "Внимание: мало свободного товара — контракт может забрать предложение с внутреннего рынка.") : L("Stały odbiorca; towar na eksport nie trafi na rynek krajowy.", "Стабильный покупатель; товар на экспорт не попадёт на внутренний рынок.")}</p>
         <div class="pl-three"><button class="pl-btn go" data-acc="${o.id}">${L("Akceptuj", "Принять")}</button><button class="pl-btn" data-neg="${o.id}">${L("Negocjuj", "Торговаться")}</button><button class="pl-btn bad" data-rej="${o.id}">${L("Odrzuć", "Отклонить")}</button></div><div class="pl-negbox" id="plneg${o.id}"></div></div>`;
@@ -317,25 +406,25 @@
     function contractsHtml(){
       const act = s.contracts.filter(c => c.status === "active"), rel = s.flags.playerReliability ?? 0.95;
       const rows = S.PK.map(pk => ({ pk, ...partnerTrade(pk) })).sort((a, b) => (b.imp + b.exp) - (a.imp + a.exp));
-      return `<section class="pl-panel"><h5>${ic("globe")}${L("Główni partnerzy handlowi (szacunek, mld zł/rok)", "Главные торговые партнёры (оценка, млрд zł/год)")}</h5><div class="pl-tscroll"><table class="pl-tbl"><tr><th>${L("Kraj", "Страна")}</th><th>${L("Eksport", "Экспорт")}</th><th>${L("Import", "Импорт")}</th><th>${L("Bilans", "Баланс")}</th></tr>${rows.map(x => `<tr><td><span class="pl-cty">${flag(x.pk, 20)}${nm(D.partners[x.pk])}</span></td><td>${n0(x.exp)}</td><td>${n0(x.imp)}</td><td class="${x.exp - x.imp >= 0 ? "g" : "r"}">${sgn(x.exp - x.imp, n0)}</td></tr>`).join("")}
-          <tr class="tot"><td>${L("Razem", "Итого")}</td><td>${n0(s.macro.X)}</td><td>${n0(s.macro.M)}</td><td class="${s.macro.X >= s.macro.M ? "g" : "r"}">${sgn(s.macro.X - s.macro.M, n0)}</td></tr></table></div><button class="pl-link" data-why="trade">${L("Dlaczego?", "Почему?")}</button></section>
+      return `<section class="pl-panel"><h5>${ic("globe")}${L("Główni partnerzy handlowi (szacunek, mld zł/rok)", "Главные торговые партнёры (оценка, млрд zł/год)")}</h5><div class="pl-tscroll"><table class="pl-tbl"><tr><th>${L("Kraj", "Страна")}</th><th>${L("Eksport", "Экспорт")}</th><th>${L("Import", "Импорт")}</th><th>${L("Bilans", "Баланс")}</th></tr>${rows.map(x => `<tr><td><span class="pl-cty">${flag(x.pk, 20)}${nm(D.partners[x.pk])}</span></td><td>${n0(x.exp)}</td><td>${n0(x.imp)}</td><td class="${x.exp - x.imp >= 0 ? "g" : "r"}">${lvl(x.exp - x.imp, n0)}</td></tr>`).join("")}
+          <tr class="tot"><td>${L("Razem", "Итого")}</td><td>${n0(s.macro.X)}</td><td>${n0(s.macro.M)}</td><td class="${s.macro.X >= s.macro.M ? "g" : "r"}">${lvl(s.macro.X - s.macro.M, n0)}</td></tr></table></div><button class="pl-link" data-why="trade">${L("Dlaczego?", "Почему?")}</button></section>
         <section class="pl-panel"><h5>${ic("doc")}${L("Oferty", "Предложения")} (${s.offers.length})</h5>${s.offers.length ? s.offers.map(offerHtml).join("") : `<p class="muted">${L("Brak ofert. Nowe pojawiają się co miesiąc.", "Предложений нет. Новые появляются каждый месяц.")}</p>`}</section>
         <section class="pl-panel"><h5>${ic("check")}${L("Aktywne kontrakty", "Активные контракты")} (${act.length}) <span class="muted small">· ${L("wiarygodność Polski", "надёжность Польши")} ${Math.round(rel * 100)}%</span></h5>
         ${act.map(c => `<div class="pl-offer"><div class="pl-oh">${flag(c.partner, 26)}<div><b>${c.type === "import" ? L("Import", "Импорт") : L("Eksport", "Экспорт")}: ${nm(D.markets[c.market]).toLowerCase()}</b><small>${nm(D.partners[c.partner])} · ${L("zostało", "осталось")} ${Math.max(0, Math.ceil((c.end - s.dayIndex) / 30))} ${L("mies.", "мес.")}</small></div><span class="${c.delivery < c.guarantee ? "r" : "g"}">${Math.round(c.delivery * 100)}%</span></div>
           <i class="pl-pbar"><b style="width:${Math.round(c.delivery * 100)}%"></b></i><button class="pl-btn bad sm" data-cancel="${c.id}">${L("Zerwij", "Разорвать")}</button></div>`).join("") || `<p class="muted">${L("Brak.", "Нет.")}</p>`}</section>`;
     }
     const OV_T = { advisor: ["user", L("Doradca ekonomiczny", "Экономический советник")], news: ["news", L("Wiadomości", "Новости")], contracts: ["globe", L("Handel i kontrakty", "Торговля и контракты")] };
-    function openOv(k){ ov = k; section = null; partnerSel = null; $("#pldrawer").hidden = true; drawNav(); drawOv(true); drawMap(); tutCheck(); }
-    function closeOv(){ ov = null; drawOv(true); }
+    function openOv(k){ if (k === "chat"){ k = "advisor"; chatFull = true; if (ov === "advisor"){ ovBuilt = null; } } ov = k; section = null; partnerSel = null; $("#pldrawer").hidden = true; drawNav(); drawOv(true); drawMap(); tutCheck(); }
+    function closeOv(){ chatFull = false; ov = null; drawOv(true); }
     function drawOv(force){
       const box = $("#plov");
-      $$("#plmnav [data-m]").forEach(b => b.classList.toggle("on", b.dataset.m === ov));
+      $$("#plmnav [data-m]").forEach(b => b.classList.toggle("on", b.dataset.m === ov)); host.classList.toggle("ovopen", !!ov);
       if (!ov){ box.hidden = true; ovBuilt = null; return; }
       const sig = ov + "|" + s.advisor.lastMonthlyReportIndex + "|" + s.news.length + "|" + s.offers.map(o => o.id + ":" + o.rounds).join(",") + "|" + s.contracts.map(c => c.status + c.delivery.toFixed(2)).join(",");
       if (!force && sig === sigOv) return; sigOv = sig;
       if (ovBuilt !== ov){
         box.hidden = false; ovBuilt = ov;
-        box.innerHTML = `<div class="pl-ovin ${ov}"><header><h3>${ic(OV_T[ov][0])}${OV_T[ov][1]}</h3><button class="pl-ib" data-close="ov" aria-label="${L("Zamknij", "Закрыть")}">${ic("close")}</button></header>
+        box.innerHTML = `<div class="pl-ovin ${ov}${ov === "advisor" && chatFull ? " chatfull" : ""}"><header><h3>${ic(OV_T[ov][0])}${OV_T[ov][1]}</h3><button class="pl-ib" data-close="ov" aria-label="${L("Zamknij", "Закрыть")}">${ic("close")}</button></header>
           <div class="pl-ovb">${ov === "advisor" ? `<div class="pl-ovl" id="plrep"></div><div class="pl-ovr" id="plchat"></div>` : `<div class="pl-ovl" id="plrep"></div>`}</div></div>`;
         if (ov === "advisor") initChat();
       }
@@ -363,15 +452,16 @@
 
     // ------------------------------------------------------------ czat doradcy (kategorie + wolny tekst, bez API)
     const AREA_IC = { MACRO: "chart", BUDGET: "coins", ENERGY: "bolt", TRADE: "globe", INDUSTRY: "factory", AGRI: "wheat", BANKS: "bank", EDU: "cap", RD: "flask", INFRA: "anchor" };
-    function initChat(){
-      $("#plchat").innerHTML = `<section class="pl-panel"><h5>${ic("help")}${L("W czym mogę pomóc?", "Чем могу помочь?")}</h5><p class="muted small">${L("Wybierz kategorię lub wpisz własne pytanie.", "Выберите категорию или задайте свой вопрос.")}</p><div id="plcats" class="pl-cats"></div></section>
-        <section class="pl-panel pl-chatp"><div id="plcrumb" class="pl-crumb"></div><div id="plchlog" class="pl-chlog">${chatHtml}</div><div id="plchips" class="pl-chips"></div>
+function initChat(){
+      $("#plchat").innerHTML = `<section class="pl-panel pl-chatp"><div class="pl-chath"><h5>${ic("help")}${L("Zapytaj doradcę", "Спросить советника")}</h5><button class="pl-btn sm" data-chatfull="1">${chatFull ? L("Zwiń czat", "Свернуть чат") : L("Rozwiń czat", "Развернуть чат")}</button></div>
+        <div id="plcats" class="pl-cats"></div><div id="plcrumb" class="pl-crumb"></div><div id="plchlog" class="pl-chlog">${chatHtml || `<p class="muted small">${L("Wybierz kategorię powyżej albo wpisz pytanie, np. „dlaczego gaz drożeje?”.", "Выберите категорию выше или задайте вопрос, например «почему дорожает газ?».")}</p>`}</div><div id="plchips" class="pl-chips"></div>
         <form id="plask" class="pl-ask"><input id="plq" placeholder="${L("Zadaj własne pytanie…", "Задайте свой вопрос…")}" autocomplete="off"><button class="pl-btn go" aria-label="${L("Wyślij", "Отправить")}">${ic("send")}</button></form><p class="muted small">${L("Odpowiedzi oparte na danych aktualnej partii.", "Ответы основаны на данных текущей партии.")}</p></section>`;
       $("#plcats").innerHTML = Object.entries(A.TREE).map(([k, v]) => `<button data-cp="${k}">${ic(AREA_IC[k] || "chart")}<span>${esc(v[lang] || v.pl)}</span></button>`).join("");
       treeChips(chatPath);
       $("#plask").onsubmit = e => { e.preventDefault(); const q = $("#plq").value.trim(); if (!q) return; $("#plq").value = ""; ask(q); };
       const log = $("#plchlog"); log.scrollTop = log.scrollHeight;
     }
+
     function treeChips(path){
       chatPath = path; const box = $("#plchips"), cr = $("#plcrumb"); if (!box) return;
       $$("#plcats [data-cp]").forEach(b => b.classList.toggle("on", b.dataset.cp === path[0]));
@@ -416,15 +506,16 @@
     const RELATED = { gas: ["power", "inflation", "imports"], power: ["gas", "inflation"], inflation: ["gas", "grain", "gdp"], gdp: ["unemployment", "trade", "budget"], unemployment: ["gdp"], budget: ["debt", "gdp"], debt: ["budget"], trade: ["imports", "exports", "gas"], imports: ["gas", "trade"], exports: ["trade", "gdp"], grain: ["inflation", "imports"] };
     const WHY_TITLE = { gas: L("Gaz", "Газ"), power: L("Prąd", "Электроэнергия"), inflation: L("Inflacja", "Инфляция"), gdp: L("PKB", "ВВП"), unemployment: L("Bezrobocie", "Безработица"), budget: L("Budżet", "Бюджет"), debt: L("Dług", "Долг"), trade: L("Handel", "Торговля"), imports: L("Import", "Импорт"), exports: L("Eksport", "Экспорт"), grain: L("Zboże", "Зерно") };
     function openWhy(key){ why = key; ui.whyOpened = true; drawWhy(); tutCheck(); }
-    function drawWhy(){
+function drawWhy(){
       const box = $("#plwhy"); if (!why){ box.hidden = true; return; }
       const E = A.explain(why, s, lang); if (!E){ box.hidden = true; return; }
       const keep = box.querySelector("details")?.open, scroll = box.querySelector(".pl-whyin")?.scrollTop || 0;
       const fv = f => f.unit === "" ? "" : `<small>${n1(f.v)} ${esc(f.unit)}</small>`;
       const row = (f, main) => `<li class="${main ? "main" : ""}"><span class="dir ${f.dir > 0 ? "up" : f.dir < 0 ? "down" : ""}">${f.dir > 0 ? "▲" : f.dir < 0 ? "▼" : "•"}</span><div><b>${esc(f.label)}</b> ${fv(f)}${f.txt ? `<p>${esc(f.txt)}</p>` : ""}</div></li>`;
-      box.hidden = false;
-      box.innerHTML = `<div class="pl-whyin" role="dialog" aria-label="${L("Dlaczego?", "Почему?")}"><button class="pl-ib pl-x" data-close="why" aria-label="${L("Zamknij", "Закрыть")}">${ic("close")}</button>
-        <h3>${ic("search")}${esc(E.title)}: <b>${esc(E.value)}</b></h3><p class="muted">${L("Zmiana w ostatnich 6 mies.", "Изменение за 6 мес.")}: <b>${sgn(E.change)}${E.unit ? " " + E.unit : "%"}</b></p>
+      const GOOD = { gdp: 1, inflation: -1, unemployment: -1, budget: 1, debt: -1, gas: -1, power: -1, grain: -1, exports: 1, imports: 0, trade: 1 };
+      const hasSer = !!SERIES[why]; if (!hasSer) whyTab = "why";
+      const tabs = hasSer ? `<div class="pl-seg">${[["why", L("Przyczyny", "Причины")], ["m", L("Miesiące", "Месяцы")], ["y", L("Lata", "Годы")]].map(([v, t]) => `<button data-wt="${v}" class="${whyTab === v ? "on" : ""}">${t}</button>`).join("")}</div>` : "";
+      const body = whyTab !== "why" ? seriesChart(why, whyTab) : `
         ${E.structure ? `<div class="pl-strbar">${E.structure.slice(0, 8).map(x => `<div><span>${esc(x.name)}</span><i style="width:${clamp(x.share, 0, 100).toFixed(0)}%"></i><b>${n0(x.value)} (${n0(x.share)}%)</b></div>`).join("")}</div>` : ""}
         ${E.main.length ? `<h4>${E.exact ? L("Największy składnik (wprost z modelu)", "Крупнейшая составляющая (прямо из модели)") : L("Główna przyczyna", "Главная причина")}</h4><ul class="pl-causes">${E.main.map(f => row(f, true)).join("")}</ul>` : ""}
         ${E.extra.length ? `<h4>${L("Dodatkowe czynniki", "Дополнительные факторы")}</h4><ul class="pl-causes">${E.extra.map(f => row(f)).join("")}</ul>` : ""}
@@ -435,9 +526,14 @@
         <details${keep ? " open" : ""}><summary>${L("Więcej: decyzje, programy w toku, niepewność", "Подробнее: решения, программы, неопределённость")}</summary>
           ${E.decisions?.length ? `<p><b>${L("Twoje ostatnie decyzje", "Ваши последние решения")}:</b> ${E.decisions.map(d => `${dateStr(d.day)} · ${esc(String(d.k))}`).join("; ")}</p>` : ""}
           ${E.delayed?.length ? `<p><b>${L("Programy w toku (efekt z opóźnieniem)", "Программы в работе (эффект с задержкой)")}:</b> ${E.delayed.map(x => `${esc(x.name)} ×${n2(x.eff)}`).join(", ")}</p>` : ""}
-          <p class="muted">${esc(E.uncertainty)}</p></details>
+          <p class="muted">${esc(E.uncertainty)}</p></details>`;
+      box.hidden = false;
+      box.innerHTML = `<div class="pl-whyin" role="dialog" aria-label="${L("Dlaczego?", "Почему?")}"><button class="pl-ib pl-x" data-close="why" aria-label="${L("Zamknij", "Закрыть")}">${ic("close")}</button>
+        <h3>${ic("search")}${esc(E.title)}: <b>${esc(E.value)}</b></h3><p class="muted">${L("Zmiana w ostatnich 6 mies.", "Изменение за 6 мес.")}: ${dl(E.change, n1, GOOD[why] ?? 0, E.unit ? " " + E.unit : "%")}</p>
+        ${tabs}${body}
         <div class="pl-chips"><small>${L("Powiązane", "Связанное")}:</small>${(RELATED[why] || []).map(k => `<button class="pl-chip" data-why="${k}">${WHY_TITLE[k]}</button>`).join("")}</div></div>`;
       box.querySelector(".pl-whyin").scrollTop = scroll;
+      const bars = box.querySelector(".pl-bars"); if (bars) bars.scrollLeft = bars.scrollWidth;
     }
 
     // ------------------------------------------------------------ szuflada sekcji (suwaki → projekt zmian → podgląd → zatwierdź)
@@ -447,29 +543,37 @@
     const draftVal = key => key.startsWith("programs.") ? draft.programs?.[key.slice(9)] : draft[key];
     const setDraft = (key, v) => { if (key.startsWith("programs.")){ draft.programs = { ...(draft.programs || {}), [key.slice(9)]: v }; if (v === curVal(key)) delete draft.programs[key.slice(9)]; if (!Object.keys(draft.programs).length) delete draft.programs; } else { draft[key] = v; if (v === curVal(key)) delete draft[key]; } };
     const fmtSl = (key, v) => key.startsWith("reserve.") ? "×" + n1(v) : POLICY_LAB[key]?.[1] === "%" ? n2(v) + "%" : n0(v) + " " + UNIT;
-    function slider(key){
+function slider(key){
       let lab, step, min, max, extra = "";
       if (key.startsWith("programs.")){ const P = D.programs[key.slice(9)], eff = s.programs[key.slice(9)].eff;
         lab = nm(P); step = P.max > 100 ? 5 : 1; min = 0; max = P.max;
         extra = `<p class="small">${esc(P.effect[li])}</p><p class="small muted">${ic("clock")}${L("Efekt od", "Эффект с")} ${P.lagStart} ${L("do", "до")} ${P.lagFull} ${L("mies. · obecny efekt", "мес. · текущий эффект")} <b>×${n2(eff)}</b>${P.maintenance ? ` · ${L("utrzymanie min.", "минимум на содержание")} ${P.maintenance}` : ""} · ${L("start", "старт")} ${P.base}</p><i class="pl-pbar"><b style="width:${clamp(eff / 2 * 100, 0, 100).toFixed(0)}%"></b></i>`; }
-      else if (key.startsWith("reserve.")){ lab = L("Rezerwa", "Резерв") + ": " + nm(D.markets[key.slice(8)]); step = 0.1; min = 0.3; max = 2.5; extra = `<p class="small muted">${L("Większa rezerwa = bufor na zakłócenia, ale zakup na zapas kosztuje teraz.", "Больше резерв — буфер от сбоев, но закупка в запас стоит денег сейчас.")}</p>`; }
+      else if (key.startsWith("reserve.")){ lab = L("Rezerwa", "Резерв") + ": " + nm(D.markets[key.slice(8)]); step = 0.1; min = 0.3; max = 2.5; }
       else { [lab, , step] = POLICY_LAB[key]; [min, max] = LIM[key]; }
       const cur = curVal(key), v = draftVal(key) ?? cur, ch = Math.abs(v - cur) > 1e-9;
-      return `<div class="pl-sl${ch ? " ch" : ""}"><label><span>${esc(lab)}</span><b data-out="${key}">${fmtSl(key, v)}</b></label><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-sl="${key}" aria-label="${esc(lab)}"><small class="muted">${L("teraz", "сейчас")}: ${fmtSl(key, cur)}</small>${extra}</div>`;
+      return `<div class="pl-sl${ch ? " ch" : ""}"><label><span>${esc(lab)} <button class="pl-q${helpOpen.has(key) ? " on" : ""}" data-help="${key}" aria-label="${L("Jak to działa?", "Как это работает?")}">?</button></span><b data-out="${key}">${fmtSl(key, v)}</b></label><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-sl="${key}" aria-label="${esc(lab)}"><small class="muted">${L("teraz", "сейчас")}: ${fmtSl(key, cur)}</small>${extra}${helpOpen.has(key) ? helpBox(key) : ""}</div>`;
     }
     const draftBox = () => `<div class="pl-draft" id="pldraft"></div>`;
     function drawDraft(){
       const box = $("#pldraft"); if (!box) return;
-      if (!Object.keys(draft).length){ box.innerHTML = `<p class="small muted">${L("Przesuń suwak — zobaczysz skutki na 12 miesięcy, zanim zatwierdzisz.", "Двигайте ползунок — увидите последствия на 12 месяцев до подтверждения.")}</p>`; return; }
-      const B = S.project(s, 12)[11], X = S.project(s, 12, draft)[11];
+      if (!Object.keys(draft).length){ box.innerHTML = `<p class="small muted">${L("Przesuń suwak — zobaczysz skutki, zanim zatwierdzisz.", "Двигайте ползунок — увидите последствия до подтверждения.")}</p>`; return; }
+      const BP = baseProj(), XP = S.project(s, 60, draft), B = BP[11], X = XP[11];
       const g = r => (r.Y / s.macro.Y - 1) * 100;
-      const rows = [[L("Wzrost PKB (12 mies.)", "Рост ВВП (12 мес.)"), g(B), g(X), "%"], [L("Inflacja", "Инфляция"), B.inflation, X.inflation, "%"], [L("Bezrobocie", "Безработица"), B.unemployment, X.unemployment, "%"], [L("Saldo budżetu", "Сальдо бюджета"), B.balance, X.balance, " " + L("mld", "млрд")], [L("Dług/PKB", "Долг/ВВП"), B.debtRatio, X.debtRatio, "%"]];
-      box.innerHTML = `<h4>${L("Podgląd skutków (12 mies., bez losowych wydarzeń)", "Предпросмотр (12 мес., без случайных событий)")}</h4><table class="pl-tbl"><tr><th></th><th>${L("bez zmian", "без изменений")}</th><th>${L("z decyzją", "с решением")}</th></tr>${rows.map(([t, x, y, u]) => `<tr><td>${t}</td><td>${n1(x)}${u}</td><td><b>${n1(y)}${u}</b> <small class="muted">(${sgn(y - x)})</small></td></tr>`).join("")}</table>
-        <p class="small muted">${L("Programy inwestycyjne działają z opóźnieniem — w 12 miesięcy widać głównie koszt.", "Инвестпрограммы работают с задержкой — за 12 месяцев виден в основном расход.")}</p>
+      const rows = [[L("Wzrost PKB (12 mies.)", "Рост ВВП (12 мес.)"), g(B), g(X), "%", 1], [L("Inflacja", "Инфляция"), B.inflation, X.inflation, "%", -1], [L("Bezrobocie", "Безработица"), B.unemployment, X.unemployment, "%", -1], [L("Saldo budżetu", "Сальдо бюджета"), B.balance, X.balance, " " + L("mld", "млрд"), 1], [L("Dług/PKB", "Долг/ВВП"), B.debtRatio, X.debtRatio, "%", -1]];
+      const mx = Math.max(B.revenue, B.spending, X.revenue, X.spending);
+      const energy = draft.programs && Object.keys(draft.programs).some(k => ENERGY_P.includes(k));
+      let gas = "";
+      if (energy){ const r = [11, 35, 59].map(i => Math.max(0, (1 - XP[i].gasImp / BP[i].gasImp) * 100));
+        gas = `<div class="pl-gasr big">${ic("flame")}<div><b>${L("Zastąpimy własnymi źródłami lub oszczędnością", "Заменим собственными источниками или экономией")}</b><div class="pl-g3">${[L("1 rok", "1 год"), L("3 lata", "3 года"), L("5 lat", "5 лет")].map((t, i) => `<span><small>${t}</small><b>${n1(r[i])}%</b></span>`).join("")}</div><small class="muted">${L("% obecnego importu gazu w porównaniu z polityką bez zmian.", "% текущего импорта газа по сравнению с политикой без изменений.")}</small></div></div>`; }
+      box.innerHTML = `<h4>${L("Podgląd skutków (bez losowych wydarzeń)", "Предпросмотр (без случайных событий)")}</h4>${gas}<table class="pl-tbl"><tr><th>${L("za 12 mies.", "через 12 мес.")}</th><th>${L("bez zmian", "без изменений")}</th><th>${L("z decyzją", "с решением")}</th></tr>${rows.map(([t, x, y, u, gd]) => `<tr><td>${t}</td><td>${n1(x)}${u}</td><td><b>${n1(y)}${u}</b> ${dl(y - x, n1, gd)}</td></tr>`).join("")}</table>
+        <div class="pl-hb"><span>${L("Dochody: teraz / po", "Доходы: сейчас / после")}</span><div class="pl-hb2">${hbar([["", B.revenue, "#4ea1ff"]], mx)}${hbar([["", X.revenue, "#3fc28a"]], mx)}</div><b>${dl(X.revenue - B.revenue, n0, 1)}</b></div>
+        <div class="pl-hb"><span>${L("Wydatki: teraz / po", "Расходы: сейчас / после")}</span><div class="pl-hb2">${hbar([["", B.spending, "#4ea1ff"]], mx)}${hbar([["", X.spending, "#e2b44c"]], mx)}</div><b>${dl(X.spending - B.spending, n0, -1)}</b></div>
+        <p class="small muted">${L("Programy inwestycyjne działają z opóźnieniem — w pierwszym roku widać głównie koszt.", "Инвестпрограммы работают с задержкой — в первый год виден в основном расход.")}</p>
         <div class="pl-two"><button class="pl-btn go" id="plcommit">${ic("check")}${L("Zatwierdź zmiany", "Утвердить")}</button><button class="pl-btn" id="plundo">${L("Anuluj", "Отмена")}</button></div>`;
-      $("#plcommit").onclick = () => { S.applyPolicyPatch(s, draft); draft = {}; toast(L("Decyzja wchodzi w życie (z opóźnieniem).", "Решение вступает в силу (с задержкой).")); drawSection(); refresh(true); tutCheck(); };
+      $("#plcommit").onclick = () => { S.applyPolicyPatch(s, draft); draft = {}; baseProjCache = null; toast(L("Decyzja wchodzi w życie (z opóźnieniem).", "Решение вступает в силу (с задержкой).")); drawSection(); refresh(true); tutCheck(); };
       $("#plundo").onclick = () => { draft = {}; drawSection(); };
     }
+
     let draftT = 0;
     function wireSliders(box){
       $$("[data-sl]", box).forEach(inp => inp.oninput = () => { const k = inp.dataset.sl, v = +inp.value; setDraft(k, v);
@@ -483,44 +587,81 @@
         return `<tr><td>${nm(B)}<small> ${B.unit}</small></td><td>${B.price < 10 ? n2(q.price) : n0(q.price)}</td><td>${n0(q.prod)}</td><td>${n0(q.demand)}</td><td title="${L("limit", "лимит")} ${n0(q.impCap)}">${n0(q.imp)}<i class="pl-cap"><b style="width:${clamp(q.imp / Math.max(1, q.impCap) * 100, 0, 100).toFixed(0)}%"></b></i></td><td>${n0(q.exp)}<i class="pl-cap"><b style="width:${clamp(q.exp / Math.max(1, q.expCap) * 100, 0, 100).toFixed(0)}%"></b></i></td><td>${q.shortage > 0.005 ? `<b class="r">−${n1(q.shortage * 100)}%</b>` : B.storable ? n0(q.stock / Math.max(1e-6, q.demand) * 360) + " " + L("dni", "дн.") : "—"}</td></tr>`; }).join("")}</table></div>
         <p class="small muted">${L("Pasek pod importem/eksportem = wykorzystanie przepustowości tras. Ilości na rok.", "Полоска = загрузка маршрутов. Объёмы в год.")}</p>`;
     }
-    function sectionHtml(k){
+function sectionHtml(k){
       const m = s.macro, mk = s.markets, title = SECTIONS.find(x => x[0] === k);
       let h = `<header><h3>${ic(title[1])}${title[2]}</h3><button class="pl-ib" data-close="drawer" aria-label="${L("Zamknij", "Закрыть")}">${ic("close")}</button></header>`;
+      const tabs = key => `<div class="pl-seg">${[["m", L("Miesiące", "Месяцы")], ["y", L("Lata", "Годы")]].map(([v, t]) => `<button data-dm="${v}" class="${dataMode === v ? "on" : ""}">${t}</button>`).join("")}</div>`;
       if (k === "gosp"){
-        h += `<div class="pl-kvs">${kv(L("PKB nominalny", "Номинальный ВВП"), n0(m.Y * m.priceLevel) + " " + L("mld", "млрд"))}${kv(L("Wzrost r/r", "Рост г/г"), sgn(m.growthYoY) + "%")}${kv(L("Luka PKB", "Разрыв ВВП"), sgn(m.gap) + "%")}${kv(L("Inflacja", "Инфляция"), n1(m.inflation) + "%")}${kv(L("Bezrobocie", "Безработица"), n1(m.unemployment) + "%")}${kv(L("Nastroje", "Настроения"), n0(m.conf * 100))}</div>
-          <h4>${L("Inflacja — z czego się składa", "Инфляция — из чего состоит")} ${whyBtn("inflation")}</h4><div class="pl-kvs">${kv(L("Oczekiwania", "Ожидания"), sgn(m.pi.expect) + PP)}${kv(L("Popyt", "Спрос"), sgn(m.pi.demand) + PP)}${kv(L("Energia", "Энергия"), sgn(m.pi.energy) + PP)}${kv(L("Żywność", "Еда"), sgn(m.pi.food) + PP)}</div>
-          <h4>${L("Popyt: C + I + G + NX", "Спрос: C + I + G + NX")} ${whyBtn("gdp")}</h4><div class="pl-kvs">${kv(L("Konsumpcja", "Потребление"), n0(m.C))}${kv(L("Inwestycje", "Инвестиции"), n0(m.I))}${kv(L("Państwo", "Государство"), n0(m.G))}${kv(L("Eksport netto", "Чистый экспорт"), sgn(m.NX, n0))}</div>
-          <p class="small muted">${L("Realnie, w cenach startowych, mld zł/rok. Dane gry — przybliżone.", "В реальном выражении, млрд zł/год. Игровые данные — приблизительно.")}</p>`;
+        h += `<div class="pl-kvs">${kv(L("PKB nominalny", "Номинальный ВВП"), n0(m.Y * m.priceLevel) + " " + L("mld", "млрд"))}${kv(L("Wzrost r/r", "Рост г/г"), dl(m.growthYoY, n1, 1, "%"))}${kv(L("Luka PKB", "Разрыв ВВП"), lvl(m.gap, n1, "%"))}${kv(L("Inflacja", "Инфляция"), n1(m.inflation) + "%")}${kv(L("Bezrobocie", "Безработица"), n1(m.unemployment) + "%")}${kv(L("Nastroje", "Настроения"), n0(m.mood ?? 60) + "/100")}</div>
+          ${tabs()}<h4>${L("Wzrost PKB r/r", "Рост ВВП г/г")} ${whyBtn("gdp")}</h4>${seriesChart("gdp", dataMode)}<h4>${L("Inflacja", "Инфляция")} ${whyBtn("inflation")}</h4>${seriesChart("inflation", dataMode)}<h4>${L("Bezrobocie", "Безработица")} ${whyBtn("unemployment")}</h4>${seriesChart("unemployment", dataMode)}
+          <h4>${L("Inflacja — z czego się składa", "Инфляция — из чего состоит")}</h4>${stackBar([[L("Oczekiwania", "Ожидания"), m.pi.expect, "#4ea1ff"], [L("Popyt", "Спрос"), m.pi.demand, "#3fc28a"], [L("Energia", "Энергия"), m.pi.energy, "#e2b44c"], [L("Żywność", "Еда"), m.pi.food, "#ef6461"]], v => n1(v) + " p.p.")}
+          <h4>${L("Popyt: C + I + G + NX", "Спрос: C + I + G + NX")}</h4>${stackBar([[L("Konsumpcja", "Потребление"), m.C, "#4ea1ff"], [L("Inwestycje", "Инвестиции"), m.I, "#3fc28a"], [L("Państwo", "Государство"), m.G, "#e2b44c"], [L("Eksport netto", "Чистый экспорт"), m.NX, "#b77cf2"]], v => n0(v))}
+          <p class="small muted">${L("Mld zł/rok, realnie. Dane gry — przybliżone.", "Млрд zł/год, реально. Игровые данные — приблизительно.")}</p>`;
       } else if (k === "budzet"){
         const RL = { vat: "VAT", pit: "PIT", cit: "CIT", excise: L("Akcyza", "Акциз"), contributions: L("Składki", "Взносы"), other: L("Inne", "Прочие"), tariffs: L("Cła", "Пошлины"), social: L("Świadczenia i zasiłki", "Соцвыплаты"), health: L("Zdrowie", "Здравоохранение"), admin: L("Administracja", "Администрация"), programs: L("Programy inwestycyjne", "Инвестпрограммы"), innovations: L("Innowacje", "Инновации"), interest: L("Odsetki od długu", "Проценты по долгу"), penalties: L("Kary umowne", "Штрафы") };
-        h += `<div class="pl-kvs">${kv(L("Dochody", "Доходы"), n0(m.revenue))}${kv(L("Wydatki", "Расходы"), n0(m.spending))}${kv(L("Saldo", "Сальдо"), sgn(m.balance, n0), m.balance < 0 ? "r" : "g")}${kv(L("Dług/PKB", "Долг/ВВП"), n1(m.debtRatio) + "%")}${kv(L("Odsetki", "Проценты"), n0(m.spend.interest))}</div>
-          <p class="small pl-note">${L("Saldo handlowe nie jest częścią budżetu. Import nie zwiększa długu publicznego wprost.", "Торговое сальдо не входит в бюджет. Импорт не увеличивает госдолг напрямую.")} ${whyBtn("budget")}</p>
-          <h4>${L("Podatki", "Налоги")}</h4>${["vat", "pit", "cit"].map(slider).join("")}<h4>${L("Wydatki", "Расходы")}</h4>${["social", "health", "admin"].map(slider).join("")}${draftBox()}
-          <details><summary>${L("Struktura dochodów i wydatków (mld zł/rok)", "Структура доходов и расходов (млрд zł/год)")}</summary><table class="pl-tbl sm"><tr><th colspan="2">${L("Dochody", "Доходы")}</th></tr>${Object.entries(m.rev).map(([a, v]) => `<tr><td>${RL[a] || a}</td><td>${n0(v)}</td></tr>`).join("")}<tr><th colspan="2">${L("Wydatki", "Расходы")}</th></tr>${Object.entries(m.spend).map(([a, v]) => `<tr><td>${RL[a] || a}</td><td>${n0(v)}</td></tr>`).join("")}</table></details>`;
+        const RC = ["#4ea1ff", "#3fc28a", "#e2b44c", "#b77cf2", "#ef6461", "#5fd0d6", "#f08bd0"];
+        const rev = Object.entries(m.rev).filter(x => x[1] > 0.5).map(([a, v], i) => [RL[a] || a, v, RC[i % 7]]), sp = Object.entries(m.spend).filter(x => x[1] > 0.5).map(([a, v], i) => [RL[a] || a, v, RC[i % 7]]);
+        const legend = (parts, tot) => `<ul class="pl-leg">${parts.map(([t, v, c]) => `<li><i style="background:${c}"></i>${esc(t)}<b>${n0(v)}</b><em>${n0(v / tot * 100)}%</em></li>`).join("")}</ul>`;
+        h += `<div class="pl-kvs">${kv(L("Dochody", "Доходы"), n0(m.revenue))}${kv(L("Wydatki", "Расходы"), n0(m.spending))}${kv(L("Saldo", "Сальдо"), lvl(m.balance, n0))}${kv(L("Dług/PKB", "Долг/ВВП"), n1(m.debtRatio) + "%")}${kv(L("Odsetki", "Проценты"), n0(m.spend.interest))}${kv(L("Deficyt/PKB", "Дефицит/ВВП"), lvl(m.balance / m.nominalGDP * 100, n1, "%"))}</div>
+          <h4>${L("Dochody vs wydatki (mld zł/rok)", "Доходы vs расходы (млрд zł/год)")} ${whyBtn("budget")}</h4>
+          <div class="pl-hb"><span>${L("Dochody", "Доходы")}</span>${hbar(rev, Math.max(m.revenue, m.spending))}<b>${n0(m.revenue)}</b></div>
+          <div class="pl-hb"><span>${L("Wydatki", "Расходы")}</span>${hbar(sp, Math.max(m.revenue, m.spending))}<b>${n0(m.spending)}</b></div>
+          <div class="pl-hb"><span>${L("Saldo", "Сальдо")}</span><div class="pl-hbt"><i style="width:${(Math.abs(m.balance) / Math.max(m.revenue, m.spending) * 100).toFixed(1)}%;background:${m.balance < 0 ? "var(--pl-red)" : "var(--pl-green)"}"></i></div><b>${lvl(m.balance, n0)}</b></div>
+          <div class="pl-donuts"><div><h6>${L("Skąd są pieniądze", "Откуда деньги")}</h6><div class="pl-strg">${donut(rev)}${legend(rev, m.revenue)}</div></div><div><h6>${L("Na co idą", "На что тратятся")}</h6><div class="pl-strg">${donut(sp)}${legend(sp, m.spending)}</div></div></div>
+          ${tabs()}<h4>${L("Saldo budżetu (mld zł/rok)", "Сальдо бюджета (млрд zł/год)")}</h4>${seriesChart("budget", dataMode)}<h4>${L("Dług publiczny / PKB", "Госдолг / ВВП")} ${whyBtn("debt")}</h4>${seriesChart("debt", dataMode)}
+          <p class="small pl-note">${L("Saldo handlowe nie jest częścią budżetu. Import nie zwiększa długu publicznego wprost.", "Торговое сальдо не входит в бюджет. Импорт не увеличивает госдолг напрямую.")}</p>
+          <h4>${L("Podatki", "Налоги")}</h4>${["vat", "pit", "cit"].map(slider).join("")}<h4>${L("Wydatki", "Расходы")}</h4>${slider("admin")}<button class="pl-btn" data-sec="spol">${ic("people")}${L("Świadczenia i zdrowie → Społeczeństwo", "Соцвыплаты и здравоохранение → Общество")}</button>${draftBox()}`;
       } else if (k === "sektory"){
-        h += `<div class="pl-tscroll"><table class="pl-tbl sm"><tr><th>${L("Sektor", "Сектор")}</th><th>${L("Produkcja", "Выпуск")}</th><th>${L("Wykorzyst.", "Загрузка")}</th><th>${L("Konkurenc.", "Конкур.")}</th><th>${L("Energochł.", "Энергоёмк.")}</th></tr>${S.SEC.filter(x => D.sectors[x].share > 0).map(x => { const z = s.sectors[x]; return `<tr><td>${nm(D.sectors[x])}</td><td>${n2(z.output)}</td><td>${n0(z.utilization * 100)}%</td><td>${n2(z.competitiveness)}</td><td>${n2(z.energyInt)}</td></tr>`; }).join("")}</table></div>
-          <p class="small muted">${L("Indeksy: 1,00 = start gry.", "Индексы: 1,00 = старт игры.")} ${whyBtn("exports")}</p><h4>${L("Programy", "Программы")}</h4>${["programs.przemysl", "programs.rolnictwo"].map(slider).join("")}${draftBox()}`;
+        h += `<div class="pl-tscroll"><table class="pl-tbl sm"><tr><th>${L("Sektor", "Сектор")}</th><th>${L("Produkcja", "Выпуск")}</th><th>${L("Wykorzyst.", "Загрузка")}</th><th>${L("Konkurenc.", "Конкур.")}</th><th>${L("Energochł.", "Энергоёмк.")}</th></tr>${S.SEC.filter(x => D.sectors[x].share > 0).map(x => { const z = s.sectors[x]; return `<tr><td>${nm(D.sectors[x])}</td><td>${n2(z.output)}</td><td><i class="pl-cap w"><b style="width:${clamp(z.utilization * 100, 0, 100).toFixed(0)}%"></b></i>${n0(z.utilization * 100)}%</td><td>${dl(z.competitiveness - 1, v => n0(v * 100) + "%", 1)}</td><td>${n2(z.energyInt)}</td></tr>`; }).join("")}</table></div>
+          <p class="small muted">${L("Konkurencyjność: zmiana od startu gry.", "Конкурентоспособность: изменение с начала игры.")} ${whyBtn("exports")}</p><h4>${L("Programy", "Программы")}</h4>${["programs.przemysl", "programs.rolnictwo"].map(slider).join("")}${draftBox()}`;
       } else if (k === "handel"){
-        h += `<div class="pl-kvs">${kv(L("Eksport", "Экспорт"), n0(m.X))}${kv(L("Import", "Импорт"), n0(m.M))}${kv(L("Saldo", "Сальдо"), sgn(m.X - m.M, n0))}${kv(L("Fracht", "Фрахт"), "×" + n2(m.freight))}</div>
+        h += `<div class="pl-kvs">${kv(L("Eksport", "Экспорт"), n0(m.X))}${kv(L("Import", "Импорт"), n0(m.M))}${kv(L("Saldo", "Сальдо"), lvl(m.X - m.M, n0))}${kv(L("Fracht", "Фрахт"), "×" + n2(m.freight))}</div>
           <p class="small pl-note">${L("Deficyt handlowy nie jest automatycznie zły — liczy się, co importujemy (maszyny vs. droga energia) i jak to finansujemy. To nie jest budżet państwa.", "Торговый дефицит не обязательно плох — важно, что импортируем (машины vs. дорогая энергия) и как финансируем. Это не госбюджет.")} ${whyBtn("trade")}</p>
-          <button class="pl-btn" data-ov="contracts">${ic("doc")}${L("Partnerzy, oferty i kontrakty", "Партнёры, предложения и контракты")}</button>
-          ${marketsTable()}<h4>${L("Rezerwy strategiczne", "Стратегические резервы")}</h4>${["reserve.zboze", "reserve.gaz", "reserve.paliwa"].map(slider).join("")}<h4>${L("Infrastruktura", "Инфраструктура")}</h4>${slider("programs.logistyka")}${draftBox()}`;
+          <div class="pl-two"><button class="pl-btn" data-ov="contracts">${ic("doc")}${L("Oferty i kontrakty", "Предложения и контракты")}</button><button class="pl-btn" data-sec="dyplo">${ic("globe")}${L("Dyplomacja", "Дипломатия")}</button></div>
+          ${tabs()}<h4>${L("Saldo handlu towarami (mld zł/rok)", "Сальдо торговли товарами (млрд zł/год)")}</h4>${seriesChart("trade", dataMode)}
+          ${marketsTable()}<h4>${L("Rezerwy strategiczne", "Стратегические резервы")}</h4>${["reserve.zboze", "reserve.gaz", "reserve.paliwa"].map(slider).join("")}${draftBox()}`;
       } else if (k === "energia"){
-        h += `<div class="pl-kvs">${kv(L("Gaz", "Газ"), n0(mk.gaz.price) + " zł/MWh")}${kv(L("Świat", "Мир"), n0(mk.gaz.world))}${kv(L("Import gazu", "Импорт газа"), n0(m.gasImportShare) + "%")}${kv(L("Prąd", "Электроэнергия"), n0(mk.prad.price) + " zł/MWh")}${kv(L("Produkcja prądu", "Выработка"), n0(mk.prad.prod) + " TWh")}${kv(L("Zapas gazu", "Запас газа"), n0(mk.gaz.stock / Math.max(1, mk.gaz.demand) * 360) + " " + L("dni", "дн."))}</div>
-          <p>${whyBtn("gas", L("Dlaczego gaz?", "Почему газ?"))} · ${whyBtn("power", L("Dlaczego prąd?", "Почему электроэнергия?"))}</p><h4>${L("Programy energetyczne", "Энергопрограммы")}</h4>${["programs.siec", "programs.magazyny", "programs.oze", "programs.efektywnosc"].map(slider).join("")}${draftBox()}`;
+        const g = mk.gaz, bp = baseProj(), share = 100 * g.imp / Math.max(1, g.demand);
+        h += `<div class="pl-kvs">${kv(L("Gaz", "Газ"), n0(g.price) + " zł/MWh")}${kv(L("Świat", "Мир"), n0(g.world))}${kv(L("Prąd", "Электроэнергия"), n0(mk.prad.price) + " zł/MWh")}${kv(L("Produkcja prądu", "Выработка"), n0(mk.prad.prod) + " TWh")}${kv(L("Zapas gazu", "Запас газа"), n0(g.stock / Math.max(1, g.demand) * 360) + " " + L("dni", "дн."))}${kv(L("Import gazu", "Импорт газа"), n0(share) + "%")}</div>
+          <section class="pl-gasb"><h4>${ic("flame")}${L("Skąd mamy gaz", "Откуда газ")} ${whyBtn("gas")}</h4>
+            <div class="pl-hb"><span>${L("Dziś", "Сейчас")}</span>${hbar([[L("Wydobycie krajowe", "Собственная добыча"), g.prod, "#3fc28a"], [L("Import", "Импорт"), g.imp, "#ef6461"]], g.prod + g.imp)}<b>${n0(share)}%</b></div>
+            ${[11, 35, 59].map((i, j) => `<div class="pl-hb"><span>${[L("za 1 rok", "через 1 год"), L("za 3 lata", "через 3 года"), L("za 5 lat", "через 5 лет")][j]}</span>${hbar([[L("Krajowe", "Своё"), Math.max(0, bp[i].gasDemand - bp[i].gasImp), "#3fc28a"], [L("Import", "Импорт"), bp[i].gasImp, "#ef6461"]], bp[i].gasDemand)}<b>${n0(bp[i].gasImportShare)}%</b></div>`).join("")}
+            <p class="small muted">${L("Prognoza przy obecnej polityce. Zmień program poniżej — podgląd pokaże, ile importu zastąpimy.", "Прогноз при текущей политике. Измените программу ниже — предпросмотр покажет, сколько импорта заменим.")}</p></section>
+          <h4>${L("Programy energetyczne", "Энергопрограммы")}</h4>${["programs.oze", "programs.efektywnosc", "programs.magazyny"].map(slider).join("")}<button class="pl-btn" data-sec="infra">${ic("bolt")}${L("Sieć przesyłowa → Infrastruktura", "Сети → Инфраструктура")}</button>${draftBox()}`;
+      } else if (k === "edukacja"){
+        h += `<div class="pl-kvs">${kv(L("Wydajność (indeks)", "Производительность"), n2(m.prod))}${kv(L("Efekt edukacji", "Эффект образования"), "×" + n2(s.programs.edukacja.eff))}${kv(L("Bezrobocie", "Безработица"), n1(m.unemployment) + "%")}</div>${slider("programs.edukacja")}${draftBox()}`;
       } else if (k === "nauka"){
         const found = s.innovations.found.filter(id => !s.innovations.active.some(x => x.id === id) && !s.innovations.done.some(x => x.id === id));
-        h += `<div class="pl-kvs">${kv(L("Szansa na odkrycie / mies.", "Шанс открытия / мес."), n1(S.innovationChance(s) * 100) + "%")}${kv(L("Wydajność (indeks)", "Производительность"), n2(m.prod))}</div>${["programs.edukacja", "programs.badania"].map(slider).join("")}${draftBox()}
+        h += `<div class="pl-kvs">${kv(L("Szansa na odkrycie / mies.", "Шанс открытия / мес."), n1(S.innovationChance(s) * 100) + "%")}${kv(L("Efekt R&D", "Эффект R&D"), "×" + n2(s.programs.badania.eff))}</div>${slider("programs.badania")}${draftBox()}
           <h4>${ic("bulb")}${L("Innowacje", "Инновации")}</h4>${found.map(id => { const I = D.innovations.find(x => x.id === id); return `<div class="pl-offer"><b>${nm(I)}</b><p class="small">${L("Koszt", "Стоимость")} ${I.cost} ${L("mld zł", "млрд zł")} · ${I.months} ${L("mies.", "мес.")}</p><button class="pl-btn go" data-inn="${id}">${L("Wdróż", "Внедрить")}</button></div>`; }).join("")}
           ${s.innovations.active.map(x => `<p class="small">${ic("clock")}${nm(D.innovations.find(i => i.id === x.id))}: ${Math.round(x.t / (x.months * 30) * 100)}%</p>`).join("")}${s.innovations.done.map(x => `<p class="small">${ic("check")}${nm(D.innovations.find(i => i.id === x.id))}</p>`).join("")}
           ${!found.length && !s.innovations.active.length && !s.innovations.done.length ? `<p class="muted small">${L("Jeszcze brak odkryć. Więcej R&D i edukacji = większa szansa (z opóźnieniem).", "Открытий пока нет. Больше R&D и образования — выше шанс (с задержкой).")}</p>` : ""}`;
       } else if (k === "banki"){
-        h += `<div class="pl-kvs">${kv(L("Stopa efektywna", "Эффективная ставка"), n2(m.rateEff) + "%")}${kv(L("Stopa realna", "Реальная ставка"), sgn(m.realRate) + "%")}${kv(L("Kredyt (indeks)", "Кредит (индекс)"), n2(m.credit))}${kv(L("Stres banków", "Стресс банков"), n0(m.bankStress * 100) + "%")}</div>
-          ${slider("rate")}<p class="small muted">${L("W grze sam ustalasz stopę (w rzeczywistości robi to niezależna RPP). Wyższa stopa: niższa inflacja i popyt, droższy kredyt — działa po kilku miesiącach.", "В игре ставку задаёте вы (в реальности — независимый RPP). Выше ставка: ниже инфляция и спрос, дороже кредит — действует через несколько месяцев.")}</p>${draftBox()}`;
+        h += `<div class="pl-kvs">${kv(L("Stopa efektywna", "Эффективная ставка"), n2(m.rateEff) + "%")}${kv(L("Stopa realna", "Реальная ставка"), lvl(m.realRate, n1, "%"))}${kv(L("Kredyt (indeks)", "Кредит (индекс)"), n2(m.credit))}${kv(L("Stres banków", "Стресс банков"), n0(m.bankStress * 100) + "%")}</div>
+          ${slider("rate")}<p class="small muted">${L("W grze sam ustalasz stopę (w rzeczywistości robi to niezależna RPP).", "В игре ставку задаёте вы (в реальности — независимый RPP).")}</p>${draftBox()}`;
+      } else if (k === "spol"){
+        h += `<div class="pl-kvs">${kv(L("Nastroje społeczne", "Общественные настроения"), n0(m.mood ?? 60) + "/100")}${kv(L("Dochód realny", "Реальный доход"), dl(((m.realIncome ?? 1) - 1) * 100, n1, 1, "%"))}${kv(L("Pracujący", "Занятые"), n1(m.employment ?? 16.7) + " " + L("mln", "млн"))}${kv(L("Bezrobocie", "Безработица"), n1(m.unemployment) + "%")}${kv(L("Inflacja", "Инфляция"), n1(m.inflation) + "%")}${kv(L("Ludność", "Население"), n1(D.macro.population) + " " + L("mln", "млн"))}</div>
+          <p class="small muted">${L("Nastroje zależą od dochodu realnego, bezrobocia, inflacji i niedoborów w sklepach. Dochód realny — zmiana od startu gry.", "Настроения зависят от реального дохода, безработицы, инфляции и дефицита в магазинах. Реальный доход — изменение с начала игры.")}</p>
+          ${tabs()}<h4>${L("Nastroje społeczne", "Общественные настроения")}</h4>${seriesChart("mood", dataMode)}<h4>${L("Dochód realny (zmiana od startu)", "Реальный доход (изменение с начала)")}</h4>${seriesChart("realIncome", dataMode)}<h4>${L("Bezrobocie", "Безработица")}</h4>${seriesChart("unemployment", dataMode)}
+          <h4>${L("Wydatki społeczne", "Социальные расходы")}</h4>${["social", "health"].map(slider).join("")}${draftBox()}`;
+      } else if (k === "infra"){
+        const P = D.programs.logistyka, low = s.policy.programs.logistyka < P.maintenance;
+        h += `<div class="pl-kvs">${kv(L("Koszt frachtu", "Стоимость фрахта"), dl((m.freight - 1) * 100, n1, -1, "%"))}${kv(L("Efekt infrastruktury", "Эффект инфраструктуры"), "×" + n2(s.programs.logistyka.eff))}${kv(L("Sieć energetyczna", "Энергосеть"), "×" + n2(s.programs.siec.eff))}</div>
+          ${low ? `<p class="pl-evp">${ic("alert")}${L("Finansowanie poniżej poziomu utrzymania — drogi, kolej i porty się starzeją, przepustowość spada.", "Финансирование ниже уровня содержания — дороги, ж/д и порты стареют, пропускная способность падает.")}</p>` : ""}
+          <h4>${L("Trasy do partnerów (drożność)", "Маршруты к партнёрам (проходимость)")}</h4>${S.PK.map(pk => { const r = s.partners[pk].route * (D.partners[pk].restricted ? 0.3 : 1); return `<div class="pl-hb"><span>${flag(pk, 18)} ${nm(D.partners[pk])}</span><div class="pl-hbt"><i style="width:${clamp(r * 100, 0, 100).toFixed(0)}%;background:${r < 0.9 ? "#ff9f3a" : "var(--pl-blue)"}"></i></div><b>${n0(r * 100)}%</b></div>`; }).join("")}
+          <h4>${L("Wykorzystanie przepustowości importu", "Загрузка импортных мощностей")}</h4>${S.MK.map(k2 => { const q = mk[k2], u = q.imp / Math.max(1e-6, q.impCap); return `<div class="pl-hb"><span>${nm(D.markets[k2])}</span><div class="pl-hbt"><i style="width:${clamp(u * 100, 0, 100).toFixed(0)}%;background:${u > 0.9 ? "var(--pl-red)" : u > 0.75 ? "var(--pl-gold)" : "var(--pl-green)"}"></i></div><b>${n0(u * 100)}%</b></div>`; }).join("")}
+          <h4>${L("Programy", "Программы")}</h4>${["programs.logistyka", "programs.siec"].map(slider).join("")}${draftBox()}`;
+      } else if (k === "dyplo"){
+        const busy = pk => (s.diplo || []).find(d => d.pk === pk);
+        h += `<p class="small muted">${L("Bez wojen i sankcji — tylko misje handlowe i umowy. Lepsze relacje = więcej ofert, lepsze ceny i więcej miejsca w negocjacjach. Efekt narasta stopniowo.", "Без войн и санкций — только торговые миссии и соглашения. Лучше отношения — больше предложений, лучше цены и больше уступок. Эффект нарастает постепенно.")}</p>
+          <div class="pl-two"><div class="pl-kv"><small>${L("Misja handlowa", "Торговая миссия")}</small><b>${n1(S.DIPLO.mission.cost)} ${L("mld zł · ~6 mies.", "млрд · ~6 мес.")}</b></div><div class="pl-kv"><small>${L("Umowa handlowa", "Торговое соглашение")}</small><b>${n1(S.DIPLO.agreement.cost)} ${L("mld zł · ~12 mies.", "млрд · ~12 мес.")}</b></div></div>
+          ${S.PK.map(pk => { const P = D.partners[pk], sp = s.partners[pk], tr = partnerTrade(pk), b = busy(pk);
+            return `<div class="pl-offer"><div class="pl-oh">${flag(pk, 30)}<div><b>${nm(P)}</b><small>${L("Handel", "Торговля")}: ${lvl(tr.exp - tr.imp, n0)} ${L("mld/rok", "млрд/год")} · ${L("niezawodność", "надёжность")} ${n0(sp.reliability * 100)}%</small></div><span class="${sp.relationship > 0.6 ? "g" : sp.relationship > 0.35 ? "gold" : "r"}">${n0(sp.relationship * 100)}/100</span></div>
+              <i class="pl-pbar"><b style="width:${(sp.relationship * 100).toFixed(0)}%"></b></i>
+              ${P.restricted ? `<p class="small r">${L("Sankcje — działania dyplomatyczne niedostępne.", "Санкции — дипломатические действия недоступны.")}</p>` : b ? `<p class="small">${ic("clock")}${b.kind === "mission" ? L("Misja handlowa w toku", "Торговая миссия идёт") : L("Umowa w toku", "Соглашение в работе")}: ${Math.round(b.t / b.len * 100)}%</p>`
+                : `<div class="pl-two"><button class="pl-btn" data-dip="${pk}:mission">${L("Misja handlowa", "Торговая миссия")}</button><button class="pl-btn go" data-dip="${pk}:agreement">${L("Umowa handlowa", "Соглашение")}</button></div>`}</div>`; }).join("")}`;
       } else if (k === "dane"){
-        const M = s.monthly.slice(-60), ser = (t, key, f, c) => `<div class="pl-dchart"><small>${t}</small>${spark(M.map(x => x[key]), c, 300, 60)}<b>${f(M.length ? M[M.length - 1][key] : 0)}</b></div>`;
-        h += `<p class="small pl-note">${esc(D.dataNote)}</p>${M.length < 2 ? `<p class="muted">${L("Wykresy pojawią się po 2 miesiącach gry.", "Графики появятся через 2 месяца игры.")}</p>` : ""}
-          ${ser(L("PKB realny", "Реальный ВВП"), "Y", n0, "var(--pl-green)")}${ser(L("Inflacja %", "Инфляция %"), "inflation", n1, "var(--pl-red)")}${ser(L("Bezrobocie %", "Безработица %"), "unemployment", n1, "var(--pl-blue)")}${ser(L("Dług/PKB %", "Долг/ВВП %"), "debtRatio", n1, "var(--pl-gold)")}${ser(L("Saldo handlu", "Торговое сальдо"), "tradeBalance", n0, "var(--pl-violet)")}${ser(L("Gaz zł/MWh", "Газ zł/MWh"), "gas", n0, "var(--pl-red)")}
+        h += `<p class="small pl-note">${esc(D.dataNote)}</p>${tabs()}${[["gdp", L("Wzrost PKB r/r %", "Рост ВВП г/г %")], ["inflation", L("Inflacja %", "Инфляция %")], ["unemployment", L("Bezrobocie %", "Безработица %")], ["debt", L("Dług/PKB %", "Долг/ВВП %")], ["budget", L("Saldo budżetu", "Сальдо бюджета")], ["trade", L("Saldo handlu", "Торговое сальдо")], ["gas", L("Gaz zł/MWh", "Газ zł/MWh")]].map(([key, t]) => `<h4>${t}</h4>${seriesChart(key, dataMode)}`).join("")}
           <h4>${L("Twoje decyzje", "Ваши решения")}</h4><ul class="small">${s.decisions.slice(-15).reverse().map(d => `<li>${dateStr(d.day)} · ${esc(String(d.k))}: ${d.from != null ? esc(String(+(+d.from).toFixed(2))) + " → " : ""}${esc(String(typeof d.v === "number" ? +d.v.toFixed(2) : d.v))}</li>`).join("") || `<li class="muted">${L("Brak.", "Нет.")}</li>`}</ul>`;
       } else if (k === "ust"){
         h += `<div class="pl-oact col"><button class="pl-btn" id="plsave">${ic("save")}${L("Zapisz grę", "Сохранить")}</button><button class="pl-btn" id="plload">${ic("folder")}${L("Wczytaj zapis", "Загрузить")}</button><button class="pl-btn" id="plnew">${ic("plus")}${L("Nowa gra", "Новая игра")}</button><button class="pl-btn" id="pltutr">${ic("cap")}${L("Samouczek od nowa", "Обучение заново")}</button></div>
@@ -528,13 +669,20 @@
       }
       return h;
     }
+    // pasek złożony z części (np. struktura dochodów) i pasek poziomy
+    function stackBar(parts, fmt){
+      const tot = parts.reduce((a, p) => a + Math.abs(p[1]), 0) || 1;
+      return `<div class="pl-stack">${parts.map(([t, v, c]) => `<i style="width:${(Math.abs(v) / tot * 100).toFixed(1)}%;background:${c}" title="${esc(t)}: ${fmt(v)}"></i>`).join("")}</div><ul class="pl-leg row">${parts.map(([t, v, c]) => `<li><i style="background:${c}"></i>${esc(t)} <b>${fmt(v)}</b></li>`).join("")}</ul>`;
+    }
+    function hbar(parts, max){ return `<div class="pl-hbt">${parts.map(([t, v, c]) => `<i style="width:${(Math.max(0, v) / Math.max(1e-6, max) * 100).toFixed(1)}%;background:${c}" title="${esc(t)}: ${n0(v)}"></i>`).join("")}</div>`; }
+
     const drawNav = () => $$("#plnav [data-nav]").forEach(b => b.classList.toggle("on", b.dataset.nav === section));
     function drawSection(){
       const box = $("#pldrawer"); drawNav();
       if (!section){ if (!partnerSel) box.hidden = true; return; }
       partnerSel = null;
       const sc = box.scrollTop; box.hidden = false; box.innerHTML = sectionHtml(section); box.scrollTop = sc;
-      wireSliders(box); drawDraft();
+      wireSliders(box); drawDraft(); $$(".pl-bars", box).forEach(b => b.scrollLeft = b.scrollWidth);
       const on = (id, f) => { const b = $("#" + id, box); if (b) b.onclick = f; };
       on("plsave", () => { save(); toast(L("Zapisano.", "Сохранено.")); });
       on("plload", () => { const r = S.deserialize(localStorage.getItem(LS_SAVE) || ""); if (!r.ok){ toast(L("Brak poprawnego zapisu.", "Нет корректного сохранения.")); return; } s = r.state; draft = {}; lastMonth = S.date(s.dayIndex).monthIndex; toast(L("Wczytano zapis.", "Сохранение загружено.")); refresh(true); drawSection(); });
@@ -562,6 +710,11 @@
       const t = e.target.closest("button,[data-why]"); if (!t || !host.contains(t) || t.disabled) return;
       const d = t.dataset;
       if (d.sp != null) setSpeed(+d.sp);
+      else if (d.help){ helpOpen.has(d.help) ? helpOpen.delete(d.help) : helpOpen.add(d.help); drawSection(); }
+      else if (d.wt){ whyTab = d.wt; drawWhy(); }
+      else if (d.dm){ dataMode = d.dm; drawSection(); }
+      else if (d.chatfull){ chatFull = !chatFull; ovBuilt = null; drawOv(true); }
+      else if (d.dip){ const [pk, kind] = d.dip.split(":"), r = S.diplomacy(s, pk, kind); toast(r.ok ? L("Działania dyplomatyczne rozpoczęte — relacje będą rosły stopniowo.", "Дипломатия начата — отношения будут расти постепенно.") : r.reason === "sanctions" ? L("Niedostępne — sankcje.", "Недоступно — санкции.") : L("Trwa już inna akcja z tym krajem.", "С этой страной уже идёт другое действие.")); refresh(true); drawSection(); }
       else if (d.nav){ if (section === d.nav){ section = null; draft = {}; drawSection(); } else openSection(d.nav); }
       else if (d.close === "drawer"){ section = null; partnerSel = null; draft = {}; drawSection(); $("#pldrawer").hidden = true; drawMap(); }
       else if (d.close === "why"){ why = null; drawWhy(); }
