@@ -11,7 +11,7 @@
     dataNote: "Dane gry — przybliżone. Nie są oficjalną statystyką ani prognozą.",
     macro: {                                       // mld zł / rok (nominalnie = realnie w cenach startowych)
       gdp: 3900, consumption: 2190, investment: 820, government: 760, servicesNet: 160,
-      inflation: 3.2, unemployment: 5.2, policyRate: 4.25, debt: 2300, population: 37.4,
+      inflation: 3.2, unemployment: 5.2, policyRate: 4.25, debt: 2300, reserves: 0, population: 37.4,   // stan na 1.01.2026 (dług brutto; rezerwy = 0)
       laborForce: 17.6,                            // mln
     },
     // Budżet państwa (mld zł / rok). Wydatki „sektorowe” są suwakami gracza.
@@ -73,10 +73,11 @@
     },
     // Wydarzenia zewnętrzne (bez wojen). months: [od, do] trwania; p: szansa miesięczna.
     events: {
-      ua_drought:   { name: ["Słabe zbiory w Ukrainie", "Неурожай в Украине"], partner: "UA", p: 0.035, season: [3, 7], len: [5, 9], effects: { supply: { UA: { zboze: 0.45, zywnosc: 0.75 } }, world: { zboze: 1.18 } } },
-      fr_drought:   { name: ["Susza w Europie Zachodniej", "Засуха в Западной Европе"], partner: "FR", p: 0.02, season: [4, 7], len: [4, 7], effects: { supply: { FR: { zboze: 0.6, zywnosc: 0.85 } }, world: { zboze: 1.1 }, domesticYield: 0.88 } },
+      ua_drought:   { name: ["Słabe zbiory w Ukrainie", "Неурожай в Украине"], partner: "UA", aid: "zboze", p: 0.035, season: [3, 7], len: [5, 9], effects: { supply: { UA: { zboze: 0.45, zywnosc: 0.75 } }, world: { zboze: 1.18 } } },
+      fr_drought:   { name: ["Susza w Europie Zachodniej", "Засуха в Западной Европе"], partner: "FR", aid: "zywnosc", p: 0.02, season: [4, 7], len: [4, 7], effects: { supply: { FR: { zboze: 0.6, zywnosc: 0.85 } }, world: { zboze: 1.1 }, domesticYield: 0.88 } },
       gas_spike:    { name: ["Skok światowych cen gazu", "Скачок мировых цен на газ"], partner: "WORLD", p: 0.025, len: [6, 12], effects: { world: { gaz: 1.7, prad: 1.25, paliwa: 1.15 } } },
       oil_spike:    { name: ["Drożejąca ropa", "Дорожающая нефть"], partner: "WORLD", p: 0.025, len: [5, 10], effects: { world: { paliwa: 1.35, gaz: 1.1 } } },
+      lt_blackout:  { name: ["Awaria systemu energetycznego na Litwie", "Авария энергосистемы Литвы"], partner: "LT", aid: "prad", p: 0.015, len: [2, 4], effects: { supply: { LT: { prad: 0.3 } }, world: { prad: 1.08 } } },
       grid_failure: { name: ["Awaria dużej elektrowni", "Авария крупной электростанции"], partner: "PL", p: 0.018, len: [2, 5], effects: { domestic: { prad: 0.9 } }, gridDependent: true },
       port_storm:   { name: ["Sztorm zamyka porty Bałtyku", "Шторм закрывает порты Балтики"], partner: "WORLD", p: 0.02, season: [10, 2], len: [1, 2], effects: { route: { WORLD: 0.4 } } },
       de_slowdown:  { name: ["Spowolnienie przemysłu w Niemczech", "Спад промышленности в Германии"], partner: "DE", p: 0.02, len: [8, 16], effects: { demand: { DE: 0.88 } } },
