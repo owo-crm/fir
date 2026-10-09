@@ -224,7 +224,7 @@
       productivity: [L("Edukacja i R&D niedofinansowane — słabszy potencjał w dłuższym okresie", "Образование и R&D недофинансированы — слабее потенциал в долгосрочной перспективе"), "gdp", "cap"], infrastructure: [L("Niedofinansowana infrastruktura", "Недофинансированная инфраструктура"), "trade", "globe"], growth: [L("Wolny wzrost gospodarki", "Медленный рост экономики"), "gdp", "chart"] };
     const CONF_R = { events: L("trwające wydarzenia", "идущие события"), prices: L("zmienne ceny surowców", "волатильные цены сырья"), decisions: L("świeże decyzje (efekt jeszcze niewidoczny)", "свежие решения (эффект ещё не виден)"), contracts: L("kłopoty z dostawami", "проблемы с поставками") };
     const lastRep = () => s.advisor.reports[s.advisor.reports.length - 1];
-    const avatar = (cls = "") => `<div class="pl-avatar ${cls}"><svg viewBox="0 0 60 60" aria-hidden="true"><rect width="60" height="60" rx="10" fill="#1c3550"/><circle cx="30" cy="23" r="10" fill="#c9d6e4"/><path d="M10 60c2-12 10-18 20-18s18 6 20 18z" fill="#2e4a68"/><path d="M26 42l4 8 4-8" fill="#c9d6e4"/><path d="M30 46v14" stroke="#e2b44c" stroke-width="2.5"/></svg></div>`;
+    const avatar = (cls = "") => `<div class="pl-avatar ${cls}"><img src="advisor.jpg" alt="" loading="lazy"></div>`;
     function advisorBrief(){
       const r = lastRep(); if (!r) return "";
       const b = r.base[0], top = r.risks[0];
