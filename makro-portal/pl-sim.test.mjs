@@ -167,5 +167,89 @@ test("wskaźniki społeczne w zakresie", () => {
   assert(s.macro.mood > 5 && s.macro.mood < 95 && s.macro.employment > 15 && Math.abs(s.macro.realIncome - 1) < 0.2, "mood/employment/realIncome");
 });
 
+// ---------------------------------------------------------------- scenariusze długookresowe (krok miesięczny, bez losowych wydarzeń)
+function scenario(patch, months, setup){
+  const s = S.newGame(11); s.flags.noEvents = true; s.quiet = true;
+  if (patch) S.applyPolicyPatch(s, patch, true); if (setup) setup(s);
+  const path = [];
+  for (let i = 1; i <= months; i++){
+    const net0 = s.macro.debt - (s.macro.reserves || 0); S.tick(s, 30); const m = s.macro;
+    path.push({ i, Y: m.Y, infl: m.inflation, u: m.unemployment, bal: m.balance / m.nominalGDP * 100, debt: m.debtRatio, res: m.reserves || 0,
+      flowErr: Math.abs((m.debt - (m.reserves || 0)) - (net0 - m.balance * 30 / 360)), gas: m.gasImportShare, vals: [m.Y, m.C, m.I, m.G, m.NX, m.inflation, m.unemployment, m.debt, m.reserves || 0, m.balance, m.priceLevel] });
+  }
+  return { s, path, at: i => path[i - 1] };
+}
+const finite = sc => sc.path.every(p => p.vals.every(Number.isFinite));
+const BASE = scenario(null, 120);
+
+test("start: udokumentowany stan na 1.01.2026 (rozgrzewka nie przesuwa finansów)", () => {
+  const s = S.newGame(3), M = S.DATA.macro;
+  assert(s.dayIndex === 0 && s.macro.priceLevel === 1 && s.macro.Y === M.gdp && s.macro.debt === M.debt && s.macro.reserves === M.reserves, "stan startowy");
+  assert(Math.abs(s.macro.debtRatio - M.debt / M.gdp * 100) < 1e-9 && Math.abs(s.macro.inflation - M.inflation) < 1e-9 && s.macro.rateEff === M.policyRate, "wskaźniki startowe");
+  assert(Math.abs(s.macro.AD - M.gdp) / M.gdp < 0.005, "popyt startowy ≠ PKB: " + s.macro.AD);
+});
+
+test("10 lat bez zmian: wartości skończone, budżet = dług, rozsądne granice", () => {
+  assert(finite(BASE), "NaN/Infinity");
+  assert(BASE.path.every(p => p.flowErr < 1e-6), "dług nie zgadza się z saldem budżetu");
+  const e = BASE.at(120), g = (Math.pow(e.Y / S.DATA.macro.gdp, 1 / 10) - 1) * 100;
+  assert(g > 1.5 && g < 3.5, "średni wzrost " + g);
+  assert(e.infl > 0.5 && e.infl < 5, "inflacja " + e.infl);
+  assert(e.u > 3 && e.u < 9, "bezrobocie " + e.u);
+  assert(e.debt > 60 && e.debt < 95, "dług/PKB po 10 latach " + e.debt + " (bez reform dług ma rosnąć, ale nie eksplodować)");
+  assert(BASE.path.every(p => p.bal < 0 && p.bal > -8), "saldo budżetu poza zakresem");
+});
+
+test("oszczędności: niższy dług, ale koszt we wzroście na starcie; dług nigdy ujemny", () => {
+  const A = scenario({ vat: 26, pit: 15, admin: 250, social: 650, health: 200 }, 120);
+  assert(finite(A) && A.path.every(p => p.flowErr < 1e-6), "spójność");
+  assert(A.at(120).debt < BASE.at(120).debt - 20, "dług nie spadł wyraźnie");
+  assert(A.at(12).Y < BASE.at(12).Y * 0.97, "brak kosztu krótkookresowego");
+  assert(A.at(12).u > BASE.at(12).u + 0.5, "bezrobocie nie wzrosło");
+  assert(A.path.every(p => p.debt >= 0 && p.res >= 0), "ujemny dług lub rezerwy");
+});
+
+test("skrajne podatki: nadwyżka trafia do rezerw (dług ≥ 0), PKB trwale niższe", () => {
+  const T = scenario({ vat: 27, pit: 25, cit: 30, admin: 240, social: 600, health: 180 }, 120);
+  assert(T.path.every(p => p.debt >= 0 && p.res >= 0 && p.flowErr < 1e-6), "bilans");
+  assert(T.at(120).res > 0 || T.at(120).debt < 20, "nadwyżka nie została rozliczona");
+  assert(T.at(120).Y < BASE.at(120).Y * 0.95, "wysokie podatki bez kosztu dla potencjału");
+});
+
+test("inwestycje: koszt teraz, efekt z opóźnieniem, mniej importu gazu", () => {
+  const I = scenario({ programs: { oze: 50, efektywnosc: 25, edukacja: 210, badania: 75, przemysl: 75, logistyka: 160 } }, 120);
+  assert(finite(I) && I.path.every(p => p.flowErr < 1e-6), "spójność");
+  assert(I.at(24).debt > BASE.at(24).debt + 1, "brak kosztu fiskalnego");
+  const g2 = I.at(60).Y / BASE.at(60).Y, g10 = I.at(120).Y / BASE.at(120).Y;
+  assert(g10 > 1.04 && g10 > g2 + 0.02, `efekt nie narasta: 5 lat ${g2}, 10 lat ${g10}`);
+  assert(I.at(120).gas < BASE.at(120).gas - 3, "import gazu nie spadł");
+});
+
+test("każdy program: +20 mld/rok daje dodatni efekt PKB po 15 latach, ale nie darmowy", () => {
+  const B = scenario(null, 180);
+  for (const k of ["edukacja", "badania", "przemysl", "logistyka", "oze", "efektywnosc"]){
+    const R = scenario({ programs: { [k]: S.DATA.programs[k].base + 20 } }, 180);
+    const dY = R.at(180).Y / B.at(180).Y - 1, d5 = R.at(60).Y / B.at(60).Y - 1;
+    assert(dY > 0.004 && dY < 0.025, `${k}: efekt po 15 latach ${dY}`);
+    assert(dY > d5, `${k}: efekt nie narasta z czasem`);
+    assert(R.at(180).debt > B.at(180).debt, `${k}: brak kosztu`);
+  }
+});
+
+test("kryzys (gaz + Niemcy + banki): głęboki spadek, potem odbicie bez przegrzania", () => {
+  const C = scenario(null, 60, s => { S.startEvent(s, "gas_spike"); S.startEvent(s, "de_slowdown"); S.startEvent(s, "bank_stress"); });
+  assert(finite(C), "NaN");
+  const minY = Math.min(...C.path.slice(0, 12).map((p, i) => p.Y / BASE.path[i].Y));
+  assert(minY < 0.97, "brak recesji: " + minY);
+  assert(Math.max(...C.path.slice(0, 12).map(p => p.infl)) > BASE.at(6).infl + 3, "brak skoku inflacji");
+  assert(C.at(36).Y / BASE.at(36).Y > 0.98 && C.at(36).Y / BASE.at(36).Y < 1.01, "brak odbicia albo przegrzanie");
+});
+
+test("odporność: magazyny łagodzą szok gazowy, efektywność obniża inflację", () => {
+  const peak = patch => { const R = scenario(patch, 96); const s = R.s; s.quiet = true; const y0 = s.macro.Y; const e = S.startEvent(s, "gas_spike"); e.len = 240; let mx = 0, mn = 9; for (let d = 0; d < 300; d++){ S.tick(s, 1); mx = Math.max(mx, s.macro.inflation); mn = Math.min(mn, s.macro.Y / y0); } return { mx, mn }; };
+  const a = peak(null), b = peak({ programs: { magazyny: 26, efektywnosc: 27 } });
+  assert(b.mx < a.mx - 0.5 && b.mn > a.mn + 0.003, `inflacja ${a.mx}→${b.mx}, PKB ${a.mn}→${b.mn}`);
+});
+
 console.log(`\n${pass} ok, ${fail} błędów`);
 if (fail) process.exit(1);

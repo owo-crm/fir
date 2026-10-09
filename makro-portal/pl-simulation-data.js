@@ -11,7 +11,7 @@
     dataNote: "Dane gry — przybliżone. Nie są oficjalną statystyką ani prognozą.",
     macro: {                                       // mld zł / rok (nominalnie = realnie w cenach startowych)
       gdp: 3900, consumption: 2190, investment: 820, government: 760, servicesNet: 160,
-      inflation: 3.2, unemployment: 5.2, policyRate: 4.25, debt: 2300, population: 37.4,
+      inflation: 3.2, unemployment: 5.2, policyRate: 4.25, debt: 2300, reserves: 0, population: 37.4,   // stan na 1.01.2026 (dług brutto; rezerwy = 0)
       laborForce: 17.6,                            // mln
     },
     // Budżet państwa (mld zł / rok). Wydatki „sektorowe” są suwakami gracza.

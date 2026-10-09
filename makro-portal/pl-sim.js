@@ -41,7 +41,7 @@
       pe: null,
       macro: { Y: M.gdp, Ypot: M.gdp * 1.005, C: M.consumption, I: M.investment, G: M.government, X: 0, M: 0, NX: 0, servicesNet: M.servicesNet,
         priceLevel: 1, cpi: 1, inflation: M.inflation, core: M.inflation, inflE: 3.0, unemployment: M.unemployment, rateEff: M.policyRate, realRate: M.policyRate - 3,
-        conf: 1, credit: 1, bankStress: 0.1, debt: M.debt, revenue: 0, spending: 0, balance: 0, debtRatio: M.debt / M.gdp * 100, prod: 1, growthYoY: 2.8, energyCost: 1, freight: 1 },
+        conf: 1, credit: 1, bankStress: 0.1, debt: M.debt, reserves: M.reserves, revenue: 0, spending: 0, balance: 0, debtRatio: M.debt / M.gdp * 100, prod: 1, growthYoY: 2.8, energyCost: 1, freight: 1 },
       programs: {}, sectors: {}, markets: {}, partners: {},
       contracts: [], offers: [], events: [], innovations: { found: [], active: [], done: [] }, news: [], history: [], monthly: [], decisions: [],
       advisor: { goals: null, reports: [], lastMonthlyReportIndex: -1, conversation: [] },
@@ -57,7 +57,16 @@
     s.advisor.goals = { start: 0, list: D.goals.map(g => ({ ...g })) };
     // rozgrzewka: 30 dni bez wydarzeń, żeby przepływy i ceny się ustabilizowały, potem start kalendarza
     s.quiet = true; for (let i = 0; i < 60; i++) tick(s, 1, true); s.quiet = false;
-    s.flags.ad0adj += s.macro.AD - DATA.macro.gdp; s.macro.Y = DATA.macro.gdp; s.macro.unemployment = DATA.macro.unemployment; s.flags.x0 = s.macro.Xr;
+    s.flags.ad0adj += s.macro.AD - DATA.macro.gdp; s.flags.x0 = s.macro.Xr;
+    // Rozgrzewka tylko ustala przepływy rynków; stan finansowy wraca do udokumentowanych wartości startowych (DATA.macro).
+    Object.assign(s.macro, { Y: DATA.macro.gdp, unemployment: DATA.macro.unemployment, priceLevel: 1, cpi: 1, debt: DATA.macro.debt, reserves: DATA.macro.reserves,
+      rateEff: DATA.macro.policyRate, inflE: DATA.macro.inflation, core: DATA.macro.inflation, nominalGDP: DATA.macro.gdp, debtRatio: DATA.macro.debt / DATA.macro.gdp * 100, netDebtRatio: (DATA.macro.debt - DATA.macro.reserves) / DATA.macro.gdp * 100 });
+    if (s.macro.pi){ const gapPi = DATA.macro.inflation - (s.macro.pi.expect + s.macro.pi.demand + s.macro.pi.energy + s.macro.pi.food); s.macro.pi.expect += gapPi; s.macro.inflation = DATA.macro.inflation; }
+    s.pe = JSON.parse(JSON.stringify(s.policy));
+    s.flags.ec0 = s.macro.energyCost; s.flags.food0 = [s.markets.zywnosc.price / s.markets.zywnosc.worldBase, s.markets.zboze.price / s.markets.zboze.worldBase];
+    // ponowna kalibracja popytu po przywróceniu stanu startowego (próbny krok na kopii)
+    for (let it = 0; it < 3; it++){ const c = JSON.parse(JSON.stringify(s)); tick(c, 1, true); s.flags.ad0adj += c.macro.AD - DATA.macro.gdp; }
+    s.flags.gap0 = (DATA.macro.gdp / s.macro.Ypot - 1) * 100; s.macro.slowGap = 0;
     s.dayIndex = 0; s.history = []; s.monthly = []; s.news = []; s.events = []; s.decisions = [];
     s.macro.growthYoY = 2.8; s.start = snapshot(s); s.yearAgo = [];
     pushNews(s, "welcome", {});
@@ -99,7 +108,7 @@
       if (e.domestic) for (const [mk, v] of Object.entries(e.domestic)) fx.domestic[mk] = Math.min(fx.domestic[mk] ?? 1, 1 - (1 - v) * k * (T.gridDependent ? clamp(1.6 - 0.6 * E("siec"), 0.4, 1.3) : 1));
       if (e.freight) fx.freight = Math.max(fx.freight, 1 + (e.freight - 1) * k);
       if (e.credit) fx.credit = Math.min(fx.credit, 1 - (1 - e.credit) * k);
-      if (e.domesticYield) fx.yieldMult = Math.min(fx.yieldMult, 1 - (1 - e.domesticYield) * k * (1 - 0.5 * (E("rolnictwo") - 1) - innov(s, "droughtResist")));
+      if (e.domesticYield) fx.yieldMult = Math.min(fx.yieldMult, 1 - (1 - e.domesticYield) * k * clamp(1 - 0.015 * (E("rolnictwo") - 1) * D.programs.rolnictwo.base - innov(s, "droughtResist"), 0.3, 1.3));
       ev.t += dt;
     }
     const ended = s.events.filter(ev => ev.t >= ev.len);
@@ -113,10 +122,16 @@
     m.bankStress = ema(m.bankStress, clamp(0.1 + (1 - fx.credit) * 3 + Math.max(0, m.rateEff - 7) * 0.05, 0, 1), 20, dt);
 
     // 4) wydajność i potencjał: edukacja, R&D, modernizacja, logistyka (wolno)
-    const growthPot = 0.025 + 0.006 * (E("edukacja") - 1) + 0.004 * (E("badania") - 1) + 0.004 * (E("przemysl") - 1) + 0.003 * (E("logistyka") - 1) + 0.03 * (m.I / (DATA.macro.investment * trendG(s)) - 1);
+    // X(k) = dodatkowe „trwałe” finansowanie programu w mld zł/rok (po opóźnieniu). Efekt liczony od kwoty, nie od procentu,
+    // żeby +20 mld w małym programie nie działało 5× mocniej niż +20 mld w dużym.
+    const XP = k => (E(k) - 1) * D.programs[k].base;
+    const growthPot = 0.025 + 0.00011 * XP("edukacja") + 0.00009 * XP("badania") + 0.00008 * XP("przemysl") + 0.00006 * XP("logistyka") + 0.03 * (m.I / (DATA.macro.investment * trendG(s)) - 1);
     m.prod *= 1 + clamp(growthPot, -0.01, 0.04) * dt / 360;
     const prodInnov = innov(s, "productivity_przemysl");
-    m.Ypot = DATA.macro.gdp * 1.01 * m.prod * (1 + 0.6 * prodInnov) * (1 - 0.02 * Math.max(0, -maint("logistyka")));
+    // strona podażowa: wysokie podatki zniechęcają do pracy i inwestycji, zdrowie wspiera aktywność zawodową (działa powoli, ~2 lata)
+    const T0 = DATA.budget.taxes, supT = 1 - 0.004 * (pe.pit - T0.pit) - 0.0025 * (pe.cit - T0.cit) - 0.0015 * (pe.vat - T0.vat) + 0.00012 * (pe.health - DATA.budget.spending.health);
+    m.supply = ema(m.supply ?? 1, clamp(supT, 0.85, 1.08), 720, dt);
+    m.Ypot = DATA.macro.gdp * 1.01 * m.prod * m.supply * (1 + 0.6 * prodInnov) * (1 - 0.02 * Math.max(0, -maint("logistyka")));
 
     // 5) energia: produkcja prądu, zapotrzebowanie, gaz do elektrowni
     const mk = s.markets, eff = 1 - 0.05 * (E("efektywnosc") - 1) - innov(s, "energyDemand");
@@ -131,7 +146,7 @@
     const storage = 1 + 0.5 * (E("magazyny") - 1) + innov(s, "storageBoost");
 
     // 6) rynki: produkcja, popyt, import/eksport (ograniczone partnerami i trasami), ceny, zapasy
-    const yieldMult = fx.yieldMult * (1 + 0.04 * (E("rolnictwo") - 1));
+    const yieldMult = fx.yieldMult * (1 + clamp(0.003 * XP("rolnictwo"), -0.1, 0.12));
     const consIdx = m.C / DATA.macro.consumption, invIdx = m.I / DATA.macro.investment;
     let X = 0, Mv = 0, Xr = 0, Mr = 0, tariffRev = 0, importEnergy = 0;
     for (const k of MK){
@@ -177,8 +192,11 @@
       const commodity = k === "zboze" || k === "gaz" || k === "paliwa";
       let impT, expT;
       if (commodity){
-        impT = Math.max(0, need + refill) + t0.imp * 0.15 * priceImp;
-        expT = Math.max(0, -(need + refill)) * 0.9 * priceExp + t0.exp * 0.1;
+        // surowce: import pokrywa lukę (+ uzupełnienie zapasu). Handel „w obie strony” tylko dla zboża i zawsze zbilansowany,
+        // żeby nadwyżka nie odkładała się w nieskończoność w magazynie.
+        const two = k === "zboze" ? t0.imp * 0.6 * priceImp : 0;
+        impT = Math.max(0, need + refill) + two;
+        expT = Math.max(0, -(need + refill)) * 0.9 * priceExp + two + t0.exp * 0.05;
       } else if (k === "prad"){
         impT = Math.max(0, need) + t0.imp * 0.6 * priceImp; expT = Math.max(0, -need) * 0.8 + t0.exp * 0.5 * priceExp;
       } else {
@@ -199,7 +217,9 @@
       const wImp = clamp(0.5 + net * 2, 0, 1);
       let pT = wImp * q.parity + (1 - wImp) * q.exportNet;
       if (k === "przemyslowe" || k === "maszyny" || k === "konsumpcyjne" || k === "zywnosc") pT *= 1 + s.sectors[B.sector].energyInt * 0.08 * (m.energyCost - 1) + 0.25 * (m.priceLevel - 1);
-      if (k === "prad") pT = 0.55 * q.parity + 0.45 * (mk.gaz.price / mk.gaz.worldBase) * q.worldBase * 1.0 + 0.0 * 0;
+      if (k === "prad") pT = (0.55 * q.parity + 0.45 * (mk.gaz.price / mk.gaz.worldBase) * q.worldBase) * (1 - 0.4 * clamp(ozeTWh / Math.max(1, elecDemand), 0, 0.6));   // tanie OZE obniżają cenę hurtową
+      // magazyny i OZE łagodzą skoki cen energii: część szoku cenowego jest „buforowana”
+      if (k === "gaz" || k === "prad"){ const ref = q.worldBase * (1 + fr) + B.transport; if (pT > ref){ const damp = clamp(0.012 * XP("magazyny"), -0.1, 0.45) + (k === "prad" ? clamp(ozeTWh / Math.max(1, elecDemand), 0, 0.5) : 0); pT = ref + (pT - ref) * (1 - clamp(damp, -0.1, 0.7)); } }
       pT *= 1 + 2.5 * Math.max(0, q.shortage) + (B.storable ? 0.25 * clamp(1 - cover, 0, 1) : 0);
       q.price = clamp(ema(q.price, pT, k === "prad" || k === "gaz" ? 20 : 35, dt), q.price * (1 - 0.02 * dt), q.price * (1 + 0.025 * dt));
       // wartości (mld zł / rok); cło tylko spoza UE (abstrakcyjne „tarcie”)
@@ -210,16 +230,16 @@
       if (k === "gaz" || k === "prad" || k === "paliwa") importEnergy += impV;
     }
     m.X = X; m.M = Mv; m.Xr = Xr; m.Mr = Mr;
-    m.energyCost = ema(m.energyCost, 0.45 * mk.prad.price / mk.prad.worldBase + 0.35 * mk.gaz.price / mk.gaz.worldBase + 0.2 * mk.paliwa.price / mk.paliwa.worldBase, 10, dt);
+    m.energyCost = ema(m.energyCost, (0.45 * mk.prad.price / mk.prad.worldBase + 0.35 * mk.gaz.price / mk.gaz.worldBase + 0.2 * mk.paliwa.price / mk.paliwa.worldBase) * eff, 10, dt);   // koszt energii = ceny × zużycie (efektywność obniża rachunek)
     m.importEnergy = importEnergy;
     m.gasImportShare = 100 * mk.gaz.imp / Math.max(1, mk.gaz.demand);
 
     // 7) sektory: konkurencyjność z kosztów, wydajności i energii
     for (const k of SEC){ const S = s.sectors[k], B = DATA.sectors[k];
-      const energyInt = B.energyInt * (k === "przemysl" ? (1 - 0.1 * (E("przemysl") - 1)) : 1) * eff;
+      const energyInt = B.energyInt * (k === "przemysl" ? (1 - clamp(0.003 * XP("przemysl"), -0.2, 0.25)) : 1) * eff;
       S.energyInt = energyInt;
-      S.unitCost = 0.7 * m.priceLevel / (m.prod * (k === "przemysl" ? 1 + prodInnov : 1)) + 0.3 * (1 + energyInt * 0.25 * (m.energyCost - 1));
-      S.competitiveness = clamp(ema(S.competitiveness, Math.pow(1 / S.unitCost, 0.5) * (1 + 0.05 * (E("przemysl") - 1)), 90, dt), 0.8, 1.25);
+      S.unitCost = 0.7 * m.priceLevel / (m.prod * (k === "przemysl" ? 1 + prodInnov : 1)) + 0.3 * (1 + energyInt * 0.6 * (m.energyCost / (s.flags.ec0 || 1) - 1));   // energia drożeje względem startu → koszt jednostkowy rośnie
+      S.competitiveness = clamp(ema(S.competitiveness, Math.pow(1 / S.unitCost, 0.5) * (1 + clamp(0.0015 * XP("przemysl"), -0.1, 0.12)), 90, dt), 0.8, 1.25);
       S.productivity = m.prod * (k === "przemysl" ? 1 + prodInnov : 1);
     }
 
@@ -245,9 +265,10 @@
     const AD = C + I + G + NX - (s.flags.ad0adj ?? 0);
     if (s.flags.ad0adj == null) s.flags.ad0adj = AD - gdp0;          // kalibracja: start w równowadze
     const Y = Math.min(AD - 0, m.Ypot * 1.06);
-    m.AD = AD - s.flags.ad0adj;
+    m.AD = AD;   // (wcześniej korekta była odejmowana dwa razy — kalibracja startu się rozjeżdżała)
     // ceny i płace powoli dopasowują się → popyt wraca w stronę potencjału (≈3 lata); polityka popytowa działa przejściowo
-    if (!warm && s.flags.gap0 != null) s.flags.ad0adj -= (m.Ypot * (1 + s.flags.gap0 / 100) - m.AD) * dt / 1080;
+    // Korekta reaguje tylko na TRWAŁĄ lukę (średnia ~1 rok), więc krótki wstrząs nie wywołuje późniejszego „przegrzania”.
+    if (!warm && s.flags.gap0 != null){ m.slowGap = ema(m.slowGap ?? 0, m.AD / m.Ypot * 100 - 100 - s.flags.gap0, 365, dt); s.flags.ad0adj += m.slowGap / 100 * m.Ypot * dt / 1440; }
     m.Y = ema(m.Y, Math.min(m.AD, m.Ypot * 1.06), 25, dt);
     m.gap = (m.Y / m.Ypot - 1) * 100;
     void Y;
@@ -263,14 +284,14 @@
     // prawo Okuna (uproszczone): 1% luki PKB ≈ 0,45 p.p. bezrobocia; wolna reakcja firm
     if (s.flags.gap0 == null) s.flags.gap0 = m.gap;
     m.unemployment = clamp(ema(m.unemployment, DATA.macro.unemployment - 0.45 * (m.gap - s.flags.gap0), 40, dt), 2, 25);
-    const foodPush = 100 * (mk.zywnosc.price / mk.zywnosc.worldBase - 1) * 0.3 + 100 * (mk.zboze.price / mk.zboze.worldBase - 1) * 0.05;
-    const energyPush = 100 * (m.energyCost - 1) * 0.12;
+    const f0 = s.flags.food0 || [1, 1], foodPush = 100 * (mk.zywnosc.price / mk.zywnosc.worldBase / f0[0] - 1) * 0.3 + 100 * (mk.zboze.price / mk.zboze.worldBase / f0[1] - 1) * 0.05;   // względem stanu startowego
+    const energyPush = 100 * (m.energyCost / (s.flags.ec0 || 1) - 1) * 0.12;
     m.inflE = ema(m.inflE, 0.5 * m.core + 0.5 * 2.5 - 0.2 * (m.rateEff - DATA.macro.policyRate), 150, dt);
     m.core = ema(m.core, m.inflE + 0.5 * (m.gap - s.flags.gap0) + 0.4 * energyPush, 45, dt);
     const yoy = (key) => { const h = s.yearAgo?.[0]; return h ? h[key] : null; };
     const foodYoY = yoy("food") ? (mk.zywnosc.price / yoy("food") - 1) * 100 : foodPush;
     const enYoY = yoy("energy") ? (m.energyCost / yoy("energy") - 1) * 100 : energyPush;
-    m.pi = { expect: 0.7 * m.inflE, demand: 0.7 * (m.core - m.inflE), energy: 0.12 * enYoY, food: 0.18 * foodYoY };
+    m.pi = { expect: 0.7 * m.inflE, demand: 0.7 * (m.core - m.inflE), energy: 0.2 * enYoY, food: 0.22 * foodYoY };
     m.inflation = m.pi.expect + m.pi.demand + m.pi.energy + m.pi.food;
     m.priceLevel *= 1 + m.core / 100 * dt / 360;
     m.cpi *= 1 + m.inflation / 100 * dt / 360;
@@ -279,15 +300,23 @@
 
     // 10) budżet (nominalnie, mld zł / rok) — handel zagraniczny NIE jest częścią budżetu
     const nom = m.Y * m.priceLevel, rb = P0.revenueBase;
-    const rev = { vat: rb.vat * (pe.vat / P0.taxes.vat) * (C / DATA.macro.consumption) * m.priceLevel, pit: rb.pit * (pe.pit / P0.taxes.pit) * (nom / gdp0), cit: rb.cit * (pe.cit / P0.taxes.cit) * (nom / gdp0) * (0.6 + 0.4 * m.I / DATA.macro.investment),
+    const tx = (k) => Math.pow(pe[k] / P0.taxes[k], pe[k] > P0.taxes[k] ? 0.8 : 1);   // wyższa stawka → więcej unikania, dochód rośnie wolniej niż stawka
+    const rev = { vat: rb.vat * tx("vat") * (C / DATA.macro.consumption) * m.priceLevel, pit: rb.pit * tx("pit") * (nom / gdp0), cit: rb.cit * tx("cit") * (nom / gdp0) * (0.6 + 0.4 * m.I / DATA.macro.investment),
       excise: rb.excise * (nom / gdp0) * 0.9 + rb.excise * 0.1, contributions: rb.contributions * (nom / gdp0) * (1 - m.unemployment / 100) / (1 - DATA.macro.unemployment / 100), other: rb.other * (nom / gdp0), tariffs: tariffRev };
     const govRate = m.rateEff * 0.6 + 2.4 + Math.max(0, m.debtRatio - 60) * 0.06;
-    const spend = { social: pe.social * m.priceLevel + m.unemployment / 100 * DATA.macro.laborForce * 1e6 * 24000 / 1e9 * m.priceLevel, health: pe.health * m.priceLevel, admin: pe.admin * m.priceLevel,
-      programs: progSpend * m.priceLevel, innovations: s.innovations.active.reduce((a, x) => a + x.cost / (x.months / 12), 0), interest: m.debt * govRate / 100, penalties: s.flags.penalties || 0 };
-    s.flags.penalties = 0;
+    // Wydatki w polityce są w cenach i skali gospodarki z 2026 r.: rosną z cenami ORAZ z realnym trendem PKB
+    // (tak jak płace w budżetówce i świadczenia). Wcześniej rosły tylko z cenami → udział w PKB malał, a deficyt sam znikał.
+    const nomTrend = m.priceLevel * trend;
+    const spend = { social: pe.social * nomTrend + m.unemployment / 100 * DATA.macro.laborForce * 1e6 * 24000 / 1e9 * nomTrend, health: pe.health * nomTrend, admin: pe.admin * nomTrend,
+      programs: progSpend * nomTrend, innovations: s.innovations.active.reduce((a, x) => a + x.cost / (x.months / 12), 0), interest: m.debt * govRate / 100 };
+    rev.reserveIncome = (m.reserves || 0) * Math.max(0, m.rateEff - 0.5) / 100;
     m.rev = rev; m.spend = spend; m.revenue = sum(rev); m.spending = sum(spend); m.balance = m.revenue - m.spending;
-    m.debt -= m.balance * dt / 360; m.govRate = govRate;
-    m.nominalGDP = nom; m.debtRatio = m.debt / nom * 100;
+    // przepływ gotówki: nadwyżka spłaca dług, a gdy długu brak — trafia do rezerw (Fundusz Rezerwowy); deficyt najpierw zużywa rezerwy
+    const cf = m.balance * dt / 360;
+    if (cf >= 0){ const pay = Math.min(cf, m.debt); m.debt -= pay; m.reserves = (m.reserves || 0) + cf - pay; }
+    else { const use = Math.min(-cf, m.reserves || 0); m.reserves = (m.reserves || 0) - use; m.debt += -cf - use; }
+    m.govRate = govRate;
+    m.nominalGDP = nom; m.debtRatio = m.debt / nom * 100; m.netDebtRatio = (m.debt - (m.reserves || 0)) / nom * 100;
 
     // 10b) społeczeństwo (wskaźniki do odczytu; nie wpływają na resztę modelu)
     if (s.flags.disp0) m.realIncome = m.disp / s.flags.disp0;
@@ -392,12 +421,20 @@
   // zerwanie umowy przez gracza → kara + spadek wiarygodności i relacji
   function cancelContract(s, id){
     const c = s.contracts.find(x => x.id === id && x.status === "active"); if (!c) return null;
-    c.status = "broken"; c.end = s.dayIndex; s.flags.penalties = (s.flags.penalties || 0) + c.penalty * 12;   // jednorazowo (×12, bo przepływ roczny/30 dni)
+    c.status = "broken"; c.end = s.dayIndex; oneOff(s, cancelPenalty(c), "penalty");
     s.flags.playerReliability = clamp((s.flags.playerReliability ?? 0.95) - 0.08, 0, 1);
     s.partners[c.partner].relationship = clamp(s.partners[c.partner].relationship - 0.12, 0, 1);
     s.decisions.push({ day: s.dayIndex, k: "cancel", v: id }); pushNews(s, "contract_broken", { id });
     return c;
   }
+  // jednorazowe koszty (kary, pomoc, dyplomacja): od razu w długu/rezerwach, sumowane w roku budżetowym
+  function oneOff(s, amt, kind){
+    const m = s.macro, use = Math.min(amt, m.reserves || 0);
+    m.reserves = (m.reserves || 0) - use; m.debt += amt - use;
+    const y = date(s.dayIndex).year; if (s.flags.oneOffYear !== y){ s.flags.oneOffYear = y; s.flags.oneOff = {}; }
+    s.flags.oneOff[kind] = (s.flags.oneOff[kind] || 0) + amt;
+  }
+  const cancelPenalty = c => +(valueOf(c.market, c.volume, c.price) * 0.25).toFixed(2);   // zerwanie: 25% rocznej wartości
   function settleContracts(s){
     for (const c of s.contracts){ if (c.status !== "active") continue;
       const q = s.markets[c.market];
@@ -406,7 +443,7 @@
       if (c.delivery < c.guarantee){ c.shortfalls++;
         const forceMajeure = c.type === "import" ? (s.partners[c.partner].supply[c.market] ?? 1) < 0.95 || s.partners[c.partner].route < 0.95 : s.events.length > 0;
         if (c.type === "import"){ s.partners[c.partner].reliability = clamp(s.partners[c.partner].reliability - (forceMajeure ? 0.01 : 0.05), 0.3, 1); if (!s.quiet) pushNews(s, "contract_shortfall", { id: c.id, fm: forceMajeure }); }
-        else { if (!forceMajeure){ s.flags.playerReliability = clamp((s.flags.playerReliability ?? 0.95) - 0.03, 0, 1); s.flags.penalties = (s.flags.penalties || 0) + c.penalty * 12; } if (!s.quiet) pushNews(s, "contract_underdelivery", { id: c.id, fm: forceMajeure }); }
+        else { if (!forceMajeure){ s.flags.playerReliability = clamp((s.flags.playerReliability ?? 0.95) - 0.03, 0, 1); oneOff(s, c.penalty, "penalty"); } if (!s.quiet) pushNews(s, "contract_underdelivery", { id: c.id, fm: forceMajeure }); }
       }
       if (s.dayIndex >= c.end){ c.status = "done"; s.partners[c.partner].relationship = clamp(s.partners[c.partner].relationship + (c.shortfalls ? 0 : 0.04), 0, 1); if (!s.quiet) pushNews(s, "contract_done", { id: c.id }); }
     }
@@ -422,13 +459,13 @@
     s.diplo = s.diplo || [];
     if (s.diplo.some(d => d.pk === pk)) return { ok: false, reason: "busy" };
     s.diplo.push({ pk, kind, t: 0, len: K.len, gain: K.gain, rel: K.rel });
-    s.macro.debt += K.cost; s.flags.diploSpent = (s.flags.diploSpent || 0) + K.cost;     // jednorazowy koszt (finansowany długiem)
+    oneOff(s, K.cost, "diplomacy");     // jednorazowy koszt (finansowany długiem)
     s.decisions.push({ day: s.dayIndex, k: "diplomacy", v: pk + ":" + kind }); if (!s.quiet) pushNews(s, "diplomacy", { pk, kind });
     return { ok: true };
   }
 
   // ------------------------------------------------------------ innowacje (prawdopodobieństwo zależy od R&D i edukacji)
-  function innovationChance(s){ const E = k => clamp(s.programs[k].eff, 0.2, 3.5); return clamp(0.015 + 0.03 * (E("badania") - 1) + 0.012 * (E("edukacja") - 1), 0, 0.15); }
+  function innovationChance(s){ const E = k => clamp(s.programs[k].eff, 0.2, 3.5); const X = k => (E(k) - 1) * DATA.programs[k].base; return clamp(0.015 + 0.0011 * X("badania") + 0.0002 * X("edukacja"), 0.003, 0.15); }
   function tryInnovation(s, r){
     if (r() >= innovationChance(s)) return;
     const pool = DATA.innovations.filter(I => !s.innovations.found.includes(I.id)); if (!pool.length) return;
@@ -442,11 +479,12 @@
   // ------------------------------------------------------------ miesiąc: raport doradcy raz na miesiąc
   function closeMonth(s){
     const mi = date(s.dayIndex).monthIndex;
+    // historia „rok temu” także w prognozach (inaczej inflacja w prognozie liczyłaby się inaczej niż w grze)
+    s.yearAgo = s.yearAgo || []; s.yearAgo.push({ food: s.markets.zywnosc.price, energy: s.macro.energyCost, Y: s.macro.Y }); if (s.yearAgo.length > 12) s.yearAgo.shift();
     if (s.quiet){ settleContracts(s); return; }
     if (s.advisor.lastMonthlyReportIndex >= mi) return;            // nigdy dwa raporty w tym samym miesiącu
     settleContracts(s);
     const z = snapshot(s);
-    s.yearAgo.push({ food: s.markets.zywnosc.price, energy: s.macro.energyCost, Y: s.macro.Y }); if (s.yearAgo.length > 12) s.yearAgo.shift();
     const y12 = s.monthly.length >= 12 ? s.monthly[s.monthly.length - 12] : null;
     s.macro.growthYoY = y12 ? (s.macro.Y / y12.Y - 1) * 100 : s.macro.growthYoY;
     s.monthly.push(z); if (s.monthly.length > 600) s.monthly.shift();
