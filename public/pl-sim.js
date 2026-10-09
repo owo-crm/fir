@@ -121,12 +121,12 @@
     // 5) energia: produkcja prądu, zapotrzebowanie, gaz do elektrowni
     const mk = s.markets, eff = 1 - 0.05 * (E("efektywnosc") - 1) - innov(s, "energyDemand");
     const indAct = s.sectors.przemysl.output, act = m.Y / DATA.macro.gdp;
-    const ozeTWh = 26 * (E("oze") - 1);
+    const ozeTWh = 45 * (E("oze") - 1);
     const outage = fx.domestic.prad ?? 1;
     const gridLoss = clamp(0.07 - 0.02 * (E("siec") - 1) + innov(s, "gridLoss"), 0.03, 0.12);
     const elecCap = (mk.prad.prodBase + ozeTWh) * outage * (1.07 - gridLoss);
     const elecDemand = mk.prad.demandBase * (0.5 + 0.5 * indAct) * eff * Math.pow(mk.prad.price / mk.prad.worldBase, -0.08);
-    const gasPower = Math.max(5, 32 - ozeTWh * 0.7);
+    const gasPower = Math.max(5, 32 - ozeTWh * 1.8);   // 1 TWh prądu z gazu ≈ 1,8–2 TWh gazu
     const gasDemand = (mk.gaz.demandBase - 32 + gasPower) * (0.4 + 0.6 * indAct) * eff * Math.pow(mk.gaz.price / mk.gaz.worldBase, -0.1);
     const storage = 1 + 0.5 * (E("magazyny") - 1) + innov(s, "storageBoost");
 
@@ -289,6 +289,14 @@
     m.debt -= m.balance * dt / 360; m.govRate = govRate;
     m.nominalGDP = nom; m.debtRatio = m.debt / nom * 100;
 
+    // 10b) społeczeństwo (wskaźniki do odczytu; nie wpływają na resztę modelu)
+    if (s.flags.disp0) m.realIncome = m.disp / s.flags.disp0;
+    m.employment = DATA.macro.laborForce * (1 - m.unemployment / 100);
+    m.mood = ema(m.mood ?? 60, clamp(60 + 150 * ((m.realIncome ?? 1) - 1) - 4 * (m.unemployment - DATA.macro.unemployment) - 3 * Math.max(0, m.inflation - 3) - 120 * avgShortage(s), 5, 95), 30, dt);
+    // 10c) dyplomacja: relacje rosną stopniowo po misji / umowie
+    for (const d of (s.diplo || [])){ const step = Math.min(dt, d.len - d.t); if (step > 0){ const P = s.partners[d.pk]; P.relationship = clamp(P.relationship + d.gain * step / d.len, 0, 1); if (d.rel) P.reliability = clamp(P.reliability + d.rel * step / d.len, 0, 1); } d.t += dt; }
+    if (s.diplo) s.diplo = s.diplo.filter(d => d.t < d.len);
+
     // 11) innowacje w trakcie wdrażania
     for (const inv of s.innovations.active) inv.t += dt;
     const doneInv = s.innovations.active.filter(x => x.t >= x.months * DAYS);
@@ -340,7 +348,8 @@
       const T = DATA.contractTemplates[Math.floor(r() * DATA.contractTemplates.length)];
       if (s.offers.some(o => o.partner === T.partner && o.market === T.market) || s.contracts.some(c => c.status === "active" && c.partner === T.partner && c.market === T.market)) continue;
       const q = s.markets[T.market], vol = +(T.vol[0] + r() * (T.vol[1] - T.vol[0])).toFixed(2), dur = Math.round(T.dur[0] + r() * (T.dur[1] - T.dur[0]));
-      const prem = T.prem[0] + r() * (T.prem[1] - T.prem[0]);
+      if (r() > 0.45 + 0.6 * s.partners[T.partner].relationship) continue;           // słabe relacje = mniej ofert
+      const prem = T.prem[0] + r() * (T.prem[1] - T.prem[0]) + (T.type === "export" ? 1 : -1) * (s.partners[T.partner].relationship - 0.65) * 0.05;
       const price = +(q.world * (1 + prem)).toFixed(DATA.markets[T.market].price < 10 ? 3 : 0);
       s.offers.push({ id: s.nextId++, partner: T.partner, market: T.market, type: T.type, volume: vol, price, months: dur, guarantee: 0.8, penalty: +(valueOf(T.market, vol, price) * 0.05).toFixed(2), expires: s.dayIndex + 28, rounds: 0, status: "offer" });
       if (!s.quiet){ const o = s.offers[s.offers.length - 1]; pushNews(s, "offer", { id: o.id, p: o.partner, mk: o.market, ty: o.type }); }
@@ -404,6 +413,20 @@
     s.offers = s.offers.filter(o => o.expires > s.dayIndex);
   }
 
+  // ------------------------------------------------------------ dyplomacja (bez wojen): misja handlowa / umowa ułatwiająca handel
+  const DIPLO = { mission: { cost: 0.5, gain: 0.08, rel: 0, len: 180 }, agreement: { cost: 3, gain: 0.15, rel: 0.04, len: 360 } };
+  function diplomacy(s, pk, kind){
+    const K = DIPLO[kind], P = DATA.partners[pk];
+    if (!K || !P) return { ok: false, reason: "unknown" };
+    if (P.restricted) return { ok: false, reason: "sanctions" };
+    s.diplo = s.diplo || [];
+    if (s.diplo.some(d => d.pk === pk)) return { ok: false, reason: "busy" };
+    s.diplo.push({ pk, kind, t: 0, len: K.len, gain: K.gain, rel: K.rel });
+    s.macro.debt += K.cost; s.flags.diploSpent = (s.flags.diploSpent || 0) + K.cost;     // jednorazowy koszt (finansowany długiem)
+    s.decisions.push({ day: s.dayIndex, k: "diplomacy", v: pk + ":" + kind }); if (!s.quiet) pushNews(s, "diplomacy", { pk, kind });
+    return { ok: true };
+  }
+
   // ------------------------------------------------------------ innowacje (prawdopodobieństwo zależy od R&D i edukacji)
   function innovationChance(s){ const E = k => clamp(s.programs[k].eff, 0.2, 3.5); return clamp(0.015 + 0.03 * (E("badania") - 1) + 0.012 * (E("edukacja") - 1), 0, 0.15); }
   function tryInnovation(s, r){
@@ -441,7 +464,7 @@
     return { day: s.dayIndex, Y: m.Y, Ypot: m.Ypot, nominalGDP: m.Y * m.priceLevel, growthYoY: m.growthYoY, inflation: m.inflation, core: m.core, unemployment: m.unemployment, balance: m.balance, debt: m.debt, debtRatio: m.debtRatio,
       X: m.X, M: m.M, tradeBalance: m.X - m.M, C: m.C, I: m.I, G: m.G, NX: m.NX, rate: s.policy.rate, rateEff: m.rateEff, energyCost: m.energyCost, gasImportShare: m.gasImportShare, priceLevel: m.priceLevel, cpi: m.cpi,
       gas: mk.gaz.price, power: mk.prad.price, grain: mk.zboze.price, food: mk.zywnosc.price, credit: m.credit, conf: m.conf, revenue: m.revenue, spending: m.spending, prod: m.prod, pi: m.pi ? { ...m.pi } : null,
-      rev: m.rev ? { ...m.rev } : null, spend: m.spend ? { ...m.spend } : null, disp: m.disp, gap: m.gap,
+      rev: m.rev ? { ...m.rev } : null, spend: m.spend ? { ...m.spend } : null, disp: m.disp, gap: m.gap, realIncome: m.realIncome ?? 1, mood: m.mood ?? 60, employment: m.employment, gasImp: mk.gaz.imp, gasProdD: mk.gaz.prod,
       mk: Object.fromEntries(MK.map(k => [k, { price: mk[k].price, world: mk[k].world, prod: mk[k].prod, demand: mk[k].demand, imp: mk[k].imp, exp: mk[k].exp, stock: mk[k].stock, shortage: mk[k].shortage, parity: mk[k].parity, impCap: mk[k].impCap, impValue: mk[k].impValue, expValue: mk[k].expValue }])) };
   }
 
@@ -451,7 +474,7 @@
     const c = clone(s); c.quiet = true; c.events = c.events.map(e => ({ ...e }));
     if (policyPatch) applyPolicyPatch(c, policyPatch, true);
     const out = [];
-    for (let i = 0; i < months; i++){ tick(c, DAYS); out.push({ month: i + 1, Y: c.macro.Y, Ypot: c.macro.Ypot, inflation: c.macro.inflation, unemployment: c.macro.unemployment, debtRatio: c.macro.debtRatio, balance: c.macro.balance, gas: c.markets.gaz.price, gasImportShare: c.macro.gasImportShare, tradeBalance: c.macro.X - c.macro.M }); }
+    for (let i = 0; i < months; i++){ tick(c, DAYS); out.push({ gasImp: c.markets.gaz.imp, gasDemand: c.markets.gaz.demand, revenue: c.macro.revenue, spending: c.macro.spending, month: i + 1, Y: c.macro.Y, Ypot: c.macro.Ypot, inflation: c.macro.inflation, unemployment: c.macro.unemployment, debtRatio: c.macro.debtRatio, balance: c.macro.balance, gas: c.markets.gaz.price, gasImportShare: c.macro.gasImportShare, tradeBalance: c.macro.X - c.macro.M }); }
     return out;
   }
   function applyPolicyPatch(s, patch, silent){
@@ -522,7 +545,7 @@
   // ------------------------------------------------------------ wiadomości (tylko ważne)
   function pushNews(s, id, data = {}){
     const key = id + (data.k || "") + (data.id || "");
-    if (s.news.some(n => n.key === key && s.dayIndex - n.day < 60 && !/offer|contract|innovation/.test(id))) return;
+    if (s.news.some(n => n.key === key && s.dayIndex - n.day < 60 && !/offer|contract|innovation|diplomacy/.test(id))) return;
     s.news.push({ ...data, ref: data.id, key, id, day: s.dayIndex }); if (s.news.length > 80) s.news.shift();
   }
   function checkNews(s){
@@ -567,6 +590,6 @@
 
   const API = { DATA, SCHEMA, DAYS, MK, PK, PROG, SEC, newGame, tick, date, snapshot, project, setPolicy, applyPolicyPatch, startEvent, phase, intensity,
     makeOffers, acceptOffer, rejectOffer, negotiate, cancelContract, assessContract, implementInnovation, innovationChance, goalStatus, confidence, risks, buildReport,
-    createClock, serialize, deserialize, opportunityCost, valueOf, clone, programStock };
+    createClock, diplomacy, DIPLO, serialize, deserialize, opportunityCost, valueOf, clone, programStock };
   if (typeof module !== "undefined" && module.exports) module.exports = API; else root.PLSim = API;
 })(typeof window !== "undefined" ? window : globalThis);
