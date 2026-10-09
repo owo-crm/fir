@@ -5,7 +5,7 @@
 (function (root) {
   "use strict";
   const DATA = typeof module !== "undefined" && module.exports ? require("./pl-simulation-data.js") : root.PL_DATA;
-  const SCHEMA = 1, DAYS = 30;
+  const SCHEMA = 2, DAYS = 30;   // 2: nowa kalibracja (budżet, rezerwy, banki) — starsze zapisy nie są zgodne
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const ema = (old, v, days, dt = 1) => old + (v - old) * Math.min(1, dt / days);
   const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
@@ -653,7 +653,7 @@
   function deserialize(json){
     let o; try { o = typeof json === "string" ? JSON.parse(json) : json; } catch (e){ return { ok: false, error: "parse" }; }
     if (!o || typeof o !== "object") return { ok: false, error: "parse" };
-    if (o.schemaVersion !== SCHEMA){ if (o.schemaVersion > SCHEMA || o.schemaVersion == null) return { ok: false, error: "version", found: o.schemaVersion }; }
+    if (o.schemaVersion !== SCHEMA) return { ok: false, error: o.schemaVersion > SCHEMA ? "version" : "old", found: o.schemaVersion };
     return { ok: true, state: o };
   }
 
