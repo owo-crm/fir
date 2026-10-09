@@ -189,18 +189,21 @@
     const mapIc = (n, sc = 0.7) => `<g class="pl-mapic" transform="translate(${-12 * sc},${-12 * sc}) scale(${sc})">${ICON[n]}</g>`;
     function buildMap(){
       const svg = $("#plmap"), pts = PL_OUT.map(p => proj(...p).map(Math.round).join(",")).join(" "), [lx, ly] = proj(18.0, 52.95);
-      let h = `<defs><linearGradient id="plsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b2140"/><stop offset="1" stop-color="#15385c"/></linearGradient>
-          <linearGradient id="plland" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#466f3c"/><stop offset="1" stop-color="#355a31"/></linearGradient></defs>
-        <rect x="0" y="0" width="1000" height="700" fill="#1e2b25"/>
-        <path d="M0 0 H1000 V120 C 820 150 760 175 700 168 C 600 160 560 152 480 158 C 400 162 330 168 290 175 C 200 190 120 150 0 170 Z" fill="url(#plsea)"/>
-        <text x="330" y="132" class="pl-sea">${L("Morze Bałtyckie", "Балтийское море")}</text>
-        ${Object.entries(NEIGH).map(([k, ps]) => `<polygon points="${ps.map(p => proj(...p).map(Math.round).join(",")).join(" ")}" class="pl-nb${k === "KG" ? " kg" : ""}" data-nb="${k}"/>`).join("")}
-        <polygon points="${pts}" class="pl-poland"/>
+      const A = window.PLMapArt, lite = isMobile();
+      const nb = Object.entries(NEIGH).map(([k, ps]) => `<polygon points="${ps.map(p => proj(...p).map(Math.round).join(",")).join(" ")}" class="pl-nb${k === "KG" ? " kg" : ""}" data-nb="${k}"/>`).join("")
+        + [[[21.1, 56.1], [25, 56.3], [26.6, 55.6], [28, 56.2], [32, 56], [45, 56], [45, 62], [21, 62]], [[-10, 47.5], [6, 47.5], [13, 47.5], [17.2, 48.0], [18.8, 47.8], [20.5, 48.1], [22.4, 48.4], [22, 45], [32, 45], [45, 45], [45, 30], [-10, 30]], [[32, 45], [32, 56], [45, 56], [45, 45]]].map(ps => `<polygon points="${ps.map(p => proj(...p).map(Math.round).join(",")).join(" ")}" class="pl-nb fill"/>`).join("");
+      let h = `<defs>${A.defs()}</defs>
+        <rect x="-1200" y="-800" width="3400" height="2400" fill="#2f4129"/>
+        <path d="M-1200 -800 H2200 V250 H-1200 Z" fill="url(#plsea2)"/><path d="M-1200 -800 H2200 V250 H-1200 Z" fill="url(#plwave)" class="pl-waves"/>
+        ${A.terrain(proj, { lite, neighbours: nb })}${A.border(proj)}${A.industry(proj)}
+        <text x="330" y="122" class="pl-sea">${L("Morze Bałtyckie", "Балтийское море")}</text>
+        <g id="pllive" pointer-events="none"></g>
         <text x="${lx.toFixed(0)}" y="${ly.toFixed(0)}" class="pl-plname">${L("POLSKA", "ПОЛЬША")}</text>
-        <g id="plroutes"></g><g id="plcities">`;
+        ${lite ? "" : A.clouds()}
+        <g id="plroutes"></g><g id="pltraffic" pointer-events="none"></g><g id="plcities">`;
       for (const [n, lo, la, cap, kind] of CITIES){ const [x, y] = proj(lo, la);
         h += kind ? `<g class="pl-poi" data-poi="${kind}" transform="translate(${x.toFixed(0)},${y.toFixed(0)})" tabindex="0" role="button" aria-label="${esc(n)}"><rect x="-12" y="-12" width="24" height="24" rx="6"/>${mapIc(kind)}<text class="pl-cn" x="16" y="5">${n}</text></g>`
-          : `<g class="pl-city" transform="translate(${x.toFixed(0)},${y.toFixed(0)})"><circle r="${cap ? 6 : 4.5}"/><text class="pl-cn${cap ? " cap" : ""}" x="9" y="5">${n}</text></g>`; }
+          : `<g class="pl-city" transform="translate(${x.toFixed(0)},${y.toFixed(0)})">${A.skyline(-10, 2, cap)}<circle r="${cap ? 6 : 4.5}"/><text class="pl-cn${cap ? " cap" : ""}" x="9" y="5">${n}</text></g>`; }
       h += `</g><g id="plpartners">`;
       for (const k of S.PK){ const [x, y] = ppos(k), P = D.partners[k];
         h += `<g class="pl-partner${P.restricted ? " restr" : ""}" data-p="${k}" transform="translate(${x.toFixed(0)},${y.toFixed(0)})" tabindex="0" role="button" aria-label="${esc(nm(P))}"><circle r="25" class="ring"/><circle r="20" class="core"/><svg x="-12" y="-8" width="24" height="16" viewBox="0 0 30 20">${flagInner(k)}</svg><text y="43" text-anchor="middle" class="pl-pn">${esc(nm(P)).toUpperCase()}</text><g class="pl-pev"></g></g>`; }
@@ -246,8 +249,9 @@
     }
     const partnerIssue = pk => { const sp = s.partners[pk]; const minS = Math.min(1, ...Object.values(sp.supply)); return sp.route < 0.9 || minS < 0.9 || sp.demand < 0.95; };
     const evMark = ph => `<g class="pl-evm ${ph}"><circle r="12"/><g transform="translate(-8,-8.5) scale(.68)">${ICON.alert}</g></g>`;
+    let trafSig = "", liveSig = "";
     function drawMap(){
-      let h = "";
+      let h = ""; const traffic = [], A = window.PLMapArt;
       for (const pk of S.PK){
         const [x1, y1] = ppos(pk), [x2, y2] = proj(...ENTRY[pk]), tr = partnerTrade(pk), v = tr.imp + tr.exp;
         const w = clamp(1.5 + Math.sqrt(v) * 0.55, 1.5, 20), bad = partnerIssue(pk), restr = D.partners[pk].restricted;
@@ -255,12 +259,30 @@
         const d = `M${x1.toFixed(0)} ${y1.toFixed(0)} Q${mx.toFixed(0)} ${my.toFixed(0)} ${x2.toFixed(0)} ${y2.toFixed(0)}`;
         const cats = { en: 0, fd: 0, in: 0 }; tr.byM.forEach(x => cats[CAT[x.k]] += x.imp + x.exp); const cat = Object.entries(cats).sort((a, b) => b[1] - a[1])[0][0];
         const tip = `${nm(D.partners[pk])}: ${L("eksport", "экспорт")} ≈${n0(tr.exp)}, ${L("import", "импорт")} ≈${n0(tr.imp)} ${L("mld zł/rok", "млрд zł/год")}`;
-        h += `<path d="${d}" class="pl-route c-${cat}${bad ? " bad" : ""}${restr ? " restr" : ""}" style="stroke-width:${w.toFixed(1)}"><title>${esc(tip)}</title></path><path d="${d}" class="pl-flow" style="animation-duration:${(6 / Math.max(0.3, s.partners[pk].route)).toFixed(1)}s"/>`;
+        h += `<path d="${d}" class="pl-route c-${cat}${bad ? " bad" : ""}${restr ? " restr" : ""}" style="stroke-width:${w.toFixed(1)}"><title>${esc(tip)}</title></path><path d="${d}" class="pl-flow" style="animation-duration:${(6 / Math.max(0.3, s.partners[pk].route)).toFixed(1)}s" ${restr ? "" : tr.exp > tr.imp ? `marker-start="url(#plarr)"` : `marker-end="url(#plarr)"`}/>`;
+        const qx = (0.25 * x1 + 0.5 * mx + 0.25 * x2), qy = (0.25 * y1 + 0.5 * my + 0.25 * y2);
+        if (restr) h += `<g class="pl-sanct" transform="translate(${(qx + 30).toFixed(0)},${(qy - 8).toFixed(0)})"><circle r="11"/><path d="M-4 -4 L4 4 M4 -4 L-4 4"/><g transform="translate(-52,15)"><rect width="104" height="24" rx="4"/><text x="52" y="16" text-anchor="middle">${L("Ograniczenia handlowe", "Торговые ограничения")}</text></g></g>`;
+        else if (bad) h += `<g class="pl-block" transform="translate(${(qx - 34).toFixed(0)},${qy.toFixed(0)})"><circle r="10"/><path d="M0 -5 V1 M0 4.5 V5"/></g>`;
+        if (!restr && v > 5){ const n = bad ? 1 : clamp(Math.round(Math.sqrt(v) / 6), 1, 5), xs = tr.exp / v, sea = pk === "WORLD";
+          const list = []; for (let i = 0; i < n; i++){ const dir = (i + 0.5) / n < xs ? -1 : 1; list.push([sea ? "plship" : ["UA", "LT", "CZ"].includes(pk) && i % 2 === 0 ? "pltrain" : "pltruck", dir, dir < 0 ? "#e2b44c" : "#5fa8ff"]); }
+          if (sea && s.markets.gaz.imp > 1) list.push(["pltanker", 1, ""]);
+          traffic.push([pk, d, list, Math.round(Math.max(0.3, s.partners[pk].route) * 4)]); }
         if (v > 60 && !restr) h += `<g class="pl-rv" transform="translate(${(0.25 * x1 + 0.5 * mx + 0.25 * x2).toFixed(0)},${(0.25 * y1 + 0.5 * my + 0.25 * y2).toFixed(0)})"><rect x="-27" y="-10" width="54" height="19" rx="5"/><text y="4" text-anchor="middle">≈${n0(v)}</text></g>`;
         const cs = s.contracts.filter(c => c.status === "active" && c.partner === pk);
         if (cs.length) h += `<path d="M${x1.toFixed(0)} ${(y1 + 8).toFixed(0)} Q${(mx + 10).toFixed(0)} ${(my + 10).toFixed(0)} ${x2.toFixed(0)} ${(y2 + 6).toFixed(0)}" class="pl-cline"/><g class="pl-ctag" transform="translate(${mx.toFixed(0)},${(my + 22).toFixed(0)})"><rect x="-17" y="-11" width="34" height="22" rx="6"/><g transform="translate(-14,-7) scale(.58)">${ICON.doc}</g><text x="5" y="5">${cs.length}</text></g>`;
       }
       $("#plroutes").innerHTML = h;
+      // ruch na trasach: przebudowa tylko przy zmianie liczby/kierunku pojazdów (animacja się nie restartuje)
+      const tsig = traffic.map(([pk, , l, sp]) => pk + l.map(x => x[0][2] + x[1]).join("") + sp).join("|");
+      if (tsig !== trafSig){ trafSig = tsig; $("#pltraffic").innerHTML = traffic.map(([pk, d, list, sp]) => A.movers(d, list, (pk === "WORLD" ? 40 : 22) / (sp / 4))).join(""); }
+      // żywa warstwa: pola (zbiory), wiatraki (efekt programu OZE), dym (wykorzystanie mocy przemysłu, produkcja prądu)
+      const mk = s.markets, [fa, fb, pale] = A.fieldColors(mk.zboze.prod / Math.max(1e-6, mk.zboze.prodBase), mk.zboze.shortage), svg = $("#plmap");
+      svg.style.setProperty("--fa", fa); svg.style.setProperty("--fb", fb); svg.style.setProperty("--fpale", pale);
+      const nW = Math.round(clamp(3 + (s.programs.oze.eff - 1) * 60, 3, A.WIND_MAX)), ind = s.sectors.przemysl;
+      const kInd = clamp((ind.utilization - 0.7) / 0.3, 0, 1) * clamp(ind.output, 0, 1.2), kPow = clamp(mk.prad.prod / Math.max(1e-6, mk.prad.prodBase), 0, 1.2) * 0.85;
+      const ls = nW + "|" + kInd.toFixed(1) + "|" + kPow.toFixed(1);
+      if (ls !== liveSig){ liveSig = ls; svg.dataset.wind = nW;
+        $("#pllive").innerHTML = A.wind(proj, nW) + (isMobile() ? "" : A.smoke(proj, 18.75, 50.32, kInd, -7, -18) + A.smoke(proj, 19.55, 51.7, kInd * 0.7, -1, -14) + A.smoke(proj, 19.33, 51.27, kPow, 37, -26)); }
       for (const g of $$(".pl-poi")){ const sv = objSev(g.dataset.poi); g.classList.toggle("warn", sv === 1); g.classList.toggle("crit", sv === 2); g.classList.toggle("sel", objSel === g.dataset.poi); }
       $$(".pl-nb").forEach(g => g.classList.toggle("issue", !!(s.partners[g.dataset.nb] && partnerIssue(g.dataset.nb))));
       for (const g of $$(".pl-partner")){ const pk = g.dataset.p, sp = s.partners[pk], ev = s.events.filter(e => D.events[e.k].partner === pk);
@@ -398,10 +420,13 @@
       const evs = s.events.filter(e => S.phase(e) !== "recovery");
       $("#plalerts").innerHTML = (s.aid ? `<button class="pl-chipa crit" data-aidopen="1">${ic("alert")}<span><b>${L("Prośba o pomoc", "Просьба о помощи")}</b><small>${esc(nm(D.partners[s.aid.partner]))}</small></span></button>` : "")
         + evs.slice(0, 3).map(e => { const P = D.events[e.k].partner, ph = S.phase(e); return `<button class="pl-chipa ${ph === "peak" ? "crit" : "warn"}" ${P && P !== "PL" && D.partners[P] ? `data-partner="${P}"` : `data-ov="news"`}>${ic("alert")}<span><b>${esc(nm(D.events[e.k]))}</b><small>${P && D.partners[P] ? esc(nm(D.partners[P])) : L("Polska", "Польша")} · ${Math.round(e.t / e.len * 100)}%</small></span></button>`; }).join("")
-        + `<button class="pl-chipa${s.offers.length ? " gold" : ""}" id="plcon" data-ov="contracts">${ic("doc")}<span><b>${L("Kontrakty", "Контракты")}: ${act.length}</b><small>${s.offers.length ? L("nowe oferty", "новые предложения") + ": " + s.offers.length : L("brak nowych ofert", "нет новых предложений")}</small></span></button>`;
+;
       $("#plright").innerHTML = `<section class="pl-float pl-advc" id="pladv"><div class="pl-advh">${avatar("sm2")}<div><h4>${L("Doradca", "Советник")}</h4><small>${r ? L("raport: ", "доклад: ") + monthName(r.month, r.year) : ""}</small></div></div>
           <p>${esc(advisorBrief())}</p><div class="pl-three"><button class="pl-btn" data-ov="advisor">${L("Raport", "Доклад")}</button><button class="pl-btn" data-ov="chat">${L("Zapytaj", "Спросить")}</button><button class="pl-btn go" data-apply="1" ${hasPlan ? "" : "disabled"} title="${L("Zastosuj zalecenia", "Применить советы")}">${L("Zastosuj", "Применить")}</button></div></section>
-        <section class="pl-float pl-newsf"><h5>${ic("news")}${L("Wiadomości", "Новости")}<button class="pl-more" data-ov="news">${L("Wszystkie", "Все")}</button></h5><ul class="pl-news">${s.news.slice().reverse().slice(0, 2).map(newsItem).join("")}</ul></section>`;
+        <section class="pl-float pl-newsf"><h5>${ic("news")}${L("Wiadomości", "Новости")}<button class="pl-more" data-ov="news">${L("Wszystkie", "Все")}</button></h5><ul class="pl-news">${s.news.slice().reverse().slice(0, 4).map(newsItem).join("")}</ul></section>
+        <section class="pl-float pl-conf" id="plcon"><h5>${ic("doc")}${L("Aktywne kontrakty", "Активные контракты")}<button class="pl-more" data-ov="contracts">${L("Wszystkie", "Все")}</button></h5>
+          ${s.offers.length ? `<button class="pl-offbar" data-ov="contracts">${ic("doc")}<span>${L("Nowe oferty", "Новые предложения")}: <b>${s.offers.length}</b></span><em>${L("Sprawdź", "Открыть")}</em></button>` : ""}
+          ${act.length ? `<ul class="pl-cons">${act.slice(0, 3).map(c => `<li>${flag(c.partner, 24)}<div><b>${nm(D.partners[c.partner])}</b><small>${nm(D.markets[c.market])} · ${c.type === "import" ? L("import", "импорт") : L("eksport", "экспорт")}</small></div><div class="pl-cv"><b>${n1(S.valueOf(c.market, c.volume, c.price))} ${L("mld/rok", "млрд/год")}</b><i class="pl-pbar"><b style="width:${Math.round(c.delivery * 100)}%"></b></i></div><em>${Math.round(c.delivery * 100)}%</em></li>`).join("")}</ul>` : `<p class="muted small">${L("Brak aktywnych kontraktów — oferty partnerów pojawią się tutaj.", "Нет активных контрактов — предложения партнёров появятся здесь.")}</p>`}</section>`;
     }
 
     // ------------------------------------------------------------ nakładki: doradca (pełny), wiadomości, handel i kontrakty
@@ -797,6 +822,17 @@ function sectionHtml(k){
     }
     function hbar(parts, max){ return `<div class="pl-hbt">${parts.map(([t, v, c]) => `<i style="width:${(Math.max(0, v) / Math.max(1e-6, max) * 100).toFixed(1)}%;background:${c}" title="${esc(t)}: ${n0(v)}"></i>`).join("")}</div>`; }
 
+    const topEl = $(".pl-top"), setTopH = () => host.style.setProperty("--toph", topEl.offsetHeight + "px");
+    setTopH(); if (window.ResizeObserver) new ResizeObserver(setTopH).observe(topEl);
+    // dopasowanie mapy do wolnego miejsca: pod półprzezroczystym paskiem, obok prawej kolumny
+    function fitMap(){
+      const svg = $("#plmap"), wr = $("#plmapwrap"), W = wr.clientWidth, H = wr.clientHeight; if (!W || !H) return;
+      const rc = $("#plright"), resR = rc && rc.offsetParent ? rc.offsetWidth + 24 : 0, top = isMobile() ? 0 : topEl.offsetHeight;
+      const k = Math.min((W - resR) / 1000, (H - top) / 690);
+      const x0 = -((W - resR) / k - 1000) / 2, y0 = 5 - top / k - ((H - top) / k - 690) / 2;
+      svg.setAttribute("viewBox", `${x0.toFixed(1)} ${y0.toFixed(1)} ${(W / k).toFixed(1)} ${(H / k).toFixed(1)}`);
+    }
+    if (window.ResizeObserver) new ResizeObserver(fitMap).observe($("#plmapwrap")); else addEventListener("resize", fitMap);
     const LS_NAV = "makro2.pl.navmini";
     try { const v = localStorage.getItem(LS_NAV); host.classList.toggle("navmini", v == null ? innerWidth < 1440 : v === "1"); } catch { host.classList.toggle("navmini", innerWidth < 1440); }
     $("#plnavt").onclick = () => { const m = host.classList.toggle("navmini"); try { localStorage.setItem(LS_NAV, m ? "1" : "0"); } catch {} };
@@ -944,7 +980,7 @@ function sectionHtml(k){
     buildMap(); lastMonth = S.date(s.dayIndex).monthIndex; refresh(true); drawTut();
     if (oldSave) toast(L("Zapis pochodził z poprzedniej wersji modelu — zaczynamy nową grę.", "Сохранение от старой версии модели — начинаем новую игру."));
     requestAnimationFrame(loop);
-    window.__plGame = { get state(){ return s; }, clock };   // dostęp dla testów (Playwright)
+    window.__plGame = { get state(){ return s; }, clock, refresh: () => refresh(true) };   // dostęp dla testów (Playwright)
   }
 
   window.BrainstormGame = { mount };
