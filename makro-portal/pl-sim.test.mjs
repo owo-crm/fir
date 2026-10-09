@@ -121,7 +121,7 @@ test("doradca: „gaz cena dlaczego” → ENERGY/GAS/PRICE/WHY", () => {
     assert(r.answerId === "ENERGY/GAS/PRICE/WHY", q + " → " + r.answerId);
   }
   const ans = A.buildAdvisorAnswer("ENERGY/GAS/PRICE/WHY", s, "pl");
-  assert(ans && ans.summary && ans.factors.length && ans.chain.length, "pusta odpowiedź");
+  assert(ans && ans.summary && ans.chain.length && ans.key === "gas", "pusta odpowiedź");
 });
 
 test("doradca: niejasne pytanie → doprecyzowanie", () => {
@@ -285,6 +285,53 @@ test("banki: bufor kapitałowy chroni w kryzysie, ale kosztuje w spokojnych czas
   assert(hi.y0 < lo.y0, "wyższy bufor powinien kosztować w spokojnych czasach");
   assert(hi.mn > lo.mn + 0.003, `bufor nie chroni: ${lo.mn} vs ${hi.mn}`);
   for (const r of [lo, hi]) assert(r.b.npl > 1 && r.b.npl < 16 && r.b.capital > 5 && r.b.capital < 26, "banki poza zakresem");
+});
+
+// ---------------------------------------------------------------- kontrakt wyjaśnień (Faza 3)
+const LIVE = (() => { const s = S.newGame(61); for (let i = 0; i < 220; i++) S.tick(s, 1); S.startEvent(s, "ua_drought"); for (let i = 0; i < 90; i++) S.tick(s, 1); return s; })();
+const MARKET_NAMES = Object.values(S.DATA.markets).map(m => m.name[0]);
+test("zboże: przyczyny dotyczą zboża, nigdy składu importu", () => {
+  const e = A.explain("grain", LIVE, "pl");
+  assert(e.topicId === "grain" && /zboż/i.test(e.title) && e.composition === null, "zły temat lub skład");
+  for (const f of [...e.main, ...e.extra]) assert(!MARKET_NAMES.filter(n => n !== "Zboże").some(n => f.label.includes(n)) && !/Struktura/.test(f.label), "obcy czynnik: " + f.label);
+  assert(e.facts.some(f => /Zapasy/.test(f[0])) && e.facts.some(f => /Produkcja/.test(f[0])), "brak danych rynku zboża");
+});
+test("import: skład osobno, przyczyny = zmiany grup towarów (cena + ilość)", () => {
+  const e = A.explain("imports", LIVE, "pl");
+  assert(e.composition && e.composition.length === 8 && Math.abs(e.composition.reduce((a, c) => a + c.share, 0) - 100) < 1, "skład importu");
+  assert(e.causes.every(f => MARKET_NAMES.includes(f.label) && /efekt ceny/.test(f.txt)), "przyczyny nie są grupami towarów");
+  const sumd = e.causes.reduce((a, f) => a + f.value, 0); assert(Math.abs(sumd - e.changeValue) < 1, "suma zmian ≠ zmiana importu");
+});
+test("gaz: metryki gazowe, udział importu ≠ wpływ na cenę", () => {
+  const e = A.explain("gas", LIVE, "pl");
+  assert(e.topicId === "gas" && e.facts.some(f => /Import jako %/.test(f[0])) && e.facts.some(f => /Produkcja/.test(f[0])) && e.facts.some(f => /Zapasy/.test(f[0])), "brak metryk gazu");
+  assert(/inna miara/.test(e.summary), "brak rozróżnienia udziału importu");
+});
+test("brak wyraźnej zmiany → brak dominującej przyczyny", () => {
+  const s = S.newGame(5);
+  for (const k of ["grain", "inflation", "unemployment", "gas"]){ const e = A.explain(k, s, "pl"); assert(e.noDominant && e.main.length === 0, k + " wymusza przyczynę"); }
+  const a = A.buildAdvisorAnswer("AGRI/GRAIN/PRICE/WHY", s, "pl"); assert(/nie wskazał jednej wyraźnie dominującej/.test(a.summary), "brak komunikatu PL");
+  const r = A.buildAdvisorAnswer("AGRI/GRAIN/PRICE/WHY", s, "ru"); assert(/не выявила одной явно доминирующей/.test(r.summary), "brak komunikatu RU");
+});
+test("każdy temat: kompletny kontrakt, nazwy i jednostki, bez zmiany stanu", () => {
+  const before = S.serialize(LIVE);
+  for (const lang of ["pl", "ru"]) for (const k of A.TOPICS){ const e = A.explain(k, LIVE, lang);
+    assert(e && e.topicId === k && e.title && e.valueText && e.unit && e.comparisonPeriod && e.summary && Number.isFinite(e.changeValue), k + ": brak pól");
+    assert(e.causalChain.length && e.causalChain.every(c => c.from && c.to && c.why), k + ": łańcuch bez wyjaśnień");
+    assert(e.causes.every(f => f.label && typeof f.unit === "string" && f.basis), k + ": czynnik bez nazwy/jednostki/podstawy");
+    assert(e.relatedTopics.every(t => A.TOPICS.includes(t)), k + ": zły powiązany temat");
+    if (lang === "ru") assert(!/[ąęłńśźż]/i.test((e.title + e.summary + e.causes.map(f => f.label + f.txt + f.unit).join("")).replace(/zł/g, "")), k + ": polskie znaki w RU"); }
+  assert(S.serialize(LIVE) === before, "wyjaśnienie zmieniło stan gry");
+});
+test("każdy rynek ma własny temat wyjaśnienia", () => {
+  for (const k of S.MK){ const t = A.TOPIC_OF_MARKET[k]; assert(t && A.explain(t, LIVE, "pl").topicId === t, k); }
+});
+test("podgląd decyzji (prognoza) nie zmienia stanu gry", () => {
+  const before = S.serialize(LIVE); S.project(LIVE, 60, { vat: 26, programs: { oze: 50 } }); assert(S.serialize(LIVE) === before, "project zmienił stan");
+});
+test("dług: rozbicie zmiany wskaźnika sumuje się dokładnie", () => {
+  const e = A.explain("debt", LIVE, "pl"), s = e.causes.reduce((a, f) => a + (f.label.includes("Wzrost") ? f.rel * Math.sign(-1) : 0), 0); void s;
+  const flow = e.causes[0], den = e.causes[1]; assert(Math.abs((flow.dir) + (den.dir) - e.changeValue) < 1e-6, "rozbicie długu");
 });
 
 console.log(`\n${pass} ok, ${fail} błędów`);
