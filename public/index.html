@@ -676,7 +676,7 @@ const UI = {
   ad_inf:{pl:"Luka inflacyjna",ru:"Инфляционный разрыв"}, ad_inft:{pl:"PKB jest o {g}% wyższy od potencjalnego. Gospodarka jest przegrzana, rosną płace i ceny. Rada: schłodzić AD.",ru:"ВВП на {g}% выше потенциального. Экономика перегрета, растут зарплаты и цены. Совет: охладить AD."},
   ad_pr:{pl:"Poziom cen",ru:"Уровень цен"},
   inf_t:{pl:"Inflacja w Polsce 2003–2024",ru:"Инфляция в Польше 2003–2024"},
-  inf_c:{pl:"Średnioroczna zmiana cen (CPI), w %. Zielony pas to cel NBP: 2,5% ± 1. Czerwone słupki: powyżej celu, turkusowe: deflacja. Dotknij słupka, aby zobaczyć wartość.",ru:"Среднегодовое изменение цен (CPI), в %. Зелёная полоса — цель NBP: 2,5% ± 1. Красные столбики — выше цели, бирюзовые — дефляция. Нажми на столбик, чтобы увидеть значение."},
+  inf_c:{pl:"Średnioroczna zmiana cen (CPI), w %. Zielony pas to cel NBP: 2,5% ± 1. Zielone słupki: w celu, czerwone: powyżej celu, niebieskie: poniżej celu (poniżej zera — deflacja). Dotknij słupka, aby zobaczyć wartość.",ru:"Среднегодовое изменение цен (CPI), в %. Зелёная полоса — цель NBP: 2,5% ± 1. Зелёные столбики — в цели, красные — выше цели, синие — ниже цели (ниже нуля — дефляция). Нажми на столбик, чтобы увидеть значение."},
   un_t:{pl:"Stopa bezrobocia w Polsce 2004–2025",ru:"Безработица в Польше 2004–2025"},
   un_c:{pl:"Stopa bezrobocia rejestrowanego w grudniu (2025: sierpień), w %. Wzrost w 2009 r. to skutek światowego kryzysu finansowego.",ru:"Уровень зарегистрированной безработицы в декабре (2025: август), в %. Рост в 2009 году — следствие мирового финансового кризиса."},
   src:{pl:"Źródło: GUS, NBP",ru:"Источник: GUS, NBP"}, target:{pl:"cel NBP",ru:"цель NBP"},
@@ -741,7 +741,7 @@ function md(src){
     }
     if (ln.startsWith("|")){
       const rows = []; while (i < lines.length && lines[i].trim().startsWith("|")){ rows.push(lines[i].trim()); i++; }
-      const cells = r => r.slice(1, -1).split("|").map(c => c.trim());
+      const cells = r => r.slice(1, -1).replace(/\[\[([^\]]*?)\|/g, "[[$1\u0001").split("|").map(c => c.replace(/\u0001/g, "|").trim());   // | wewnątrz [[id|tekst]] nie dzieli komórki
       const body = rows.filter(r => !/^\|[\s|:-]+\|$/.test(r));
       out.push(`<div class="tbl"><table><thead><tr>${cells(body[0]).map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.slice(1).map(r => `<tr>${cells(r).map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
       continue;
@@ -1247,14 +1247,14 @@ const CHARTS = {
     let g = `<rect x="${L}" y="${y(3.5)}" width="${R - L}" height="${y(1.5) - y(3.5)}" fill="var(--ok)" opacity=".16"/>`;
     [0, 5, 10, 15].forEach(v => g += line(L, y(v), R, y(v), "var(--line)", 1) + txt(L - 6, y(v) + 4, v, "", "end"));
     d.forEach(([yr, v], i) => {
-      const x = L + i * bw + 2, c = v < 0 ? "var(--chart-lo)" : v > 3.5 ? "var(--chart-hi)" : "var(--chart-a)";
-      g += `<rect class="bar" tabindex="0" data-v="${yr}: ${num(v)}%" x="${x}" y="${Math.min(y(v), y(0))}" width="${bw - 4}" height="${Math.max(1.5, Math.abs(y(v) - y(0)))}" rx="2" fill="${c}"><title>${yr}: ${num(v)}%</title></rect>`;
+      const x = L + i * bw + 2, c = v > 3.5 ? "var(--chart-hi)" : v >= 1.5 ? "var(--ok)" : "var(--chart-a)";
+      g += `<rect class="pt" tabindex="0" data-v="${yr}: ${num(v)}%" x="${x}" y="${Math.min(y(v), y(0))}" width="${bw - 4}" height="${Math.max(1.5, Math.abs(y(v) - y(0)))}" rx="2" fill="${c}"><title>${yr}: ${num(v)}%</title></rect>`;
       if (yr % 3 === 0) g += txt(x + (bw - 4) / 2, B + 18, "’" + String(yr).slice(2), "", "middle");
       if (yr === 2022) g += txt(x + (bw - 4) / 2, y(v) - 6, "14,4", "lab", "middle");
     });
-    g += txt(R, y(3.5) - 4, `${t(UI.target)} 2,5 ± 1`, "", "end");
+    g += txt(L + 4, y(3.5) - 4, `${t(UI.target)} 2,5 ± 1`, "", "start");
     el.innerHTML = head("inf") + NS(W, H, g) + `<p class="cap" id="infv" style="margin:8px 0 0">${t(UI.src)}</p>`;
-    el.querySelectorAll(".bar").forEach(b => { const f = () => el.querySelector("#infv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
+    el.querySelectorAll(".pt").forEach(b => { const f = () => el.querySelector("#infv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
   },
   unemployment(el){
     const d = C.data.unemployment, W = 440, H = 240, L = 34, B = 204, T = 14, R = 430, max = 20;
@@ -1265,12 +1265,12 @@ const CHARTS = {
     g += `<polygon points="${x(0)},${B} ${pts} ${x(d.length - 1)},${B}" fill="var(--chart-a)" opacity=".12"/>`;
     g += `<polyline points="${pts}" fill="none" stroke="var(--chart-a)" stroke-width="2.6" stroke-linejoin="round"/>`;
     d.forEach(([yr, v], i) => {
-      g += `<circle class="bar" tabindex="0" data-v="${yr}: ${num(v)}%" cx="${x(i)}" cy="${y(v)}" r="${[0, 5, d.length - 1].includes(i) ? 4.5 : 3}" fill="var(--surface)" stroke="var(--chart-a)" stroke-width="2"><title>${yr}: ${num(v)}%</title></circle>`;
+      g += `<circle class="pt" tabindex="0" data-v="${yr}: ${num(v)}%" cx="${x(i)}" cy="${y(v)}" r="${[0, 5, d.length - 1].includes(i) ? 4.5 : 3}" fill="var(--surface)" stroke="var(--chart-a)" stroke-width="2"><title>${yr}: ${num(v)}%</title></circle>`;
       if (yr % 3 === 1 || i === d.length - 1) g += txt(x(i), B + 18, "’" + String(yr).slice(2), "", "middle");
     });
     g += txt(x(0) + 8, y(19) - 6, "19,0", "lab") + txt(x(d.length - 1), y(5.5) - 10, "5,5", "lab", "end");
     el.innerHTML = head("un") + NS(W, H, g) + `<p class="cap" id="unv" style="margin:8px 0 0">${t(UI.src)}</p>`;
-    el.querySelectorAll(".bar").forEach(b => { const f = () => el.querySelector("#unv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
+    el.querySelectorAll(".pt").forEach(b => { const f = () => el.querySelector("#unv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
   },
   gaps(el){
     // AD: p = 140 − 0,7(x − 20 − d), SAS: p = 40 + 0,7(x − 20); przecięcie x = (128 + 0,7d) / 1,4
