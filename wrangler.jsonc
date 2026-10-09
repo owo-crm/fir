@@ -1,0 +1,10 @@
+{
+  "name": "brainstorm",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "brainstorm-stats", "database_id": "6c9ddb1f-1fc3-4faa-9a75-3e7138e9a329" }
+  ]
+  // Sekret ADMIN_PASSWORD ustawia się poza repo: npx wrangler secret put ADMIN_PASSWORD
+}
