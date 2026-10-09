@@ -31,6 +31,9 @@
   // Stan „pełnego wdrożenia” przy stałym finansowaniu bazowym — punkt odniesienia indeksu efektu (=1 na starcie).
   function steadyStock(P, perMonth){ let k = 0; for (let age = 0; age < 240; age++) k += perMonth * ramp(age, P) * Math.pow(1 - P.dep, age / 12); return k; }
 
+  // docelowy indeks efektu programu przy OBECNYM finansowaniu (gdy wszystkie roczniki dojrzeją) — do opisu postępu
+  function programTarget(s, k){ const P = DATA.programs[k]; return steadyStock(P, s.policy.programs[k] / 12) / s.programs[k].base; }
+
   // ------------------------------------------------------------ nowa gra
   function newGame(seed = 20260101){
     const D = DATA, M = D.macro;
@@ -530,7 +533,7 @@
   function snapshot(s){
     const m = s.macro, mk = s.markets;
     return { day: s.dayIndex, Y: m.Y, Ypot: m.Ypot, nominalGDP: m.Y * m.priceLevel, growthYoY: m.growthYoY, inflation: m.inflation, core: m.core, unemployment: m.unemployment, balance: m.balance, debt: m.debt, debtRatio: m.debtRatio,
-      X: m.X, M: m.M, tradeBalance: m.X - m.M, C: m.C, I: m.I, G: m.G, NX: m.NX, rate: s.policy.rate, rateEff: m.rateEff, energyCost: m.energyCost, gasImportShare: m.gasImportShare, priceLevel: m.priceLevel, cpi: m.cpi,
+      X: m.X, M: m.M, tradeBalance: m.X - m.M, freight: m.freight, Ypot: m.Ypot, C: m.C, I: m.I, G: m.G, NX: m.NX, rate: s.policy.rate, rateEff: m.rateEff, energyCost: m.energyCost, gasImportShare: m.gasImportShare, priceLevel: m.priceLevel, cpi: m.cpi,
       gas: mk.gaz.price, power: mk.prad.price, grain: mk.zboze.price, food: mk.zywnosc.price, credit: m.credit, conf: m.conf, revenue: m.revenue, spending: m.spending, prod: m.prod, pi: m.pi ? { ...m.pi } : null,
       rev: m.rev ? { ...m.rev } : null, spend: m.spend ? { ...m.spend } : null, disp: m.disp, gap: m.gap, realIncome: m.realIncome ?? 1, mood: m.mood ?? 60, employment: m.employment, npl: m.bank?.npl, capital: m.bank?.capital, lendRate: m.bank?.lendRate, reserves: m.reserves || 0, gasImp: mk.gaz.imp, gasProdD: mk.gaz.prod,
       mk: Object.fromEntries(MK.map(k => [k, { price: mk[k].price, world: mk[k].world, prod: mk[k].prod, demand: mk[k].demand, imp: mk[k].imp, exp: mk[k].exp, stock: mk[k].stock, shortage: mk[k].shortage, parity: mk[k].parity, impCap: mk[k].impCap, impValue: mk[k].impValue, expValue: mk[k].expValue }])) };
@@ -659,6 +662,6 @@
 
   const API = { DATA, SCHEMA, DAYS, MK, PK, PROG, SEC, newGame, tick, date, snapshot, project, setPolicy, applyPolicyPatch, startEvent, phase, intensity,
     makeOffers, acceptOffer, rejectOffer, negotiate, cancelContract, assessContract, implementInnovation, innovationChance, goalStatus, confidence, risks, buildReport,
-    createClock, diplomacy, DIPLO, respondAid, AID, cancelPenalty, serialize, deserialize, opportunityCost, valueOf, clone, programStock };
+    createClock, programTarget, diplomacy, DIPLO, respondAid, AID, cancelPenalty, serialize, deserialize, opportunityCost, valueOf, clone, programStock };
   if (typeof module !== "undefined" && module.exports) module.exports = API; else root.PLSim = API;
 })(typeof window !== "undefined" ? window : globalThis);
