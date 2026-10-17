@@ -210,11 +210,6 @@
      "TFI działa na podstawie zezwolenia KNF i ustawy o funduszach inwestycyjnych z 2004 r. Pobiera opłatę za zarządzanie z aktywów funduszu. Aktywa funduszu są oddzielone od majątku TFI i przechowywane przez depozytariusza, co chroni inwestorów w razie problemów towarzystwa."],
     ["TFI", "Общество инвестиционных фондов (towarzystwo funduszy inwestycyjnych) — компания, создающая фонды и управляющая ими.",
      "TFI работает на основании разрешения KNF и закона об инвестиционных фондах 2004 года. Берёт плату за управление из активов фонда. Активы фонда отделены от имущества TFI и хранятся у депозитария, что защищает инвесторов при проблемах общества."]);
-  T("knf", ["tfi", "fundusz-inwestycyjny", "nbp"],
-    ["KNF", "Komisja Nadzoru Finansowego — polski organ nadzoru nad rynkiem finansowym.",
-     "KNF nadzoruje banki, rynek kapitałowy (w tym giełdę, domy maklerskie, TFI i fundusze), ubezpieczenia i rynek emerytalny. Wydaje zezwolenia, kontroluje instytucje i prowadzi publiczną listę ostrzeżeń przed podmiotami budzącymi wątpliwości. Celem nadzoru jest bezpieczeństwo i zaufanie do rynku."],
-    ["KNF", "Комиссия финансового надзора (Komisja Nadzoru Finansowego) — польский орган надзора за финансовым рынком.",
-     "KNF надзирает за банками, рынком капитала (в том числе биржей, брокерскими домами, TFI и фондами), страхованием и пенсионным рынком. Выдаёт разрешения, проверяет учреждения и ведёт публичный список предупреждений о сомнительных субъектах. Цель надзора — безопасность рынка и доверие к нему."]);
   T("inwestycje-alternatywne", ["zloto-inwestycyjne", "reit", "dywersyfikacja", "plynnosc"],
     ["Inwestycje alternatywne", "Inwestycje poza klasycznym zestawem akcji, obligacji i lokat: złoto, nieruchomości, REIT-y, sztuka, wino.",
      "Mogą poprawić dywersyfikację portfela i chronić przed inflacją, ale zwykle mają niższą płynność, wyższe koszty transakcyjne i przechowywania oraz trudniejszą wycenę. Przy kolekcjach granica między inwestowaniem, spekulacją a kolekcjonowaniem jest płynna. Zazwyczaj stanowią uzupełnienie portfela."],
@@ -257,11 +252,6 @@
      "Przykłady: błąd zarządu, utrata kluczowego klienta, pożar fabryki, proces sądowy. Ponieważ takie zdarzenia w różnych firmach zachodzą niezależnie, rozłożenie kapitału na wiele spółek znacząco zmniejsza ich wpływ na portfel. Nazywane jest też niesystematycznym lub dywersyfikowalnym."],
     ["Специфический риск", "Риск, связанный с конкретной компанией, отраслью или проектом, который можно ограничить диверсификацией.",
      "Примеры: ошибка правления, потеря ключевого клиента, пожар на заводе, судебный процесс. Поскольку такие события в разных фирмах происходят независимо, распределение капитала по многим компаниям заметно снижает их влияние на портфель. Его также называют несистематическим или диверсифицируемым."]);
-  T("ryzyko-stopy-procentowej", ["obligacja", "stopa-referencyjna", "ryzyko-inwestycyjne"],
-    ["Ryzyko stopy procentowej", "Ryzyko, że zmiana stóp procentowych obniży wartość inwestycji lub podniesie koszt długu.",
-     "Gdy stopy rosną, ceny obligacji o stałym kuponie spadają, a raty kredytów o zmiennym oprocentowaniu rosną. Gdy stopy spadają — dzieje się odwrotnie. Wpływ jest tym większy, im dłuższy termin do wykupu obligacji. Na poziom stóp w Polsce wpływa stopa referencyjna NBP."],
-    ["Процентный риск", "Риск того, что изменение процентных ставок снизит стоимость инвестиции или повысит стоимость долга.",
-     "Когда ставки растут, цены облигаций с фиксированным купоном падают, а платежи по кредитам с плавающей ставкой растут. Когда ставки падают — наоборот. Влияние тем сильнее, чем дольше срок до погашения облигации. На уровень ставок в Польше влияет референтная ставка NBP."]);
   T("odchylenie-standardowe", ["ryzyko-inwestycyjne", "stopa-zwrotu"],
     ["Odchylenie standardowe", "Miara rozrzutu stóp zwrotu wokół średniej; podstawowa miara ryzyka.",
      "σ = pierwiastek z wariancji, czyli ze średniej (ważonej) kwadratów odchyleń od średniej. Przykład: inwestycje X i Y dały średnio po 10%, ale σ(X) ≈ 1,41 p.p., a σ(Y) ≈ 15,81 p.p. — Y jest bardziej ryzykowna. Przy różnych średnich porównuje się współczynnik zmienności σ / E(R). Miary historyczne nie gwarantują przyszłych wahań."],
