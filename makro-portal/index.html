@@ -92,7 +92,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .crumbs a:hover{color:var(--accent)}
 .crumbs svg{width:14px;height:14px}
 .eyebrow{font:600 12px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
-.h1{font:600 clamp(26px,4vw,38px)/1.15 var(--font-display);letter-spacing:-.02em}
+.h1{font:600 clamp(26px,4vw,38px)/1.15 var(--font-display);letter-spacing:-.02em;overflow-wrap:break-word;hyphens:auto}
 .h2{font:600 20px/1.25 var(--font-display);letter-spacing:-.01em}
 .lead{font-size:18px;color:var(--muted);max-width:62ch;margin:0}
 .muted{color:var(--muted)}
@@ -166,7 +166,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 @media (max-width:1200px){.artwrap{grid-template-columns:minmax(0,1fr)}.toc{display:none}}
 .arthead{display:flex;flex-direction:column;gap:12px;margin-bottom:8px}
 .meta{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:14px}
-.meta span{display:inline-flex;align-items:center;gap:6px}
+.meta span{min-width:0;display:inline-flex;align-items:center;gap:6px}
 .meta svg{width:16px;height:16px}
 .prose{font-size:17px;line-height:1.72}
 .prose>p{margin:0 0 16px}
@@ -190,11 +190,11 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .formula{margin:22px 0;padding:18px 20px;border-radius:12px;background:var(--sunken);text-align:center}
 .formula .f{font:500 clamp(15px,2.4vw,19px)/1.5 var(--font-mono);overflow-x:auto;white-space:nowrap}
 .formula figcaption{margin-top:6px;font-size:14px;color:var(--muted)}
-.tbl{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.tbl{max-width:100%;overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .tbl table{border-collapse:collapse;width:100%;font-size:15px;line-height:1.45}
 .tbl th,.tbl td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
 .tbl tr:last-child td{border-bottom:0}
-.tbl th{font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken)}
+.tbl th{hyphens:auto;overflow-wrap:break-word;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken)}
 .chart{margin:24px 0;padding:18px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
 .chart h4{margin:0 0 4px;font-size:15px}
 .chart .cap{margin:2px 0 12px;font-size:14px;color:var(--muted);line-height:1.5}
