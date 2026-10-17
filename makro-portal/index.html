@@ -123,6 +123,12 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .continue:hover{border-color:var(--accent)}
 .continue .body{flex:1;min-width:0}
 .continue .body b{display:block;font-size:17px}
+.navlab{font:600 11px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:12px 10px 4px}
+.navsub.lecs{margin-left:21px}.navsub.lecs .navsub{margin-left:12px}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.scard{display:flex;flex-direction:column;gap:10px;padding:20px}
+.scard .sic{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent)}.scard .sic .i{width:22px;height:22px}
+#gsubj{margin-bottom:12px}#gsubj .chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .lcard{display:flex;flex-direction:column;gap:12px;padding:20px}
 .lcard:hover{border-color:var(--accent);box-shadow:var(--shadow)}
@@ -805,7 +811,13 @@ details.pl-legend{display:block}.pl-legend:not([open]){padding:5px 12px}
 <nav class="tabbar" id="tabbar"></nav>
 
 <script src="glossary.js"></script>
+<script src="glossary-bank.js"></script>
+<script src="glossary-podatki.js"></script>
+<script src="glossary-inwest.js"></script>
 <script src="content.js"></script>
+<script src="content-bank.js"></script>
+<script src="content-podatki.js"></script>
+<script src="content-inwest.js"></script>
 <script src="pl-simulation-data.js"></script>
 <script src="pl-sim.js"></script>
 <script src="advisor-knowledge.js"></script>
@@ -814,7 +826,12 @@ details.pl-legend{display:block}.pl-legend:not([open]){padding:5px 12px}
 <script src="game.js"></script>
 <script>
 "use strict";
-const C = window.COURSE, GL = window.GLOSSARY;
+// przedmioty: makro (content.js) + kolejne pliki content-*.js (SUBJECTS.push)
+const MACRO = window.COURSE; MACRO.id = "makro";
+MACRO.name = { pl: "Makroekonomia", ru: "Макроэкономика" }; MACRO.short = MACRO.name; MACRO.icon = "globe";
+const SUBJECTS = [MACRO, ...(window.SUBJECTS || []).filter(x => x && x.id && x.id !== "makro")];
+const SUBJ = Object.fromEntries(SUBJECTS.map(x => [x.id, x]));
+let C = MACRO; const GL = window.GLOSSARY;
 const TERM = Object.fromEntries(GL.map(g => [g.id, g]));
 
 // ---------- ikony ----------
@@ -842,6 +859,9 @@ const I = {
   play:'<path d="M7 4.5v15l12-7.5-12-7.5Z"/>',
   x:'<path d="M6 6l12 12M18 6 6 18"/>',
   cube:'<path d="M12 2.8 20.5 7.5v9L12 21.2 3.5 16.5v-9L12 2.8Z"/><path d="m3.5 7.5 8.5 4.7 8.5-4.7M12 12.2v9"/>',
+  bank:'<path d="M3 9.5 12 4l9 5.5"/><path d="M4 10h16M5.5 10v8M10 10v8M14 10v8M18.5 10v8M3 20.5h18"/>',
+  coins:'<ellipse cx="9" cy="7" rx="6" ry="2.6"/><path d="M3 7v4c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V7"/><path d="M9 13.6v4c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6v-4c0-1.4-2.7-2.6-6-2.6"/>',
+  chart:'<path d="M4 20V4M4 20h16"/><path d="m7 15 4-4 3 3 5-6"/>',
   globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"/>',
 };
 const icon = (n, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
@@ -849,6 +869,9 @@ const LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V13M9.3 
 
 // ---------- teksty interfejsu ----------
 const UI = {
+  subjects:{pl:"Przedmioty",ru:"Предметы"}, lecShort:{pl:"wykł.",ru:"лекц."}, passedShort:{pl:"zaliczone",ru:"зачтено"}, daysShort:{pl:"dni do egz.",ru:"дн. до экз."},
+  portalLead:{pl:"Wszystkie przedmioty w jednym miejscu: makroekonomia, bankowość, podatki i inwestycje. Krótkie artykuły, słownik pojęć, fiszki i testy.",ru:"Все предметы в одном месте: макроэкономика, банковское дело, налоги и инвестиции. Понятные статьи, словарь понятий, карточки и тесты."},
+  srcLab:{pl:"Na podstawie materiałów z zajęć",ru:"По материалам занятий"}, allSubj:{pl:"Wszystkie",ru:"Все"}, examFor:{pl:"Egzamin próbny z przedmiotu",ru:"Пробный экзамен по предмету"},
   start:{pl:"Start",ru:"Главная"}, lectures:{pl:"Wykłady",ru:"Лекции"}, glossary:{pl:"Słownik",ru:"Словарь"},
   exam:{pl:"Egzamin",ru:"Экзамен"}, game:{pl:"Gra",ru:"Игра"}, settings:{pl:"Ustawienia",ru:"Настройки"}, lecture:{pl:"Wykład",ru:"Лекция"},
   search:{pl:"Szukaj pojęcia lub tematu…",ru:"Искать понятие или тему…"}, searchShort:{pl:"Szukaj",ru:"Поиск"},
@@ -916,17 +939,27 @@ const store = {
   set(k, v){ try{ localStorage.setItem("makro2." + k, JSON.stringify(v)); }catch{} },
 };
 let lang = store.get("lang", "pl");
-const S = { read: store.get("read", {}), mini: store.get("mini", {}), best: store.get("best", {}), last: store.get("last", null) };
-const save = () => { store.set("read", S.read); store.set("mini", S.mini); store.set("best", S.best); store.set("last", S.last); };
+const S = { read: store.get("read", {}), mini: store.get("mini", {}), best: store.get("best", {}), last: store.get("last", null), lastBy: store.get("lastBy", {}), lastAny: store.get("lastAny", null) };
+const save = () => { store.set("read", S.read); store.set("mini", S.mini); store.set("best", S.best); store.set("last", S.last); store.set("lastBy", S.lastBy); store.set("lastAny", S.lastAny); };
+const lastOf = X => X.id === "makro" ? S.last : S.lastBy[X.id];
 const t = o => o == null ? "" : typeof o === "string" ? o : (o[lang] ?? o.pl);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt = (s, o) => s.replace(/\{(\w+)\}/g, (_, k) => o[k]);
 const num = v => String(v).replace(".", lang === "pl" ? "," : ",");
 const tn = id => TERM[id]?.[lang] || TERM[id]?.pl;
 
-const allSubs = C.lectures.flatMap(L => L.subs.map(s => ({ ...s, L })));
+const subsOf = X => X.lectures.flatMap(L => L.subs.map(s => ({ ...s, L, X })));
+let allSubs = subsOf(C);
 const findSub = id => allSubs.find(s => s.id === id);
-const lecPassed = L => S.best["w" + L.n] === 1;
+function setSubj(id){ C = SUBJ[id] || MACRO; allSubs = subsOf(C); }
+// klucze postępu: makro bez prefiksu (zgodność ze starymi zapisami), pozostałe „przedmiot:id”
+const K = (id, X = C) => X.id === "makro" ? id : X.id + ":" + id;
+// prefiks adresów: makro „#w1.1”, pozostałe „#bank/w1.1”
+const P = (X = C) => X.id === "makro" ? "#" : "#" + X.id + "/";
+const examKey = X => X.id === "makro" ? "exam" : "exam." + X.id;
+const lecPassed = (L, X = C) => S.best[K("w" + L.n, X)] === 1;
+const subjProgress = X => { const ss = subsOf(X); return { total: ss.length, read: ss.filter(s => S.read[K(s.id, X)]).length, passed: X.lectures.filter(L => lecPassed(L, X)).length }; };
+const daysTo = X => Math.max(0, Math.ceil((new Date(store.get(examKey(X), X.examDate)) - new Date()) / 864e5));
 const words = s => (s.body.pl.match(/\S+/g) || []).length;
 const readMin = s => Math.max(2, Math.round(words(s) / 170));
 const termsIn = txt => [...new Set([...txt.matchAll(/\[\[([a-z0-9-]+)/g)].map(m => m[1]).filter(id => TERM[id]))];
@@ -983,56 +1016,66 @@ function md(src){
 
 // ---------- nawigacja ----------
 function route(){
-  const h = location.hash.replace(/^#/, "");
-  let m;
-  if (!h || h === "start") return { v: "home" };
-  if ((m = h.match(/^w(\d+)$/))) return { v: "lecture", n: +m[1] };
-  if ((m = h.match(/^w(\d+)-fiszki$/))) return { v: "cards", n: +m[1] };
-  if ((m = h.match(/^w(\d+)-test$/))) return { v: "final", n: +m[1] };
-  if ((m = h.match(/^w(\d+\.\d+)$/))) return { v: "sub", id: m[1] };
-  if (h === "slownik") return { v: "glossary" };
-  if ((m = h.match(/^p-([a-z0-9-]+)$/))) return { v: "term", id: m[1] };
-  if (h === "dev-gra") return { v: "game" };
-  if (h === "egzamin") return { v: "exam" };
-  if (h === "ustawienia") return { v: "settings" };
-  return { v: "home" };
+  let h = location.hash.replace(/^#/, ""), subj = null, m;
+  // „#bank”, „#bank/w1.2” — przedmiot w adresie; stare adresy „#w1.1” = makroekonomia
+  if ((m = h.match(/^([a-z]+)(?:\/(.*))?$/)) && SUBJ[m[1]]){ subj = m[1]; h = m[2] || ""; if (!h) return { v: "subject", subj }; }
+  const r = (() => {
+    if (!h || h === "start") return { v: "home" };
+    if ((m = h.match(/^w(\d+)$/))) return { v: "lecture", n: +m[1], sub: 1 };
+    if ((m = h.match(/^w(\d+)-fiszki$/))) return { v: "cards", n: +m[1], sub: 1 };
+    if ((m = h.match(/^w(\d+)-test$/))) return { v: "final", n: +m[1], sub: 1 };
+    if ((m = h.match(/^w(\d+\.\d+)$/))) return { v: "sub", id: m[1], sub: 1 };
+    if (h === "slownik") return { v: "glossary" };
+    if ((m = h.match(/^p-([a-z0-9-]+)$/))) return { v: "term", id: m[1] };
+    if (h === "dev-gra") return { v: "game" };
+    if (h === "egzamin") return { v: "exam" };
+    if (h === "ustawienia") return { v: "settings" };
+    return { v: "home" };
+  })();
+  r.subj = subj || (r.sub ? "makro" : store.get("subj", "makro"));
+  if (!SUBJ[r.subj]) r.subj = "makro";
+  return r;
 }
-function tabOf(r){ return { home:"start", lecture:"lectures", cards:"lectures", final:"lectures", sub:"lectures", glossary:"glossary", term:"glossary", game:"game", exam:"exam", settings:"settings" }[r.v]; }
+function tabOf(r){ return { home:"start", subject:"lectures", lecture:"lectures", cards:"lectures", final:"lectures", sub:"lectures", glossary:"glossary", term:"glossary", game:"game", exam:"exam", settings:"settings" }[r.v]; }
 
 function renderChrome(r){
   const tab = tabOf(r);
   const L1 = r.v === "sub" ? findSub(r.id)?.L : (r.n ? C.lectures.find(L => L.n === r.n) : null);
-  const brand = `<a class="brand" href="#start"><span class="logo">${LOGO}</span><span><b>${esc(C.name)}</b><small>${esc(C.university)} · ${t(UI.lectures).toLowerCase()}</small></span></a>`;
+  const brand = `<a class="brand" href="#start"><span class="logo">${LOGO}</span><span><b>Brainstorm</b><small>${esc(MACRO.university)} · ${t(UI.subjects).toLowerCase()}</small></span></a>`;
   const navItem = (k, ic, h) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k === "start" ? "start" : k])}</a>`;
-  const lecNav = C.lectures.map(L => `<a href="#w${L.n}" class="${L1 === L && r.v !== "sub" ? "on" : ""}">${icon("book")}${t(UI.lecture)} ${L.n}</a>
-    ${L1 === L ? `<div class="navsub">${L.subs.map(s => `<a href="#w${s.id}" class="${r.id === s.id ? "on" : ""}"><span class="num">${s.id}</span>${esc(t(s.title))}${S.mini[s.id] === 1 ? '<span class="dot" title="100%"></span>' : ""}</a>`).join("")}</div>` : ""}`).join("");
+  const lecNav = C.lectures.map(L => `<a href="${P()}w${L.n}" class="${L1 === L && r.v !== "sub" ? "on" : ""}">${icon("book")}${t(UI.lecture)} ${L.n}</a>
+    ${L1 === L ? `<div class="navsub">${L.subs.map(s => `<a href="${P()}w${s.id}" class="${r.id === s.id ? "on" : ""}"><span class="num">${s.id}</span>${esc(t(s.title))}${S.mini[K(s.id)] === 1 ? '<span class="dot" title="100%"></span>' : ""}</a>`).join("")}</div>` : ""}`).join("");
+  const subjNav = SUBJECTS.map(X => `<a href="#${X.id}" class="subjlink ${X === C && tab === "lectures" ? "on" : ""}">${icon(I[X.icon] ? X.icon : "book")}${esc(t(X.short || X.name))}</a>
+      ${X === C && tab === "lectures" ? `<div class="navsub lecs">${lecNav}</div>` : ""}`).join("");
   document.getElementById("side").innerHTML = `${brand}
     <button class="searchbtn" data-open-search>${icon("search")}${t(UI.searchShort)}<kbd>⌘K</kbd></button>
     <nav class="nav" aria-label="${t(UI.start)}">
       ${navItem("start", "home", "#start")}
-      ${lecNav}
+      <div class="navlab">${t(UI.subjects)}</div>
+      ${subjNav}
       ${navItem("glossary", "dict", "#slownik")}
-      ${navItem("exam", "target", "#egzamin")}
+      ${navItem("exam", "target", P() + "egzamin")}
       ${navItem("settings", "gear", "#ustawienia")}
     </nav>
     <div class="side-foot"><div class="seg" role="group" aria-label="${t(UI.language)}">${["pl","ru"].map(l => `<button data-lang="${l}" class="${lang === l ? "on" : ""}">${l === "pl" ? "Polski" : "Русский"}</button>`).join("")}</div></div>`;
   document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button>`;
-  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#w1"],["glossary","dict","#slownik"],["exam","target","#egzamin"],["settings","gear","#ustawienia"]]
+  document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#" + C.id],["glossary","dict","#slownik"],["exam","target",P() + "egzamin"],["settings","gear","#ustawienia"]]
     .map(([k, ic, h]) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k])}</a>`).join("");
 }
 
 // ---------- widoki ----------
-function vHome(){
-  const total = allSubs.length, read = allSubs.filter(s => S.read[s.id]).length;
+function vSubject(){
+  const total = allSubs.length, read = allSubs.filter(s => S.read[K(s.id)]).length;
   const passed = C.lectures.filter(lecPassed).length;
-  const days = Math.max(0, Math.ceil((new Date(store.get("exam", C.examDate)) - new Date()) / 864e5));
-  const last = findSub(S.last) || allSubs.find(s => !S.read[s.id]) || allSubs[0];
+  const days = daysTo(C);
+  const last = findSub(lastOf(C)) || allSubs.find(s => !S.read[K(s.id)]) || allSubs[0];
   const pop = lecTerms(C.lectures[0]).slice(0, 12);
   return `<div class="page">
     <section class="hero">
-      <span class="eyebrow">${esc(C.university)} · ${esc(C.lecturer)}</span>
-      <h1 class="h1">${t(UI.hello)}</h1>
-      <p class="lead">${t(UI.heroLead)}</p>
+      <nav class="crumbs"><a href="#start">${t(UI.start)}</a>${icon("chev")}<span>${esc(t(C.name))}</span></nav>
+      <span class="eyebrow">${esc(C.lecturer || "")}</span>
+      <h1 class="h1">${esc(t(C.name))}</h1>
+      <p class="lead">${t(C.id === "makro" ? UI.heroLead : C.lead || "")}</p>
       <button class="bigsearch" data-open-search>${icon("search")}${t(UI.search)}</button>
     </section>
     <div class="stats">
@@ -1041,8 +1084,8 @@ function vHome(){
       <div class="card stat"><b>${days}</b><span>${t(UI.days)}</span></div>
     </div>
     <section class="stack">
-      <h2 class="h2">${S.last ? t(UI.continue) : t(UI.startHere)}</h2>
-      <a class="card continue" href="#w${last.id}">
+      <h2 class="h2">${lastOf(C) ? t(UI.continue) : t(UI.startHere)}</h2>
+      <a class="card continue" href="${P()}w${last.id}">
         <span class="lnum">${last.L.n}</span>
         <span class="body"><span class="muted" style="font-size:13px">${t(UI.lecture)} ${last.L.n} · ${last.id}</span><b>${esc(t(last.title))}</b></span>
         ${icon("arrow")}
@@ -1051,8 +1094,9 @@ function vHome(){
     <section class="stack">
       <h2 class="h2">${t(UI.allLectures)}</h2>
       <div class="lgrid">${C.lectures.map(lecCard).join("")}</div>
-      <p class="muted" style="margin:6px 0 0;font-size:14px">${t(UI.soonLead)}</p>
-      <div class="soonlist">${C.program.map(p => `<div>${icon("lock")}<span class="n">${p.n}</span>${esc(t(p))}</div>`).join("")}</div>
+      ${C.id === "makro" ? `<a class="card act" href="#dev-gra" style="margin-top:4px"><span class="ic">${icon("cube")}</span><span class="body"><b>${lang === "pl" ? "Gra ekonomiczna „Nieurodzaj”" : "Экономическая игра «Неурожай»"}</b><span class="muted">${lang === "pl" ? "Zarządzaj gospodarką Polski i sprawdź teorię w praktyce" : "Управляй экономикой Польши и проверь теорию на практике"}</span></span>${icon("chev")}</a>` : ""}
+      ${(C.program || []).length ? `<p class="muted" style="margin:6px 0 0;font-size:14px">${t(UI.soonLead)}</p>` : ""}
+      <div class="soonlist">${(C.program || []).map(p => `<div>${icon("lock")}<span class="n">${p.n}</span>${esc(t(p))}</div>`).join("")}</div>
     </section>
     <section class="stack">
       <h2 class="h2">${t(UI.popular)}</h2>
@@ -1060,9 +1104,34 @@ function vHome(){
     </section>
   </div>`;
 }
+function vHome(){
+  const la = S.lastAny && SUBJ[S.lastAny.subj] ? subsOf(SUBJ[S.lastAny.subj]).find(s => s.id === S.lastAny.id) : (S.last ? subsOf(MACRO).find(s => s.id === S.last) : null);
+  return `<div class="page">
+    <section class="hero">
+      <span class="eyebrow">${esc(MACRO.university)}</span>
+      <h1 class="h1">${t(UI.hello)}</h1>
+      <p class="lead">${t(UI.portalLead)}</p>
+      <button class="bigsearch" data-open-search>${icon("search")}${t(UI.search)}</button>
+    </section>
+    ${la ? `<section class="stack"><h2 class="h2">${t(UI.continue)}</h2>
+      <a class="card continue" href="${P(la.X)}w${la.id}"><span class="lnum">${la.L.n}</span>
+        <span class="body"><span class="muted" style="font-size:13px">${esc(t(la.X.short || la.X.name))} · ${t(UI.lecture)} ${la.L.n} · ${la.id}</span><b>${esc(t(la.title))}</b></span>${icon("arrow")}</a></section>` : ""}
+    <section class="stack">
+      <h2 class="h2">${t(UI.subjects)}</h2>
+      <div class="sgrid">${SUBJECTS.map(X => { const pr = subjProgress(X);
+        return `<a class="card scard" href="#${X.id}">
+          <div class="row" style="justify-content:space-between"><span class="sic">${icon(I[X.icon] ? X.icon : "book")}</span><span class="pill">${X.lectures.length} ${t(UI.lecShort)}</span></div>
+          <b style="font-size:19px;line-height:1.3">${esc(t(X.name))}</b>
+          <span class="muted" style="font-size:13.5px">${esc(X.lecturer || "")}</span>
+          <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill">${pr.read}/${pr.total} ${t(UI.subs)}</span><span class="pill ${pr.passed ? "ok" : ""}">${pr.passed}/${X.lectures.length} ${t(UI.passedShort)}</span><span class="pill">${icon("clock")}${daysTo(X)} ${t(UI.daysShort)}</span></div>
+          <div class="bar" aria-label="${t(UI.progress)}"><i style="width:${pr.total ? pr.read / pr.total * 100 : 0}%"></i></div>
+        </a>`; }).join("")}</div>
+    </section>
+  </div>`;
+}
 function lecCard(L){
-  const done = L.subs.filter(s => S.read[s.id]).length;
-  return `<a class="card lcard" href="#w${L.n}">
+  const done = L.subs.filter(s => S.read[K(s.id)]).length;
+  return `<a class="card lcard" href="${P()}w${L.n}">
     <div class="row" style="justify-content:space-between"><span class="lnum">${L.n}</span>${lecPassed(L) ? `<span class="pill ok">${icon("check")}${t(UI.lecPassed)}</span>` : `<span class="pill">${L.subs.length} ${t(UI.subs)}</span>`}</div>
     <b style="font-size:18px;line-height:1.3">${esc(t(L.title))}</b>
     <span class="muted" style="font-size:14px">${esc(t(L.lead))}</span>
@@ -1070,9 +1139,9 @@ function lecCard(L){
   </a>`;
 }
 function vLecture(L){
-  const nterms = lecTerms(L).length, bestv = S.best["w" + L.n];
+  const nterms = lecTerms(L).length, bestv = S.best[K("w" + L.n)];
   return `<div class="page">
-    <nav class="crumbs"><a href="#start">${t(UI.start)}</a>${icon("chev")}<span>${t(UI.lecture)} ${L.n}</span></nav>
+    <nav class="crumbs"><a href="#${C.id}">${esc(t(C.short || C.name))}</a>${icon("chev")}<span>${t(UI.lecture)} ${L.n}</span></nav>
     <header class="stack">
       <span class="eyebrow">${t(UI.lecture)} ${L.n}</span>
       <h1 class="h1">${esc(t(L.title))}</h1>
@@ -1080,19 +1149,19 @@ function vLecture(L){
     </header>
     <section class="stack">
       <h2 class="h2">${t(UI.topics)}</h2>
-      <div class="subgrid">${L.subs.map(s => `<a class="card sub" href="#w${s.id}">
+      <div class="subgrid">${L.subs.map(s => `<a class="card sub" href="${P()}w${s.id}">
         <span class="num">${s.id}</span>
         <span class="body"><b>${esc(t(s.title))}</b>
           <span class="row" style="gap:8px"><span class="pill">${icon("clock")}${readMin(s)} ${t(UI.min)}</span>
-          ${S.read[s.id] ? `<span class="pill ok">${icon("check")}${t(UI.readDone)}</span>` : ""}
-          ${S.mini[s.id] === 1 ? `<span class="pill ok">${icon("star")}100%</span>` : ""}</span></span>
+          ${S.read[K(s.id)] ? `<span class="pill ok">${icon("check")}${t(UI.readDone)}</span>` : ""}
+          ${S.mini[K(s.id)] === 1 ? `<span class="pill ok">${icon("star")}100%</span>` : ""}</span></span>
       </a>`).join("")}</div>
     </section>
     <section class="stack">
       <h2 class="h2">${t(UI.practice)}</h2>
       <div class="acts">
-        <a class="card act" href="#w${L.n}-fiszki"><span class="ic">${icon("cards")}</span><span class="body"><b>${t(UI.cards)}</b><span class="muted">${nterms} ${t(UI.cardsLead)}</span></span>${icon("chev")}</a>
-        <a class="card act" href="#w${L.n}-test"><span class="ic ${lecPassed(L) ? "ok" : ""}">${icon(lecPassed(L) ? "trophy" : "target")}</span><span class="body"><b>${t(UI.final)}</b><span class="muted">${lecPassed(L) ? t(UI.lecPassed) : `${L.final.length} ${t(UI.finalLead)}${bestv != null ? ` · ${t(UI.best)} ${Math.round(bestv * 100)}%` : ""}`}</span></span>${icon("chev")}</a>
+        <a class="card act" href="${P()}w${L.n}-fiszki"><span class="ic">${icon("cards")}</span><span class="body"><b>${t(UI.cards)}</b><span class="muted">${nterms} ${t(UI.cardsLead)}</span></span>${icon("chev")}</a>
+        <a class="card act" href="${P()}w${L.n}-test"><span class="ic ${lecPassed(L) ? "ok" : ""}">${icon(lecPassed(L) ? "trophy" : "target")}</span><span class="body"><b>${t(UI.final)}</b><span class="muted">${lecPassed(L) ? t(UI.lecPassed) : `${L.final.length} ${t(UI.finalLead)}${bestv != null ? ` · ${t(UI.best)} ${Math.round(bestv * 100)}%` : ""}`}</span></span>${icon("chev")}</a>
       </div>
     </section>
   </div>`;
@@ -1104,9 +1173,9 @@ function vSub(s){
   return `<div class="artwrap">
     <article class="art">
       <div class="arthead">
-        <nav class="crumbs"><a href="#w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${s.id}</span></nav>
+        <nav class="crumbs"><a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${s.id}</span></nav>
         <h1 class="h1">${esc(t(s.title))}</h1>
-        <div class="meta"><span>${icon("clock")}${readMin(s)} ${t(UI.min)}</span><span>${icon("tag")}${terms.length} ${t(UI.terms)}</span>${S.mini[s.id] === 1 ? `<span style="color:var(--ok)">${icon("star")}${t(UI.miniDone)}</span>` : ""}</div>
+        <div class="meta"><span>${icon("clock")}${readMin(s)} ${t(UI.min)}</span>${s.src ? `<span title="${esc(t(UI.srcLab))}">${icon("book")}${esc(s.src)}</span>` : ""}<span>${icon("tag")}${terms.length} ${t(UI.terms)}</span>${S.mini[K(s.id)] === 1 ? `<span style="color:var(--ok)">${icon("star")}${t(UI.miniDone)}</span>` : ""}</div>
       </div>
       <div class="prose">${html}</div>
       <section class="endblock" id="endmark">
@@ -1118,22 +1187,22 @@ function vSub(s){
         <div class="card quiz" id="quiz"></div>
       </section>
       <div class="pn">
-        ${prev ? `<a class="card" href="#w${prev.id}"><small>← ${t(UI.prev)} · ${prev.id}</small><b>${esc(t(prev.title))}</b></a>` : `<a class="card" href="#w${L.n}"><small>← ${t(UI.toLecture)}</small><b>${esc(t(L.title))}</b></a>`}
-        ${next ? `<a class="card next" href="#w${next.id}"><small>${t(UI.next)} · ${next.id} →</small><b>${esc(t(next.title))}</b></a>` : `<a class="card next" href="#w${L.n}-test"><small>${t(UI.next)} →</small><b>${t(UI.final)}</b></a>`}
+        ${prev ? `<a class="card" href="${P()}w${prev.id}"><small>← ${t(UI.prev)} · ${prev.id}</small><b>${esc(t(prev.title))}</b></a>` : `<a class="card" href="${P()}w${L.n}"><small>← ${t(UI.toLecture)}</small><b>${esc(t(L.title))}</b></a>`}
+        ${next ? `<a class="card next" href="${P()}w${next.id}"><small>${t(UI.next)} · ${next.id} →</small><b>${esc(t(next.title))}</b></a>` : `<a class="card next" href="${P()}w${L.n}-test"><small>${t(UI.next)} →</small><b>${t(UI.final)}</b></a>`}
       </div>
     </article>
-    <aside class="toc"><b>${t(UI.toc)}</b>${toc.map(x => `<a href="#w${s.id}" data-goto="${x.id}">${inline(x.h).replace(/<[^>]+>/g, "")}</a>`).join("")}</aside>
+    <aside class="toc"><b>${t(UI.toc)}</b>${toc.map(x => `<a href="${P()}w${s.id}" data-goto="${x.id}">${inline(x.h).replace(/<[^>]+>/g, "")}</a>`).join("")}</aside>
   </div>`;
 }
 function vCards(L){
   return `<div class="page" style="max-width:640px">
-    <nav class="crumbs"><a href="#w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.cards)}</span></nav>
+    <nav class="crumbs"><a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.cards)}</span></nav>
     <h1 class="h1">${t(UI.cards)}</h1>
     <div id="cards"></div></div>`;
 }
 function vFinal(L){
   return `<div class="page" style="max-width:720px">
-    <nav class="crumbs"><a href="#w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.final)}</span></nav>
+    <nav class="crumbs"><a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.final)}</span></nav>
     <header class="stack"><h1 class="h1">${t(UI.final)}</h1><p class="lead">${esc(t(L.title))} · ${L.final.length} ${t(UI.finalLead)}</p></header>
     <div class="card quiz" id="quiz"></div></div>`;
 }
@@ -1143,12 +1212,15 @@ function sortedTerms(){
 function vGlossary(){
   return `<div class="page" style="max-width:820px">
     <header class="stack"><h1 class="h1">${t(UI.glossary)}</h1><p class="lead">${GL.length} ${t(UI.termsCount)}</p></header>
+    <div class="chips" id="gsubj">${[["", t(UI.allSubj)], ...SUBJECTS.map(X => [X.id, t(X.short || X.name)])].map(([id, n]) => `<button type="button" class="chip ${gSubj === id ? "on" : ""}" data-gs="${id}">${esc(n)}</button>`).join("")}</div>
     <label class="filter">${icon("search")}<span class="sr">${t(UI.filter)}</span><input id="gfilter" placeholder="${t(UI.filter)}" autocomplete="off"></label>
     <div id="glist"></div></div>`;
 }
+let gSubj = "";
+const termSubj = g => g.subj || "makro";
 function glossaryList(q){
   const nq = norm(q || "");
-  const items = sortedTerms().filter(g => !nq || norm(g[lang].n + " " + g[lang].s).includes(nq));
+  const items = sortedTerms().filter(g => (!gSubj || termSubj(g) === gSubj) && (!nq || norm(g[lang].n + " " + g[lang].s).includes(nq)));
   if (!items.length) return `<p class="muted">${t(UI.noRes)}</p>`;
   const groups = {};
   items.forEach(g => { const L0 = g[lang].n[0].toUpperCase(); (groups[L0] = groups[L0] || []).push(g); });
@@ -1156,7 +1228,7 @@ function glossaryList(q){
 }
 function vTerm(g){
   const d = g[lang];
-  const where = allSubs.filter(s => termsIn(s.body.pl).includes(g.id));
+  const where = SUBJECTS.flatMap(subsOf).filter(s => termsIn(s.body.pl).includes(g.id));
   return `<div class="page" style="max-width:820px"><div class="termpage">
     <nav class="crumbs"><a href="#slownik">${t(UI.glossary)}</a>${icon("chev")}<span>${esc(d.n)}</span></nav>
     <h1 class="h1">${esc(d.n)}</h1>
@@ -1164,12 +1236,12 @@ function vTerm(g){
     <p class="def">${esc(d.s)}</p>
     <p class="long">${esc(d.l)}</p>
     ${g.rel.length ? `<div class="stack"><h2 class="h2">${t(UI.related)}</h2><div class="chips">${g.rel.filter(id => TERM[id]).map(id => `<a class="chip" href="#p-${id}">${icon("tag")}${esc(tn(id).n)}</a>`).join("")}</div></div>` : ""}
-    ${where.length ? `<div class="stack"><h2 class="h2">${t(UI.appears)}</h2><div class="stack" style="gap:8px">${where.map(s => `<a class="card continue" href="#w${s.id}" style="padding:12px 16px"><span class="pill">${s.id}</span><span class="body"><b style="font-size:15px">${esc(t(s.title))}</b></span>${icon("chev")}</a>`).join("")}</div></div>` : ""}
+    ${where.length ? `<div class="stack"><h2 class="h2">${t(UI.appears)}</h2><div class="stack" style="gap:8px">${where.map(s => `<a class="card continue" href="${P(s.X)}w${s.id}" style="padding:12px 16px"><span class="pill">${s.X === MACRO ? "" : esc(t(s.X.short || s.X.name)) + " · "}${s.id}</span><span class="body"><b style="font-size:15px">${esc(t(s.title))}</b></span>${icon("chev")}</a>`).join("")}</div></div>` : ""}
   </div></div>`;
 }
 function vExam(){
   return `<div class="page" style="max-width:720px">
-    <header class="stack"><h1 class="h1">${t(UI.examTitle)}</h1><p class="lead">${t(UI.examLead)}</p></header>
+    <header class="stack"><span class="eyebrow">${esc(t(C.name))}</span><h1 class="h1">${t(UI.examTitle)}</h1><p class="lead">${t(UI.examLead)}</p></header>
     <div class="card quiz" id="quiz"><button class="btn wide" id="go">${icon("play")}${t(UI.examGo)}</button></div></div>`;
 }
 function vSettings(){
@@ -1180,7 +1252,7 @@ function vSettings(){
     <div class="card">
       <div class="setrow"><b>${t(UI.language)}</b>${seg("lang", lang, [["pl","Polski"],["ru","Русский"]])}</div>
       <div class="setrow"><b>${t(UI.theme)}</b>${seg("theme", th, [["auto",t(UI.auto)],["light",t(UI.light)],["dark",t(UI.dark)]])}</div>
-      <div class="setrow"><label for="examdate"><b>${t(UI.examDate)}</b></label><input type="date" id="examdate" value="${esc(store.get("exam", C.examDate))}"></div>
+      ${SUBJECTS.map(X => `<div class="setrow"><label for="ex-${X.id}"><b>${t(UI.examDate)}</b><br><span class="muted" style="font-size:13px">${esc(t(X.name))}</span></label><input type="date" id="ex-${X.id}" data-exam="${X.id}" value="${esc(store.get(examKey(X), X.examDate))}"></div>`).join("")}
       <div class="setrow"><span class="muted" style="font-size:14px">${lang === "pl" ? "Zbieramy anonimowe statystyki użycia: które strony są otwierane i ile czasu na nich spędzasz. Bez imion, kont i adresów IP." : "Мы собираем анонимную статистику: какие страницы открываются и сколько времени на них проводят. Без имён, аккаунтов и IP-адресов."}</span><a href="admin.html" class="muted" style="font-size:13px">Admin</a> <a href="#dev-gra" class="muted" style="font-size:13px">Dev: gra</a></div>
       <div class="setrow"><span><b>Beta</b><br><span class="muted" style="font-size:13px">${lang === "pl" ? "Gra ekonomiczna „Nieurodzaj” — Polska (wersja testowa)" : "Экономическая игра «Неурожай» — Польша (тестовая версия)"}</span></span><a class="btn" href="#dev-gra">${icon("cube")}${lang === "pl" ? "Otwórz grę" : "Открыть игру"}</a></div>
       <div class="setrow"><button class="danger" id="reset">${t(UI.reset)}</button></div>
@@ -1467,7 +1539,7 @@ const CHARTS = {
     el.querySelectorAll("input").forEach(x => x.oninput = upd); upd();
   },
   inflation(el){
-    const d = C.data.inflation, W = 440, H = 250, L = 34, B = 214, T = 14, R = 434, max = 15, min = -2;
+    const d = MACRO.data.inflation, W = 440, H = 250, L = 34, B = 214, T = 14, R = 434, max = 15, min = -2;
     const y = v => B - (v - min) / (max - min) * (B - T), bw = (R - L) / d.length;
     let g = `<rect x="${L}" y="${y(3.5)}" width="${R - L}" height="${y(1.5) - y(3.5)}" fill="var(--ok)" opacity=".16"/>`;
     [0, 5, 10, 15].forEach(v => g += line(L, y(v), R, y(v), "var(--line)", 1) + txt(L - 6, y(v) + 4, v, "", "end"));
@@ -1482,7 +1554,7 @@ const CHARTS = {
     el.querySelectorAll(".pt").forEach(b => { const f = () => el.querySelector("#infv").textContent = b.dataset.v + " · " + t(UI.src); b.onclick = f; b.onfocus = f; b.onmouseenter = f; });
   },
   unemployment(el){
-    const d = C.data.unemployment, W = 440, H = 240, L = 34, B = 204, T = 14, R = 430, max = 20;
+    const d = MACRO.data.unemployment, W = 440, H = 240, L = 34, B = 204, T = 14, R = 430, max = 20;
     const x = i => L + i / (d.length - 1) * (R - L), y = v => B - v / max * (B - T);
     let g = "";
     [0, 5, 10, 15, 20].forEach(v => g += line(L, y(v), R, y(v), "var(--line)", 1) + txt(L - 6, y(v) + 4, v, "", "end"));
@@ -1560,9 +1632,9 @@ const norm = s => s.toLowerCase().replace(/ł/g, "l").normalize("NFD").replace(/
 function searchIndex(){
   const items = [];
   GL.forEach(g => items.push({ kind: "t", href: "#p-" + g.id, title: g[lang].n, sub: g[lang].s, hay: norm(g[lang].n + " " + g[lang].s + " " + g.pl.n) }));
-  allSubs.forEach(s => {
+  SUBJECTS.flatMap(subsOf).forEach(s => {
     const heads = [...t(s.body).matchAll(/^## (.+)$/gm)].map(m => m[1]);
-    items.push({ kind: "s", href: "#w" + s.id, title: s.id + " · " + t(s.title), sub: heads.join(" · "), hay: norm(t(s.title) + " " + heads.join(" ") + " " + t(s.body).replace(/\[\[[^|\]]+\|?([^\]]*)\]\]/g, "$1")) });
+    items.push({ kind: "s", href: P(s.X) + "w" + s.id, title: (s.X === MACRO ? "" : t(s.X.short || s.X.name) + " · ") + s.id + " · " + t(s.title), sub: heads.join(" · "), hay: norm(t(s.title) + " " + heads.join(" ") + " " + t(s.body).replace(/\[\[[^|\]]+\|?([^\]]*)\]\]/g, "$1")) });
   });
   return items;
 }
@@ -1647,6 +1719,7 @@ function render(scrollTop = true){
   TRACK.view(location.hash.replace(/^#/, "") || "start");
   document.documentElement.lang = lang;
   const r = route(), main = document.getElementById("main");
+  setSubj(r.subj); if (r.v !== "home") store.set("subj", C.id);
   const L = r.n ? C.lectures.find(x => x.n === r.n) : null;
   const s = r.v === "sub" ? findSub(r.id) : null, g = r.v === "term" ? TERM[r.id] : null;
   renderChrome(r);
@@ -1659,30 +1732,33 @@ function render(scrollTop = true){
     g ? vTerm(g) :
     r.v === "game" ? `<div class="page" id="gamebox"></div>` :
     r.v === "exam" ? vExam() :
-    r.v === "settings" ? vSettings() : vHome();
-  document.title = (s ? t(s.title) : g ? g[lang].n : L ? `${t(UI.lecture)} ${L.n}` : "") ? `${s ? t(s.title) : g ? g[lang].n : `${t(UI.lecture)} ${L.n}`} · Brainstorm WSB` : "Brainstorm WSB";
+    r.v === "settings" ? vSettings() :
+    r.v === "subject" ? vSubject() : vHome();
+  const ttl = s ? t(s.title) : g ? g[lang].n : L ? `${t(C.short || C.name)} · ${t(UI.lecture)} ${L.n}` : r.v === "subject" ? t(C.name) : "";
+  document.title = ttl ? `${ttl} · Brainstorm WSB` : "Brainstorm WSB";
 
   main.querySelectorAll("[data-chart]").forEach(el => CHARTS[el.dataset.chart]?.(el));
   if (s){
-    S.last = s.id; save();
-    quiz(main.querySelector("#quiz"), s.quiz, r => { TRACK.ev("mini", s.id, Math.round(r * 100)); if (S.mini[s.id] == null || r > S.mini[s.id]){ S.mini[s.id] = r; save(); renderChrome(route()); } });
+    if (C.id === "makro") S.last = s.id; else S.lastBy[C.id] = s.id; S.lastAny = { subj: C.id, id: s.id }; save();
+    quiz(main.querySelector("#quiz"), s.quiz, r => { TRACK.ev("mini", K(s.id), Math.round(r * 100)); if (S.mini[K(s.id)] == null || r > S.mini[K(s.id)]){ S.mini[K(s.id)] = r; save(); renderChrome(route()); } });
     main.querySelectorAll("[data-goto]").forEach(a => a.onclick = e => { e.preventDefault(); document.getElementById(a.dataset.goto)?.scrollIntoView({ behavior: "smooth" }); });
     const tocLinks = [...main.querySelectorAll(".toc a")];
     tocObs = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting){ tocLinks.forEach(a => a.classList.toggle("on", a.dataset.goto === en.target.id)); } }), { rootMargin: "0px 0px -70% 0px" });
     main.querySelectorAll(".prose h2").forEach(h => tocObs.observe(h));
-    endObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !S.read[s.id]){ S.read[s.id] = true; save(); renderChrome(route()); } });
+    endObs = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !S.read[K(s.id)]){ S.read[K(s.id)] = true; save(); renderChrome(route()); } });
     endObs.observe(main.querySelector("#endmark"));
   }
   if (L && r.v === "cards") cards(main.querySelector("#cards"), lecTerms(L));
   if (L && r.v === "final") quiz(main.querySelector("#quiz"), L.final, res => {
-    const k = "w" + L.n, was = lecPassed(L);
+    const k = K("w" + L.n), was = lecPassed(L);
     if (S.best[k] == null || res > S.best[k]){ S.best[k] = res; save(); }
-    TRACK.ev("final", "w" + L.n, Math.round(res * 100));
+    TRACK.ev("final", K("w" + L.n), Math.round(res * 100));
     if (res === 1 && !was) toast(`${icon("trophy")}${t(UI.passedToast)}`);
   });
   if (r.v === "glossary"){
     const f = main.querySelector("#gfilter"), gl = main.querySelector("#glist");
     gl.innerHTML = glossaryList(""); f.oninput = () => gl.innerHTML = glossaryList(f.value);
+    main.querySelectorAll("[data-gs]").forEach(b => b.onclick = () => { gSubj = b.dataset.gs; main.querySelectorAll("[data-gs]").forEach(x => x.classList.toggle("on", x === b)); gl.innerHTML = glossaryList(f.value); });
   }
   if (r.v !== "game") { document.body.classList.remove("gaming"); document.querySelector(".gfull")?.remove(); }
   if (r.v === "game") window.BrainstormGame?.mount(main.querySelector("#gamebox"), { lang, inline, esc, track: (a, b, c) => TRACK.ev(a, b, c) });
@@ -1693,11 +1769,11 @@ function render(scrollTop = true){
   };
   if (r.v === "settings"){
     main.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { store.set("theme", b.dataset.theme); applyTheme(); render(false); });
-    main.querySelector("#examdate").onchange = e => { if (e.target.value) store.set("exam", e.target.value); };
+    main.querySelectorAll("[data-exam]").forEach(inp => inp.onchange = e => { if (e.target.value) store.set(examKey(SUBJ[inp.dataset.exam]), e.target.value); });
     const rb = main.querySelector("#reset"); let armed = false;
     rb.onclick = () => {
       if (!armed){ armed = true; rb.textContent = t(UI.resetSure); return; }
-      S.read = {}; S.mini = {}; S.best = {}; S.last = null; save(); toast(t(UI.resetDone)); render(false);
+      S.read = {}; S.mini = {}; S.best = {}; S.last = null; S.lastBy = {}; S.lastAny = null; save(); toast(t(UI.resetDone)); render(false);
     };
   }
   if (scrollTop) scrollTo(0, 0);
