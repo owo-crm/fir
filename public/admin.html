@@ -1,0 +1,91 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Brainstorm Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Onest:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f3f5f8;--surface:#fff;--sunken:#eaeef3;--ink:#141c27;--muted:#5a6676;--line:#dfe4ea;--accent:#2347c5;--ok:#13804a;--bad:#c23a1a}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1319;--surface:#161d26;--sunken:#1d2530;--ink:#e8edf3;--muted:#9aa6b4;--line:#28313d;--accent:#86a0ff;--ok:#4cc78a;--bad:#ff8a6b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Onest",system-ui,sans-serif;padding:24px 16px 64px}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font:600 26px "Unbounded",system-ui,sans-serif;margin:0}
+#dash{display:flex;flex-direction:column;gap:16px}
+h2{font-size:16px;margin:0 0 10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile b{display:block;font:600 26px "Unbounded",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:13px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+form{display:flex;gap:8px;flex-wrap:wrap;max-width:420px}
+input{flex:1;min-width:0;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit}
+button{padding:11px 16px;border-radius:10px;border:0;background:var(--accent);color:var(--surface);font:600 15px inherit;cursor:pointer}
+.err{color:var(--bad)}
+.muted{color:var(--muted)}
+svg text{fill:var(--muted);font-size:11px}
+</style>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h1>Brainstorm · Admin</h1><a href="/" class="muted">← portal</a></div>
+  <div id="login" class="card">
+    <h2>Logowanie administratora</h2>
+    <form id="f"><label for="pw" class="muted" style="width:100%">Hasło</label><input id="pw" type="password" autocomplete="current-password"><button>Zaloguj</button></form>
+    <p id="msg" class="err"></p>
+  </div>
+  <div id="dash" hidden></div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const dur = s => { s = +s || 0; const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min`; };
+let pw = ""; try { pw = sessionStorage.getItem("bs.admin") || ""; } catch {}
+async function load(){
+  const r = await fetch("/api/stats", { headers: { authorization: "Bearer " + pw } });
+  if (r.status === 401){ $("#msg").textContent = "Nieprawidłowe hasło."; $("#login").hidden = false; $("#dash").hidden = true; return; }
+  if (!r.ok){ $("#msg").textContent = "Błąd serwera: " + r.status; return; }
+  try { sessionStorage.setItem("bs.admin", pw); } catch {}
+  render(await r.json());
+}
+function bars(daily){
+  if (!daily.length) return '<p class="muted">Brak danych z ostatnich 30 dni.</p>';
+  const W = 640, H = 170, L = 30, B = 140, max = Math.max(1, ...daily.map(d => d.users)), bw = (W - L) / daily.length;
+  let g = "";
+  [0, max].forEach(v => g += `<text x="${L - 6}" y="${B - v / max * 120 + 4}" text-anchor="end">${v}</text>`);
+  daily.forEach((d, i) => {
+    const h = d.users / max * 120, x = L + i * bw + 2;
+    g += `<rect x="${x}" y="${B - h}" width="${Math.min(40, Math.max(2, bw - 4))}" height="${h}" rx="2" fill="var(--accent)"><title>${d.day}: ${d.users} os., ${dur(d.secs)}</title></rect>`;
+    if (i % Math.ceil(daily.length / 8) === 0) g += `<text x="${x + bw / 2 - 2}" y="${B + 16}" text-anchor="middle">${d.day.slice(5)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${g}</svg>`;
+}
+const table = (cols, rows) => rows.length ? `<div class="scroll"><table><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c[2] || ""}">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : '<p class="muted">Brak danych.</p>';
+function render(s){
+  $("#login").hidden = true; $("#dash").hidden = false;
+  const u = s.users, avg = s.time.users ? s.time.secs / s.time.users : 0;
+  $("#dash").innerHTML = `
+  <div class="tiles">
+    <div class="card tile"><b>${u.d1 || 0}</b><span>użytkowników dziś</span></div>
+    <div class="card tile"><b>${u.d7 || 0}</b><span>w ostatnich 7 dniach</span></div>
+    <div class="card tile"><b>${u.d30 || 0}</b><span>w ostatnich 30 dniach</span></div>
+    <div class="card tile"><b>${u.total || 0}</b><span>wszystkich urządzeń</span></div>
+    <div class="card tile"><b>${dur(s.time.secs)}</b><span>łączny czas nauki</span></div>
+    <div class="card tile"><b>${dur(avg)}</b><span>średnio na osobę</span></div>
+  </div>
+  <div class="card"><h2>Aktywni użytkownicy dziennie (30 dni)</h2>${bars(s.daily)}</div>
+  <div class="card"><h2>Strony: czas i odsłony</h2>${table([["Strona", r => esc(r.page)], ["Osoby", r => r.users, "n"], ["Odsłony", r => r.views, "n"], ["Czas", r => dur(r.secs), "n"]], s.pages)}</div>
+  <div class="grid2">
+    <div class="card"><h2>Testy</h2>${table([["Test", r => (r.type === "final" ? "Końcowy " : "Mini ") + esc(r.page)], ["Podejść", r => r.n, "n"], ["Śr. %", r => r.avg, "n"], ["100%", r => r.perfect, "n"]], s.tests)}</div>
+    <div class="card"><h2>Klikane pojęcia</h2>${table([["Pojęcie", r => esc(r.page)], ["Kliknięcia", r => r.n, "n"]], s.terms)}</div>
+    <div class="card"><h2>Wyszukiwania</h2>${table([["Zapytanie", r => esc(r.page)], ["Ile razy", r => r.n, "n"]], s.searches)}</div>
+    <div class="card"><h2>Język i urządzenie</h2>${table([["Język", r => r.lang === "ru" ? "rosyjski" : "polski"], ["Urządzenie", r => r.device === "m" ? "telefon" : "komputer"], ["Osoby", r => r.n, "n"]], s.split)}</div>
+  </div>
+  <p class="muted" style="font-size:13px">Dane są anonimowe: losowy identyfikator urządzenia, bez imion, kont i adresów IP. Jedna osoba na dwóch urządzeniach liczy się jako dwie.</p>`;
+}
+$("#f").onsubmit = e => { e.preventDefault(); pw = $("#pw").value; $("#msg").textContent = ""; load(); };
+if (pw) load();
+</script>
