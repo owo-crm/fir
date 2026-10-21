@@ -129,6 +129,30 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .scard{display:flex;flex-direction:column;gap:10px;padding:20px}
 .scard .sic{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent)}.scard .sic .i{width:22px;height:22px}
 #gsubj{margin-bottom:12px}#gsubj .chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.subjsw{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);text-align:left;color:var(--ink)}
+.subjsw:hover{border-color:var(--accent)}.subjsw>.i:first-child{color:var(--accent);width:22px;height:22px;flex:none}.subjsw span{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.subjsw small{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}.subjsw b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.subjsw>.i:last-child{transform:rotate(90deg);color:var(--muted);width:16px;height:16px;flex:none}
+.nav a.lec{align-items:flex-start;gap:10px;padding:8px 10px}
+.nav .ln{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--sunken);font:600 12px var(--font-mono);color:var(--muted)}.nav .ln.ok{background:var(--ok);color:#fff}.nav .ln .i{width:14px;height:14px}
+.nav a.lec.on .ln,.nav a.lec.open .ln:not(.ok){background:var(--accent);color:var(--accent-ink)}
+.nav .lt{display:flex;flex-direction:column;font-size:14px;line-height:1.3;color:var(--ink)}.nav .lt small{color:var(--faint);font-size:11.5px;margin-top:2px}
+.navsub{margin:0 0 6px 21px}.navsub a{align-items:flex-start}.navsub .num .i{width:13px;height:13px}.navsub .dot.rd{background:var(--line)}
+.side-foot{position:sticky;bottom:-20px;background:var(--surface);padding:8px 0 4px;margin-bottom:-4px;border-top:1px solid var(--line)}.tools{display:flex;gap:4px}.tools a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:9px;font-size:11.5px;font-weight:600;color:var(--muted)}.tools a:hover{background:var(--sunken)}.tools a.on{background:var(--accent-soft);color:var(--accent)}
+.smenu-ov{position:fixed;inset:0;z-index:60}
+.smenu{position:fixed;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column;gap:2px}
+.smenu a{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;color:var(--ink)}.smenu a:hover{background:var(--sunken)}.smenu a.on{background:var(--accent-soft)}
+.smenu .sic{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent);flex:none}
+.smenu a span:nth-child(2){flex:1;display:flex;flex-direction:column}.smenu small{color:var(--muted);font-size:12.5px}.smenu a>.i:last-child{color:var(--accent)}.smenu a.all{border-top:1px solid var(--line);border-radius:0 0 10px 10px}
+.lectoc{display:none;margin:0 0 18px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.lectoc summary{display:flex;align-items:center;gap:8px;padding:11px 14px;font-weight:600;font-size:14.5px;cursor:pointer;list-style:none}.lectoc summary::-webkit-details-marker{display:none}
+.lectoc div{display:flex;flex-direction:column;padding:0 6px 8px}.lectoc a{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;font-size:14px;color:var(--ink)}.lectoc a.on{background:var(--accent-soft);color:var(--accent)}.lectoc .num{font:500 11px var(--font-mono);color:var(--faint);min-width:26px}.lectoc a .i:last-child{margin-left:auto;color:var(--ok);width:16px;height:16px}
+@media (max-width:900px){
+  .topbar .brand{flex:none}
+  .topbar .subjsw{flex:1;padding:6px 10px;border-radius:10px}.topbar .subjsw small{display:none}
+  .lectoc{display:block}
+  .smenu{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));border-radius:18px;padding:8px}
+  .smenu-ov{background:rgba(0,0,0,.35)}
+}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .lcard{display:flex;flex-direction:column;gap:12px;padding:20px}
 .lcard:hover{border-color:var(--accent);box-shadow:var(--shadow)}
@@ -869,7 +893,7 @@ const LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V13M9.3 
 
 // ---------- teksty interfejsu ----------
 const UI = {
-  subjects:{pl:"Przedmioty",ru:"Предметы"}, lecShort:{pl:"wykł.",ru:"лекц."}, passedShort:{pl:"zaliczone",ru:"зачтено"}, daysShort:{pl:"dni do egz.",ru:"дн. до экз."},
+  subjects:{pl:"Przedmioty",ru:"Предметы"}, subject:{pl:"Przedmiot",ru:"Предмет"}, overview:{pl:"Przegląd przedmiotu",ru:"Обзор предмета"}, allSubjects:{pl:"Wszystkie przedmioty",ru:"Все предметы"}, lecToc:{pl:"Spis wykładu",ru:"Содержание лекции"}, lecShort:{pl:"wykł.",ru:"лекц."}, passedShort:{pl:"zaliczone",ru:"зачтено"}, daysShort:{pl:"dni do egz.",ru:"дн. до экз."},
   portalLead:{pl:"Wszystkie przedmioty w jednym miejscu: makroekonomia, bankowość, podatki i inwestycje. Krótkie artykuły, słownik pojęć, fiszki i testy.",ru:"Все предметы в одном месте: макроэкономика, банковское дело, налоги и инвестиции. Понятные статьи, словарь понятий, карточки и тесты."},
   srcLab:{pl:"Na podstawie materiałów z zajęć",ru:"По материалам занятий"}, allSubj:{pl:"Wszystkie",ru:"Все"}, examFor:{pl:"Egzamin próbny z przedmiotu",ru:"Пробный экзамен по предмету"},
   start:{pl:"Start",ru:"Главная"}, lectures:{pl:"Wykłady",ru:"Лекции"}, glossary:{pl:"Słownik",ru:"Словарь"},
@@ -1041,27 +1065,46 @@ function tabOf(r){ return { home:"start", subject:"lectures", lecture:"lectures"
 function renderChrome(r){
   const tab = tabOf(r);
   const L1 = r.v === "sub" ? findSub(r.id)?.L : (r.n ? C.lectures.find(L => L.n === r.n) : null);
-  const brand = `<a class="brand" href="#start"><span class="logo">${LOGO}</span><span><b>Brainstorm</b><small>${esc(MACRO.university)} · ${t(UI.subjects).toLowerCase()}</small></span></a>`;
-  const navItem = (k, ic, h) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k === "start" ? "start" : k])}</a>`;
-  const lecNav = C.lectures.map(L => `<a href="${P()}w${L.n}" class="${L1 === L && r.v !== "sub" ? "on" : ""}">${icon("book")}${t(UI.lecture)} ${L.n}</a>
-    ${L1 === L ? `<div class="navsub">${L.subs.map(s => `<a href="${P()}w${s.id}" class="${r.id === s.id ? "on" : ""}"><span class="num">${s.id}</span>${esc(t(s.title))}${S.mini[K(s.id)] === 1 ? '<span class="dot" title="100%"></span>' : ""}</a>`).join("")}</div>` : ""}`).join("");
-  const subjNav = SUBJECTS.map(X => `<a href="#${X.id}" class="subjlink ${X === C && tab === "lectures" ? "on" : ""}">${icon(I[X.icon] ? X.icon : "book")}${esc(t(X.short || X.name))}</a>
-      ${X === C && tab === "lectures" ? `<div class="navsub lecs">${lecNav}</div>` : ""}`).join("");
+  const sic = X => icon(I[X.icon] ? X.icon : "book");
+  const brand = `<a class="brand" href="#start"><span class="logo">${LOGO}</span><span><b>Brainstorm</b><small>${esc(MACRO.university)}</small></span></a>`;
+  // przełącznik przedmiotu: jeden przycisk z bieżącym przedmiotem, lista po kliknięciu
+  const sw = `<button class="subjsw" data-subjmenu aria-haspopup="true">${sic(C)}<span><small>${t(UI.subject)}</small><b>${esc(t(C.short || C.name))}</b></span>${icon("chev")}</button>`;
+  const lecNav = C.lectures.map(L => {
+    const open = L1 === L, done = L.subs.filter(s => S.read[K(s.id)]).length;
+    return `<a href="${P()}w${L.n}" class="lec ${open && r.v !== "sub" ? "on" : ""} ${open ? "open" : ""}"><span class="ln ${lecPassed(L) ? "ok" : ""}">${lecPassed(L) ? icon("check") : L.n}</span><span class="lt">${esc(t(L.title))}<small>${done}/${L.subs.length}</small></span></a>
+      ${open ? `<div class="navsub">${L.subs.map(s => `<a href="${P()}w${s.id}" class="${r.id === s.id ? "on" : ""}"><span class="num">${s.id}</span><span>${esc(t(s.title))}</span>${S.mini[K(s.id)] === 1 ? '<span class="dot" title="100%"></span>' : S.read[K(s.id)] ? '<span class="dot rd"></span>' : ""}</a>`).join("")}
+        <a href="${P()}w${L.n}-test" class="${r.v === "final" ? "on" : ""}"><span class="num">${icon("target")}</span><span>${t(UI.final)}</span></a></div>` : ""}`; }).join("");
+  const tool = (k, ic, h) => `<a href="${h}" class="${tab === k ? "on" : ""}" title="${t(UI[k])}">${icon(ic)}<span>${t(UI[k])}</span></a>`;
   document.getElementById("side").innerHTML = `${brand}
     <button class="searchbtn" data-open-search>${icon("search")}${t(UI.searchShort)}<kbd>⌘K</kbd></button>
-    <nav class="nav" aria-label="${t(UI.start)}">
-      ${navItem("start", "home", "#start")}
-      <div class="navlab">${t(UI.subjects)}</div>
-      ${subjNav}
-      ${navItem("glossary", "dict", "#slownik")}
-      ${navItem("exam", "target", P() + "egzamin")}
-      ${navItem("settings", "gear", "#ustawienia")}
+    ${sw}
+    <nav class="nav" aria-label="${esc(t(C.name))}">
+      <a href="#${C.id}" class="${r.v === "subject" ? "on" : ""}">${icon("home")}${t(UI.overview)}</a>
+      <div class="navlab">${t(UI.lectures)}</div>
+      ${lecNav}
     </nav>
-    <div class="side-foot"><div class="seg" role="group" aria-label="${t(UI.language)}">${["pl","ru"].map(l => `<button data-lang="${l}" class="${lang === l ? "on" : ""}">${l === "pl" ? "Polski" : "Русский"}</button>`).join("")}</div></div>`;
-  document.getElementById("topbar").innerHTML = `${brand}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button>`;
+    <div class="side-foot">
+      <div class="tools">${tool("glossary", "dict", "#slownik")}${tool("exam", "target", P() + "egzamin")}${tool("settings", "gear", "#ustawienia")}</div>
+      <div class="seg" role="group" aria-label="${t(UI.language)}">${["pl","ru"].map(l => `<button data-lang="${l}" class="${lang === l ? "on" : ""}">${l === "pl" ? "Polski" : "Русский"}</button>`).join("")}</div></div>`;
+  document.getElementById("topbar").innerHTML = `<a class="brand" href="#start"><span class="logo">${LOGO}</span></a>${sw}<button class="iconbtn" data-open-search aria-label="${t(UI.searchShort)}">${icon("search")}</button>`;
   document.getElementById("tabbar").innerHTML = [["start","home","#start"],["lectures","book","#" + C.id],["glossary","dict","#slownik"],["exam","target",P() + "egzamin"],["settings","gear","#ustawienia"]]
-    .map(([k, ic, h]) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k])}</a>`).join("");
+    .map(([k, ic, h]) => `<a href="${h}" class="${tab === k ? "on" : ""}">${icon(ic)}${t(UI[k === "start" ? "subjects" : k])}</a>`).join("");
 }
+// lista przedmiotów (desktop: rozwijane menu, telefon: arkusz od dołu)
+function openSubjMenu(btn){
+  closeSubjMenu();
+  const ov = document.createElement("div"); ov.className = "smenu-ov";
+  ov.innerHTML = `<div class="smenu" role="menu">${SUBJECTS.map(X => { const pr = subjProgress(X);
+    return `<a role="menuitem" href="#${X.id}" class="${X === C ? "on" : ""}"><span class="sic">${icon(I[X.icon] ? X.icon : "book")}</span><span><b>${esc(t(X.name))}</b><small>${X.lectures.length} ${t(UI.lecShort)} · ${pr.read}/${pr.total} ${t(UI.subs)}</small></span>${X === C ? icon("check") : ""}</a>`; }).join("")}
+    <a role="menuitem" href="#start" class="all"><span class="sic">${icon("home")}</span><span><b>${t(UI.allSubjects)}</b></span></a></div>`;
+  document.body.appendChild(ov);
+  const m = ov.querySelector(".smenu");
+  if (!matchMedia("(max-width:900px)").matches){ const rc = btn.getBoundingClientRect(); m.style.left = rc.left + "px"; m.style.top = rc.bottom + 6 + "px"; m.style.width = Math.max(rc.width, 280) + "px"; }
+  ov.onclick = e => { if (e.target === ov || e.target.closest("a")) closeSubjMenu(); };
+}
+function closeSubjMenu(){ document.querySelector(".smenu-ov")?.remove(); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-subjmenu]"); if (b){ e.preventDefault(); openSubjMenu(b); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSubjMenu(); });
 
 // ---------- widoki ----------
 function vSubject(){
@@ -1167,16 +1210,18 @@ function vLecture(L){
   </div>`;
 }
 function vSub(s){
-  const L = s.L, idx = L.subs.indexOf(s), prev = L.subs[idx - 1], next = L.subs[idx + 1];
+  const L = s.L, idx = L.subs.findIndex(x => x.id === s.id), prev = L.subs[idx - 1], next = L.subs[idx + 1];
   const { html, toc } = md(t(s.body));
   const terms = termsIn(t(s.body));
   return `<div class="artwrap">
     <article class="art">
       <div class="arthead">
-        <nav class="crumbs"><a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${s.id}</span></nav>
+        <nav class="crumbs"><a href="#${C.id}">${esc(t(C.short || C.name))}</a>${icon("chev")}<a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${s.id}</span></nav>
         <h1 class="h1">${esc(t(s.title))}</h1>
         <div class="meta"><span>${icon("clock")}${readMin(s)} ${t(UI.min)}</span>${s.src ? `<span title="${esc(t(UI.srcLab))}">${icon("book")}${esc(s.src)}</span>` : ""}<span>${icon("tag")}${terms.length} ${t(UI.terms)}</span>${S.mini[K(s.id)] === 1 ? `<span style="color:var(--ok)">${icon("star")}${t(UI.miniDone)}</span>` : ""}</div>
       </div>
+      <details class="lectoc"><summary>${icon("book")}${t(UI.lecToc)}: ${esc(t(L.title))} <span class="muted">· ${idx + 1}/${L.subs.length}</span></summary>
+        <div>${L.subs.map(x => `<a href="${P()}w${x.id}" class="${x.id === s.id ? "on" : ""}"><span class="num">${x.id}</span>${esc(t(x.title))}${S.read[K(x.id)] ? icon("check") : ""}</a>`).join("")}<a href="${P()}w${L.n}-test"><span class="num">${icon("target")}</span>${t(UI.final)}</a></div></details>
       <div class="prose">${html}</div>
       <section class="endblock" id="endmark">
         <h2 class="h2">${t(UI.keyTerms)}</h2>
@@ -1196,13 +1241,13 @@ function vSub(s){
 }
 function vCards(L){
   return `<div class="page" style="max-width:640px">
-    <nav class="crumbs"><a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.cards)}</span></nav>
+    <nav class="crumbs"><a href="#${C.id}">${esc(t(C.short || C.name))}</a>${icon("chev")}<a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.cards)}</span></nav>
     <h1 class="h1">${t(UI.cards)}</h1>
     <div id="cards"></div></div>`;
 }
 function vFinal(L){
   return `<div class="page" style="max-width:720px">
-    <nav class="crumbs"><a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.final)}</span></nav>
+    <nav class="crumbs"><a href="#${C.id}">${esc(t(C.short || C.name))}</a>${icon("chev")}<a href="${P()}w${L.n}">${t(UI.lecture)} ${L.n}</a>${icon("chev")}<span>${t(UI.final)}</span></nav>
     <header class="stack"><h1 class="h1">${t(UI.final)}</h1><p class="lead">${esc(t(L.title))} · ${L.final.length} ${t(UI.finalLead)}</p></header>
     <div class="card quiz" id="quiz"></div></div>`;
 }
@@ -1723,6 +1768,7 @@ function render(scrollTop = true){
   const L = r.n ? C.lectures.find(x => x.n === r.n) : null;
   const s = r.v === "sub" ? findSub(r.id) : null, g = r.v === "term" ? TERM[r.id] : null;
   renderChrome(r);
+  requestAnimationFrame(() => document.querySelector("#side .navsub a.on, #side a.lec.on, #side a.lec.open")?.scrollIntoView({ block: "nearest" }));
   main.innerHTML =
     r.v === "lecture" && L ? vLecture(L) :
     r.v === "cards" && L ? vCards(L) :
